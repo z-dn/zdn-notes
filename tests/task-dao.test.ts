@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   parent_id     TEXT REFERENCES tasks(id) ON DELETE CASCADE,
   order_index   REAL NOT NULL,
   tags          TEXT DEFAULT '[]',
-  project       TEXT DEFAULT '',
+  owner       TEXT DEFAULT '',
   category_id   TEXT REFERENCES categories(id) ON DELETE SET NULL,
   meta          TEXT DEFAULT '{}',
   created_at    INTEGER NOT NULL,

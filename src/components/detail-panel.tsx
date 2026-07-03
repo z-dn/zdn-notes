@@ -22,7 +22,7 @@ export function DetailPanel() {
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [newTag, setNewTag] = useState('')
-  const [newProject, setNewProject] = useState('')
+  const [newOwner, setNewOwner] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
   const tagInput = useRef<HTMLInputElement>(null)
 
@@ -30,7 +30,7 @@ export function DetailPanel() {
     if (selectedTask) {
       setTitle(selectedTask.title)
       setDescription(selectedTask.description || '')
-      setNewProject('')
+      setNewOwner('')
       setDueDate(
         selectedTask.dueDate
           ? new Date(selectedTask.dueDate).toISOString().slice(0, 10)
@@ -131,11 +131,11 @@ export function DetailPanel() {
 
       <div className="space-y-1">
         <div className="flex flex-wrap gap-1">
-          {selectedTask.project && (
+          {selectedTask.owner && (
             <Badge variant="secondary" className="text-[10px]">
-              @{selectedTask.project}
+              @{selectedTask.owner}
               <button
-                onClick={() => updateTask({ id: selectedTask.id, project: '' })}
+                onClick={() => updateTask({ id: selectedTask.id, owner: '' })}
                 className="ml-1 hover:text-destructive"
               >
                 ✕
@@ -144,15 +144,15 @@ export function DetailPanel() {
           )}
         </div>
         <input
-          value={newProject}
-          onChange={(e) => setNewProject(e.target.value)}
+          value={newOwner}
+          onChange={(e) => setNewOwner(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && newProject.trim()) {
-              updateTask({ id: selectedTask.id, project: newProject.trim() })
-              setNewProject('')
+            if (e.key === 'Enter' && newOwner.trim()) {
+              updateTask({ id: selectedTask.id, owner: newOwner.trim() })
+              setNewOwner('')
             }
           }}
-          placeholder="添加项目..."
+          placeholder="添加负责人..."
           className="h-6 w-full rounded border border-input bg-transparent px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
         />
       </div>

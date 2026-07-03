@@ -3,8 +3,8 @@ import { parseNLP } from '../src/lib/nlp'
 
 describe('parseNLP', () => {
   it('returns empty result for empty input', () => {
-    expect(parseNLP('')).toEqual({ title: '', priority: null, dueDate: null, tags: [], project: null })
-    expect(parseNLP('   ')).toEqual({ title: '', priority: null, dueDate: null, tags: [], project: null })
+    expect(parseNLP('')).toEqual({ title: '', priority: null, dueDate: null, tags: [], owner: null })
+    expect(parseNLP('   ')).toEqual({ title: '', priority: null, dueDate: null, tags: [], owner: null })
   })
 
   it('returns title when no special tokens', () => {
@@ -13,7 +13,7 @@ describe('parseNLP', () => {
     expect(r.priority).toBeNull()
     expect(r.dueDate).toBeNull()
     expect(r.tags).toEqual([])
-    expect(r.project).toBeNull()
+    expect(r.owner).toBeNull()
   })
 
   describe('priority', () => {
@@ -84,16 +84,16 @@ describe('parseNLP', () => {
     })
   })
 
-  describe('project', () => {
-    it('extracts project', () => {
+  describe('owner', () => {
+    it('extracts owner', () => {
       const r = parseNLP('Deploy @server')
-      expect(r.project).toBe('server')
+      expect(r.owner).toBe('server')
       expect(r.title).toBe('Deploy')
     })
 
-    it('extracts first project only', () => {
+    it('extracts first owner only', () => {
       const r = parseNLP('@work @home Task')
-      expect(r.project).toBe('work')
+      expect(r.owner).toBe('work')
     })
   })
 
@@ -132,7 +132,7 @@ describe('parseNLP', () => {
       const r = parseNLP('明天下午3点开会 @工作 P0 #紧急')
       expect(r.title).toBe('开会')
       expect(r.priority).toBe('P0')
-      expect(r.project).toBe('工作')
+      expect(r.owner).toBe('工作')
       expect(r.tags).toEqual(['紧急'])
       expect(r.dueDate).not.toBeNull()
       // 明天 = July 2 (relative to test date assumption)
@@ -159,7 +159,7 @@ describe('parseNLP', () => {
       const r = parseNLP('Fix bug #urgent @project-alpha P0 明天')
       expect(r.title).toBe('Fix bug')
       expect(r.tags).toEqual(['urgent'])
-      expect(r.project).toBe('project-alpha')
+      expect(r.owner).toBe('project-alpha')
       expect(r.priority).toBe('P0')
       expect(r.dueDate).not.toBeNull()
     })
@@ -190,10 +190,10 @@ describe('parseNLP', () => {
       expect(r.title).toBe('task')
     })
 
-    it('handles Chinese tags and projects', () => {
+    it('handles Chinese tags and owners', () => {
       const r = parseNLP('任务 #标签 @项目')
       expect(r.tags).toEqual(['标签'])
-      expect(r.project).toBe('项目')
+      expect(r.owner).toBe('项目')
       expect(r.title).toBe('任务')
     })
 
@@ -201,7 +201,7 @@ describe('parseNLP', () => {
       const r = parseNLP('#tag @project P1')
       expect(r.title).toBe('')
       expect(r.tags).toEqual(['tag'])
-      expect(r.project).toBe('project')
+      expect(r.owner).toBe('project')
       expect(r.priority).toBe('P1')
     })
 
@@ -215,7 +215,7 @@ describe('parseNLP', () => {
       const r = parseNLP('Task\t#tag\n@project')
       expect(r.title).toBe('Task')
       expect(r.tags).toEqual(['tag'])
-      expect(r.project).toBe('project')
+      expect(r.owner).toBe('project')
     })
   })
 })

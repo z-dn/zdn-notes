@@ -22,7 +22,7 @@ export interface Task {
   parentId: string | null
   orderIndex: number
   tags: string[]
-  project: string
+  owner: string
   categoryId: string | null
   meta: Record<string, unknown>
   createdAt: number
@@ -39,7 +39,7 @@ export interface CreateTaskDTO {
   reminderTime?: number | null
   parentId?: string | null
   tags?: string[]
-  project?: string
+  owner?: string
   categoryId?: string | null
 }
 

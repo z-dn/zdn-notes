@@ -93,7 +93,7 @@ export function createTask(dto: CreateTaskDTO, _db?: Database): Task {
     parentId: dto.parentId,
     orderIndex,
     tags: dto.tags ?? [],
-    project: dto.project ?? '',
+    owner: dto.owner ?? '',
     categoryId: dto.categoryId ?? null,
     meta: {},
     createdAt: now,
@@ -147,7 +147,7 @@ export function updateTask(dto: UpdateTaskDTO, _db?: Database): Task | null {
     reminderTime: 'reminder_time',
     parentId: 'parent_id',
     tags: 'tags',
-    project: 'project',
+    owner: 'owner',
     categoryId: 'category_id',
   }
 

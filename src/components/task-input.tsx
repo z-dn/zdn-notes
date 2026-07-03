@@ -56,7 +56,7 @@ export function TaskInput() {
       priority: p.priority ?? 'P2',
       dueDate: p.dueDate,
       tags: p.tags,
-      project: p.project ?? '',
+      owner: p.owner ?? '',
       parentId: selectedTask?.id ?? null,
     })
 
@@ -125,9 +125,9 @@ export function TaskInput() {
                 <button onClick={() => removeTag(tag)} className="ml-1">✕</button>
               </Badge>
             ))}
-            {preview.project && (
+            {preview.owner && (
               <Badge variant="secondary" className="text-[10px]">
-                @{preview.project}
+                @{preview.owner}
               </Badge>
             )}
             {preview.dueDate && (

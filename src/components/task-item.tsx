@@ -72,9 +72,9 @@ export function TaskItem({ task, depth, hasChildren }: TaskItemProps) {
         {task.priority}
       </Badge>
 
-      {task.project && (
+      {task.owner && (
         <Badge variant="outline" className="text-[10px]">
-          @{task.project}
+          @{task.owner}
         </Badge>
       )}
 

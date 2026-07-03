@@ -6,7 +6,7 @@ export interface NLPResult {
   priority: Priority | null
   dueDate: number | null
   tags: string[]
-  project: string | null
+  owner: string | null
 }
 
 function extractPriority(text: string): { priority: Priority | null; rest: string } {
@@ -33,13 +33,13 @@ function extractTags(text: string): { tags: string[]; rest: string } {
   return { tags, rest: rest.replace(/\s+/g, ' ').trim() }
 }
 
-function extractProject(text: string): { project: string | null; rest: string } {
-  let project: string | null = null
+function extractOwner(text: string): { owner: string | null; rest: string } {
+  let owner: string | null = null
   const rest = text.replace(
     /(?:^|\s)@([\p{L}\p{N}_-]+)/u,
-    (_, name) => { project = name; return '' },
+    (_, name) => { owner = name; return '' },
   )
-  return { project, rest: rest.replace(/\s+/g, ' ').trim() }
+  return { owner, rest: rest.replace(/\s+/g, ' ').trim() }
 }
 
 function extractTime(text: string): { dueDate: number | null; rest: string } {
@@ -66,15 +66,15 @@ function extractTime(text: string): { dueDate: number | null; rest: string } {
 export function parseNLP(input: string): NLPResult {
   const text = input.trim()
   if (!text) {
-    return { title: '', priority: null, dueDate: null, tags: [], project: null }
+    return { title: '', priority: null, dueDate: null, tags: [], owner: null }
   }
 
   const { priority, rest: afterPriority } = extractPriority(text)
-  const { project, rest: afterProject } = extractProject(afterPriority)
+  const { owner, rest: afterProject } = extractOwner(afterPriority)
   const { tags, rest: afterTags } = extractTags(afterProject)
   const { dueDate, rest: afterTime } = extractTime(afterTags)
 
   const title = afterTime.replace(/\s+/g, ' ').trim()
 
-  return { title, priority, dueDate, tags, project }
+  return { title, priority, dueDate, tags, owner }
 }

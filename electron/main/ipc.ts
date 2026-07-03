@@ -47,7 +47,7 @@ export function registerIpcHandlers(): void {
       const indent = '  '.repeat(depth)
       const badge = t.priority !== 'P2' ? ` \`${t.priority}\`` : ''
       const tagStr = t.tags.length ? ' ' + t.tags.map((x) => `#${x}`).join(' ') : ''
-      const proj = t.project ? ` @${t.project}` : ''
+      const proj = t.owner ? ` @${t.owner}` : ''
       const due = t.dueDate ? ` 📅${new Date(t.dueDate).toLocaleDateString('zh-CN')}` : ''
       lines.push(`${indent}- ${statusCheckbox(t.status)} **${t.title}**${badge}${tagStr}${proj}${due}`)
       if (t.description) {
