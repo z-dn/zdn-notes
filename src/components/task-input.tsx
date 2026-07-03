@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { parseNLP, type NLPResult } from '@/lib/nlp'
 import { useTaskStore } from '@/stores/task-store'
+import { useCategoryStore } from '@/stores/category-store'
 import type { Priority } from '@/types/task'
 
 const PRIORITY_CYCLE: Priority[] = ['P2', 'P1', 'P0', 'P3']
@@ -15,6 +16,7 @@ export function TaskInput() {
   const createTask = useTaskStore((s) => s.createTask)
   const selectedTask = useTaskStore((s) => s.selectedTask)
   const selectTask = useTaskStore((s) => s.selectTask)
+  const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const text = e.target.value
@@ -58,6 +60,7 @@ export function TaskInput() {
       tags: p.tags,
       owner: p.owner ?? '',
       parentId: selectedTask?.id ?? null,
+      categoryId: activeCategoryId ?? null,
     })
 
     setValue('')
