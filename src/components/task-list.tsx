@@ -1,10 +1,10 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { TaskItem } from './task-item'
 import { ContextMenu } from './context-menu'
 import { InlineTaskInput } from './inline-task-input'
-import { generateBetween } from '@/lib/lexorank'
+import { generateBetween, rebalance } from '@/lib/lexorank'
 import type { Task } from '@/types/task'
 
 type SortField = 'order' | 'priority' | 'dueDate' | 'createdAt'
@@ -69,6 +69,15 @@ function flattenTree(
   }
 }
 
+function isDescendantOf(targetId: string, parentId: string, tasks: Task[]): boolean {
+  const children = tasks.filter((t) => t.parentId === parentId)
+  for (const child of children) {
+    if (child.id === targetId) return true
+    if (isDescendantOf(targetId, child.id, tasks)) return true
+  }
+  return false
+}
+
 const SORT_LABELS: Record<string, string> = {
   order: '自定义',
   priority: '优先级',
@@ -82,6 +91,7 @@ export function TaskList() {
   const expandedIds = useTaskStore((s) => s.expandedIds)
   const selectTask = useTaskStore((s) => s.selectTask)
   const toggleExpand = useTaskStore((s) => s.toggleExpand)
+  const updateTask = useTaskStore((s) => s.updateTask)
   const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
   const [sortField, setSortField] = useState<SortField>('order')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -92,14 +102,105 @@ export function TaskList() {
     orderIndex: number
     depth: number
   } | null>(null)
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const dragIdRef = useRef<string | null>(null)
+  const dropIdxRef = useRef<number | null>(null)
 
   const flatList = useMemo(() => {
     const filtered = activeCategoryId ? tasks.filter((t) => t.categoryId === activeCategoryId) : tasks
-    const roots = buildTree(sortField === 'order' ? filtered : sortTasks(filtered, sortField, sortDir))
+    const sorted = sortField === 'order' ? [...filtered].sort((a, b) => a.orderIndex - b.orderIndex) : sortTasks(filtered, sortField, sortDir)
+    const roots = buildTree(sorted)
     const result: { task: Task; depth: number; hasChildren: boolean }[] = []
     flattenTree(roots, 0, expandedIds, result)
     return result
   }, [tasks, expandedIds, sortField, sortDir, activeCategoryId])
+
+  useEffect(() => {
+    const el = listRef.current
+    if (!el || sortField !== 'order') return
+
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault()
+      const childEls = el.querySelectorAll(':scope > [data-task-wrap]')
+      let targetIdx = childEls.length
+      childEls.forEach((child, i) => {
+        const r = child.getBoundingClientRect()
+        if (e.clientY > r.top + r.height / 2) targetIdx = i + 1
+      })
+      dropIdxRef.current = targetIdx
+      setDropTargetIndex(targetIdx)
+    }
+
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault()
+      const dragId = dragIdRef.current
+      const dropIdx = dropIdxRef.current
+      if (!dragId || dropIdx === null) return
+
+      const draggedTask = tasks.find((t) => t.id === dragId)
+      if (!draggedTask) { dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); return }
+
+      const newParentId = dropIdx === 0 ? null : (flatList[dropIdx - 1]?.task.parentId ?? null)
+
+      if (newParentId === draggedTask.id || (newParentId && isDescendantOf(draggedTask.id, newParentId, tasks))) {
+        dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); return
+      }
+
+      let siblingAbove: Task | null = null
+      let siblingBelow: Task | null = null
+      for (let i = dropIdx - 1; i >= 0; i--) {
+        if (flatList[i].task.parentId === newParentId && flatList[i].task.id !== dragId) {
+          siblingAbove = flatList[i].task; break
+        }
+      }
+      for (let i = dropIdx; i < flatList.length; i++) {
+        if (flatList[i].task.parentId === newParentId && flatList[i].task.id !== dragId) {
+          siblingBelow = flatList[i].task; break
+        }
+      }
+
+      let newOrderIndex: number
+      try {
+        newOrderIndex = generateBetween(siblingAbove?.orderIndex ?? null, siblingBelow?.orderIndex ?? null)
+      } catch {
+        const siblingTasks = tasks.filter((t) => t.parentId === newParentId && t.id !== dragId)
+        const siblingIds = siblingTasks.map((t) => t.id)
+        const ranks = siblingTasks.map((t) => t.orderIndex)
+        const newRanks = rebalance(ranks)
+        siblingIds.forEach((id, i) => updateTask({ id, orderIndex: newRanks[i] }))
+        newOrderIndex = generateBetween(siblingAbove?.orderIndex ?? null, siblingBelow?.orderIndex ?? null)
+      }
+
+      updateTask({ id: dragId, orderIndex: newOrderIndex, parentId: newParentId })
+      dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null)
+    }
+
+    const onDragStart = (e: DragEvent) => {
+      const taskItem = (e.target as HTMLElement)?.closest('[data-task-id]')
+      if (taskItem) {
+        dragIdRef.current = taskItem.getAttribute('data-task-id')
+      }
+    }
+
+    const onDragEnd = () => {
+      dragIdRef.current = null
+      dropIdxRef.current = null
+      setDropTargetIndex(null)
+    }
+
+    el.addEventListener('dragover', onDragOver)
+    el.addEventListener('drop', onDrop)
+    document.addEventListener('dragstart', onDragStart)
+    document.addEventListener('dragend', onDragEnd)
+
+    return () => {
+      el.removeEventListener('dragover', onDragOver)
+      el.removeEventListener('drop', onDrop)
+      document.removeEventListener('dragstart', onDragStart)
+      document.removeEventListener('dragend', onDragEnd)
+    }
+  }, [sortField, tasks, flatList, updateTask])
 
   const handleAddSibling = useCallback((task: Task) => {
     const siblings = tasks
@@ -172,15 +273,21 @@ export function TaskList() {
         ))}
       </div>
 
-      <div className="space-y-0.5" onClick={() => selectTask(null)}>
-        {flatList.flatMap(({ task, depth, hasChildren }) => [
-          <TaskItem
-            key={task.id}
-            task={task}
-            depth={depth}
-            hasChildren={hasChildren}
-            onContextMenu={(e, t) => setContextMenu({ x: e.clientX, y: e.clientY, task: t })}
-          />,
+      <div ref={listRef} className="space-y-0.5" onClick={() => { if (!dragIdRef.current) selectTask(null) }}>
+        {flatList.flatMap(({ task, depth, hasChildren }, flatIndex) => [
+          dropTargetIndex === flatIndex && dragIdRef.current && (
+            <div key={`drop-${flatIndex}`} className="h-0.5 rounded bg-blue-500" />
+          ),
+          <div key={task.id} data-task-wrap>
+            <TaskItem
+              task={task}
+              depth={depth}
+              hasChildren={hasChildren}
+              onContextMenu={(e, t) => setContextMenu({ x: e.clientX, y: e.clientY, task: t })}
+              draggable={sortField === 'order'}
+              isDragging={dragIdRef.current === task.id}
+            />
+          </div>,
           inlineInput?.afterTaskId === task.id && (
             <InlineTaskInput
               key="inline-input"
@@ -191,6 +298,9 @@ export function TaskList() {
             />
           ),
         ])}
+        {dropTargetIndex === flatList.length && dragIdRef.current && (
+          <div key="drop-end" className="h-0.5 rounded bg-blue-500" />
+        )}
       </div>
       {contextMenu && (
         <ContextMenu

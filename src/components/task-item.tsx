@@ -18,9 +18,11 @@ interface TaskItemProps {
   depth: number
   hasChildren: boolean
   onContextMenu?: (e: React.MouseEvent, task: Task) => void
+  draggable?: boolean
+  isDragging?: boolean
 }
 
-export function TaskItem({ task, depth, hasChildren, onContextMenu }: TaskItemProps) {
+export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, isDragging }: TaskItemProps) {
   const toggleDone = useTaskStore((s) => s.toggleDone)
   const selectTask = useTaskStore((s) => s.selectTask)
   const selectedTask = useTaskStore((s) => s.selectedTask)
@@ -74,15 +76,23 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu }: TaskItemPr
     }
   }
 
+  function handleDragStart(e: React.DragEvent) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', task.id)
+  }
+
   return (
     <div
-      className={`group flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-accent/50 ${
-        isSelected ? 'bg-accent' : ''
-      } ${isDone ? 'opacity-60' : ''}`}
+      data-task-id={task.id}
+      className={`group flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors ${
+        isDragging ? 'opacity-30' : 'hover:bg-accent/50'
+      } ${isSelected ? 'bg-accent' : ''} ${isDone ? 'opacity-60' : ''}`}
       style={{ paddingLeft: `${12 + depth * 20}px` }}
       onClick={(e) => { if (!editing) { e.stopPropagation(); selectTask(task) } }}
       onDoubleClick={startEdit}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(e, task) }}
+      draggable={draggable ?? false}
+      onDragStart={handleDragStart}
     >
       {hasChildren ? (
         <button
