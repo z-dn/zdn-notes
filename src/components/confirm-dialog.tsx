@@ -46,7 +46,12 @@ export function ConfirmDialog() {
         if (!open) close(false)
       }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          document.getElementById('task-input')?.focus()
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{message}</AlertDialogDescription>

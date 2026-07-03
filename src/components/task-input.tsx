@@ -101,6 +101,7 @@ export function TaskInput() {
         </div>
       )}
       <Input
+        id="task-input"
         ref={inputRef}
         value={value}
         onChange={handleChange}
