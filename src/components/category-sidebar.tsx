@@ -1,13 +1,24 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useCategoryStore } from '@/stores/category-store'
+import type { Category } from '@/types/task'
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899']
 
 export function CategorySidebar() {
-  const { categories, taskCounts, activeCategoryId, selectCategory, createCategory, deleteCategory } = useCategoryStore()
+  const { categories, taskCounts, activeCategoryId, selectCategory, createCategory, deleteCategory, updateCategory } = useCategoryStore()
   const [showCreator, setShowCreator] = useState(false)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#6b7280')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const editRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editingId && editRef.current) {
+      editRef.current.focus()
+      editRef.current.select()
+    }
+  }, [editingId])
 
   const handleCreate = async () => {
     if (!newName.trim()) return
@@ -17,8 +28,36 @@ export function CategorySidebar() {
     setShowCreator(false)
   }
 
+  const startEdit = (cat: Category, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (cat.id === '__uncategorized') return
+    setEditingId(cat.id)
+    setEditValue(cat.name)
+  }
+
+  const saveEdit = async () => {
+    if (!editingId) return
+    const trimmed = editValue.trim()
+    if (trimmed) await updateCategory(editingId, { name: trimmed })
+    setEditingId(null)
+    setEditValue('')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditValue('')
+  }
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation()
+    if (e.key === 'Enter') { e.preventDefault(); saveEdit() }
+    if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+  }
+
+  const totalCount = Object.values(taskCounts).reduce((a, b) => a + b, 0)
+
   return (
-    <div className="group relative flex h-full w-40 flex-col border-r bg-muted/20">
+    <div className="group relative flex h-full w-48 flex-col border-r bg-muted/20">
       <div className="border-b px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
         分类
       </div>
@@ -34,37 +73,75 @@ export function CategorySidebar() {
         >
           <span className="text-xs">📋</span>
           <span className="flex-1 truncate">全部</span>
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {Object.values(taskCounts).reduce((a, b) => a + b, 0)}
-          </span>
+          <span className="text-xs tabular-nums text-muted-foreground">{totalCount}</span>
         </button>
 
         {categories.map((cat) => {
           const count = taskCounts[cat.id] ?? 0
+          const editing = editingId === cat.id
           return (
-            <div key={cat.id} className="group/item relative">
-              <button
-                onClick={() => selectCategory(cat.id)}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
-                  activeCategoryId === cat.id
+            <div
+              key={cat.id}
+              className={`group/item flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                editing
+                  ? 'bg-blue-50/80 text-foreground'
+                  : activeCategoryId === cat.id
                     ? 'bg-primary/10 text-primary font-medium'
                     : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: cat.color }}
-                />
-                <span className="flex-1 truncate">{cat.name}</span>
-                <span className="text-xs tabular-nums text-muted-foreground group-hover/item:hidden">{count}</span>
-              </button>
-              {cat.id !== '__uncategorized' && (
-                <button
-                  onClick={() => deleteCategory(cat.id)}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover/item:inline-flex items-center justify-center h-5 w-5 rounded text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                >
-                  ✕
-                </button>
+              }`}
+              onClick={editing ? undefined : () => selectCategory(cat.id)}
+            >
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: cat.color }}
+              />
+
+              {editing ? (
+                <>
+                  <input
+                    ref={editRef}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={handleEditKeyDown}
+                    onBlur={saveEdit}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="请输入分类名称"
+                    className="flex-1 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+                  />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); saveEdit() }}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-600 hover:bg-green-100"
+                    title="保存"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); cancelEdit() }}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+                    title="取消"
+                  >
+                    ✕
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="flex-1 truncate text-xs"
+                    onDoubleClick={(e) => startEdit(cat, e)}
+                  >
+                    {cat.name}
+                  </span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                  {cat.id !== '__uncategorized' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id) }}
+                      className="invisible ml-auto text-muted-foreground hover:text-destructive group-hover/item:visible"
+                      title="删除"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )

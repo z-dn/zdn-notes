@@ -29,14 +29,15 @@ CREATE TABLE IF NOT EXISTS categories (
   id         TEXT PRIMARY KEY NOT NULL,
   name       TEXT NOT NULL,
   color      TEXT NOT NULL DEFAULT '#6b7280',
-  sort_order INTEGER NOT NULL DEFAULT 0,
+  sort_order REAL NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_tasks_status      ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_due_date    ON tasks(due_date);
-CREATE INDEX IF NOT EXISTS idx_tasks_parent_id   ON tasks(parent_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_order_index ON tasks(order_index);
+CREATE INDEX IF NOT EXISTS idx_tasks_status       ON tasks(status);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_date     ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent_id    ON tasks(parent_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_order_index  ON tasks(order_index);
+
 `
 
 let db: SqlJsDatabase | null = null
@@ -51,7 +52,9 @@ export async function initDB(): Promise<void> {
     db = new SQL.Database(buffer)
     try { db.run("ALTER TABLE tasks RENAME COLUMN project TO owner") } catch (e) { /* already renamed */ }
     try { db.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''") } catch (e) { /* column may already exist */ }
-    try { db.run("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)") } catch (e) { /* table may already exist */ }
+    try { db.run("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)") } catch (e) { /* table may already exist */ }
+    try { db.run("ALTER TABLE categories ADD COLUMN parent_id TEXT") } catch (e) { /* column may already exist */ }
+    try { db.run("UPDATE categories SET parent_id = NULL") } catch (e) { /* ignore */ }
     try { db.run("ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL") } catch (e) { /* column may already exist */ }
   } else {
     db = new SQL.Database()
