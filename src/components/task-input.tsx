@@ -57,6 +57,7 @@ export function TaskInput() {
       title: p.title || text,
       priority: p.priority ?? 'P2',
       dueDate: p.dueDate,
+      startDate: p.startDate,
       tags: p.tags,
       owner: p.owner ?? '',
       parentId: selectedTask?.id ?? null,

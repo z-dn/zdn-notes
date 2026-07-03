@@ -48,8 +48,9 @@ export function registerIpcHandlers(): void {
       const badge = t.priority !== 'P2' ? ` \`${t.priority}\`` : ''
       const tagStr = t.tags.length ? ' ' + t.tags.map((x) => `#${x}`).join(' ') : ''
       const proj = t.owner ? ` @${t.owner}` : ''
+      const start = t.startDate ? ` 🚀${new Date(t.startDate).toLocaleDateString('zh-CN')}` : ''
       const due = t.dueDate ? ` 📅${new Date(t.dueDate).toLocaleDateString('zh-CN')}` : ''
-      lines.push(`${indent}- ${statusCheckbox(t.status)} **${t.title}**${badge}${tagStr}${proj}${due}`)
+      lines.push(`${indent}- ${statusCheckbox(t.status)} **${t.title}**${badge}${tagStr}${proj}${start}${due}`)
       if (t.description) {
         const firstLine = t.description.split('\n')[0].trim()
         if (firstLine) lines.push(`${indent}  > ${firstLine}`)

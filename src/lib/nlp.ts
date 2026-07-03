@@ -5,6 +5,7 @@ export interface NLPResult {
   title: string
   priority: Priority | null
   dueDate: number | null
+  startDate: number | null
   tags: string[]
   owner: string | null
 }
@@ -66,7 +67,7 @@ function extractTime(text: string): { dueDate: number | null; rest: string } {
 export function parseNLP(input: string): NLPResult {
   const text = input.trim()
   if (!text) {
-    return { title: '', priority: null, dueDate: null, tags: [], owner: null }
+    return { title: '', priority: null, dueDate: null, startDate: null, tags: [], owner: null }
   }
 
   const { priority, rest: afterPriority } = extractPriority(text)
@@ -76,5 +77,5 @@ export function parseNLP(input: string): NLPResult {
 
   const title = afterTime.replace(/\s+/g, ' ').trim()
 
-  return { title, priority, dueDate, tags, owner }
+  return { title, priority, dueDate, startDate: null, tags, owner }
 }

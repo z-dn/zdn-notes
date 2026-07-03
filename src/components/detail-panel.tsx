@@ -21,6 +21,7 @@ export function DetailPanel() {
   const [description, setDescription] = useState('')
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [startDate, setStartDate] = useState('')
   const [newTag, setNewTag] = useState('')
   const [newOwner, setNewOwner] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
@@ -34,6 +35,11 @@ export function DetailPanel() {
       setDueDate(
         selectedTask.dueDate
           ? new Date(selectedTask.dueDate).toISOString().slice(0, 10)
+          : '',
+      )
+      setStartDate(
+        selectedTask.startDate
+          ? new Date(selectedTask.startDate).toISOString().slice(0, 10)
           : '',
       )
     }
@@ -155,6 +161,51 @@ export function DetailPanel() {
           placeholder="添加负责人..."
           className="h-6 w-full rounded border border-input bg-transparent px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
         />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground/60">开始日期</label>
+        <div className="flex gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className={`flex h-7 flex-1 items-center rounded-md border border-input bg-background px-2 text-xs transition-colors hover:bg-accent ${
+                  startDate ? 'text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {startDate
+                  ? format(new Date(startDate + 'T00:00:00'), 'M月d日 EEE', { locale: zhCN })
+                  : '选择日期'}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={startDate ? new Date(startDate + 'T00:00:00') : undefined}
+                onSelect={(selected: Date | undefined) => {
+                  if (selected) {
+                    const val = format(selected, 'yyyy-MM-dd')
+                    setStartDate(val)
+                    updateTask({ id: selectedTask.id, startDate: new Date(val + 'T00:00:00').getTime() })
+                  }
+                }}
+                locale={zhCN}
+                weekStartsOn={1}
+              />
+            </PopoverContent>
+          </Popover>
+          {startDate && (
+            <button
+              onClick={() => {
+                setStartDate('')
+                updateTask({ id: selectedTask.id, startDate: null })
+              }}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-input bg-background text-xs text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-1">

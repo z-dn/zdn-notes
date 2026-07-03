@@ -26,6 +26,7 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
       title: p.title || text,
       priority: p.priority ?? 'P2',
       dueDate: p.dueDate,
+      startDate: p.startDate,
       tags: p.tags,
       owner: p.owner ?? '',
       parentId,

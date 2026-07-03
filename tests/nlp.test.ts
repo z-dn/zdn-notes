@@ -3,8 +3,8 @@ import { parseNLP } from '../src/lib/nlp'
 
 describe('parseNLP', () => {
   it('returns empty result for empty input', () => {
-    expect(parseNLP('')).toEqual({ title: '', priority: null, dueDate: null, tags: [], owner: null })
-    expect(parseNLP('   ')).toEqual({ title: '', priority: null, dueDate: null, tags: [], owner: null })
+    expect(parseNLP('')).toEqual({ title: '', priority: null, dueDate: null, startDate: null, tags: [], owner: null })
+    expect(parseNLP('   ')).toEqual({ title: '', priority: null, dueDate: null, startDate: null, tags: [], owner: null })
   })
 
   it('returns title when no special tokens', () => {

@@ -134,6 +134,12 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu }: TaskItemPr
         </Badge>
       )}
 
+      {task.startDate && (
+        <span className="hidden text-xs text-muted-foreground sm:inline">
+          {new Date(task.startDate).toLocaleDateString('zh-CN')} →
+        </span>
+      )}
+
       {task.dueDate && (
         <span className="hidden text-xs text-muted-foreground sm:inline">
           {new Date(task.dueDate).toLocaleDateString('zh-CN')}
