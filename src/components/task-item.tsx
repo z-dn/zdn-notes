@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import type { Task } from '@/types/task'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -26,11 +27,52 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu }: TaskItemPr
   const expandedIds = useTaskStore((s) => s.expandedIds)
   const toggleExpand = useTaskStore((s) => s.toggleExpand)
   const deleteTask = useTaskStore((s) => s.deleteTask)
+  const updateTask = useTaskStore((s) => s.updateTask)
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+  const editRef = useRef<HTMLInputElement>(null)
   const isExpanded = expandedIds.has(task.id)
   const isSelected = selectedTask?.id === task.id
 
   const isDone = task.status === 'done'
   const isCancelled = task.status === 'cancelled'
+
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus()
+      editRef.current.select()
+    }
+  }, [editing])
+
+  function startEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditValue(task.title)
+    setEditing(true)
+  }
+
+  function saveEdit() {
+    const trimmed = editValue.trim()
+    if (trimmed && trimmed !== task.title) {
+      updateTask({ id: task.id, title: trimmed })
+    }
+    setEditing(false)
+  }
+
+  function cancelEdit() {
+    setEditing(false)
+  }
+
+  function handleEditKeyDown(e: React.KeyboardEvent) {
+    e.stopPropagation()
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      saveEdit()
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelEdit()
+    }
+  }
 
   return (
     <div
@@ -38,7 +80,8 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu }: TaskItemPr
         isSelected ? 'bg-accent' : ''
       } ${isDone ? 'opacity-60' : ''}`}
       style={{ paddingLeft: `${12 + depth * 20}px` }}
-      onClick={(e) => { e.stopPropagation(); selectTask(task) }}
+      onClick={(e) => { if (!editing) { e.stopPropagation(); selectTask(task) } }}
+      onDoubleClick={startEdit}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(e, task) }}
     >
       {hasChildren ? (
@@ -62,13 +105,24 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu }: TaskItemPr
         className={`shrink-0 ${isCancelled ? 'opacity-40' : ''}`}
       />
 
-      <span
-        className={`flex-1 truncate text-sm ${
-          isDone ? 'line-through text-muted-foreground' : ''
-        } ${isCancelled ? 'line-through text-muted-foreground/50' : ''}`}
-      >
-        {task.title}
-      </span>
+      {editing ? (
+        <input
+          ref={editRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleEditKeyDown}
+          onBlur={saveEdit}
+          className="flex-1 rounded border border-input bg-background px-1 text-sm outline-none focus:ring-1 focus:ring-ring"
+        />
+      ) : (
+        <span
+          className={`flex-1 truncate text-sm ${
+            isDone ? 'line-through text-muted-foreground' : ''
+          } ${isCancelled ? 'line-through text-muted-foreground/50' : ''}`}
+        >
+          {task.title}
+        </span>
+      )}
 
       <Badge className={`${PRIORITY_COLORS[task.priority] || ''} text-[10px]`}>
         {task.priority}
