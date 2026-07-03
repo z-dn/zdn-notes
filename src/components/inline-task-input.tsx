@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTaskStore } from '@/stores/task-store'
+import { useCategoryStore } from '@/stores/category-store'
 import { parseNLP } from '@/lib/nlp'
 
 interface InlineTaskInputProps {
@@ -13,6 +14,7 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const createTask = useTaskStore((s) => s.createTask)
+  const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -31,6 +33,7 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
       owner: p.owner ?? '',
       parentId,
       orderIndex,
+      categoryId: activeCategoryId ?? null,
     })
     onClose()
   }
