@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { TaskItem } from './task-item'
+import { ContextMenu } from './context-menu'
+import { InlineTaskInput } from './inline-task-input'
+import { generateBetween } from '@/lib/lexorank'
 import type { Task } from '@/types/task'
 
 type SortField = 'order' | 'priority' | 'dueDate' | 'createdAt'
@@ -78,9 +81,17 @@ export function TaskList() {
   const loading = useTaskStore((s) => s.loading)
   const expandedIds = useTaskStore((s) => s.expandedIds)
   const selectTask = useTaskStore((s) => s.selectTask)
+  const toggleExpand = useTaskStore((s) => s.toggleExpand)
   const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
   const [sortField, setSortField] = useState<SortField>('order')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; task: Task } | null>(null)
+  const [inlineInput, setInlineInput] = useState<{
+    afterTaskId: string
+    parentId: string | null
+    orderIndex: number
+    depth: number
+  } | null>(null)
 
   const flatList = useMemo(() => {
     const filtered = activeCategoryId ? tasks.filter((t) => t.categoryId === activeCategoryId) : tasks
@@ -89,6 +100,36 @@ export function TaskList() {
     flattenTree(roots, 0, expandedIds, result)
     return result
   }, [tasks, expandedIds, sortField, sortDir, activeCategoryId])
+
+  const handleAddSibling = useCallback((task: Task) => {
+    const siblings = tasks
+      .filter((t) => t.parentId === task.parentId && t.id !== task.id)
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+
+    const idx = siblings.findIndex((t) => t.orderIndex > task.orderIndex)
+    const next = idx >= 0 ? siblings[idx].orderIndex : null
+    const orderIndex = generateBetween(task.orderIndex, next)
+
+    const flatIndex = flatList.findIndex((f) => f.task.id === task.id)
+    const depth = flatIndex >= 0 ? flatList[flatIndex].depth : 0
+
+    setInlineInput({ afterTaskId: task.id, parentId: task.parentId, orderIndex, depth })
+  }, [tasks, flatList])
+
+  const handleAddChild = useCallback((task: Task) => {
+    const children = tasks
+      .filter((t) => t.parentId === task.id)
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+
+    const last = children.length > 0 ? children[children.length - 1].orderIndex : null
+    const orderIndex = generateBetween(last, null)
+    if (!expandedIds.has(task.id)) toggleExpand(task.id)
+
+    const flatIndex = flatList.findIndex((f) => f.task.id === task.id)
+    const depth = flatIndex >= 0 ? flatList[flatIndex].depth + 1 : 1
+
+    setInlineInput({ afterTaskId: task.id, parentId: task.id, orderIndex, depth })
+  }, [tasks, flatList, expandedIds, toggleExpand])
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -132,10 +173,35 @@ export function TaskList() {
       </div>
 
       <div className="space-y-0.5" onClick={() => selectTask(null)}>
-        {flatList.map(({ task, depth, hasChildren }) => (
-          <TaskItem key={task.id} task={task} depth={depth} hasChildren={hasChildren} />
-        ))}
+        {flatList.flatMap(({ task, depth, hasChildren }) => [
+          <TaskItem
+            key={task.id}
+            task={task}
+            depth={depth}
+            hasChildren={hasChildren}
+            onContextMenu={(e, t) => setContextMenu({ x: e.clientX, y: e.clientY, task: t })}
+          />,
+          inlineInput?.afterTaskId === task.id && (
+            <InlineTaskInput
+              key="inline-input"
+              parentId={inlineInput.parentId}
+              orderIndex={inlineInput.orderIndex}
+              depth={inlineInput.depth}
+              onClose={() => setInlineInput(null)}
+            />
+          ),
+        ])}
       </div>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          task={contextMenu.task}
+          onClose={() => setContextMenu(null)}
+          onAddSibling={handleAddSibling}
+          onAddChild={handleAddChild}
+        />
+      )}
     </div>
   )
 }

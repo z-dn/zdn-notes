@@ -80,7 +80,7 @@ export function createTask(dto: CreateTaskDTO, _db?: Database): Task {
   const now = Date.now()
   const id = randomUUID()
 
-  const orderIndex = generateBetween(maxOrderIndex(db), null)
+  const orderIndex = dto.orderIndex ?? generateBetween(maxOrderIndex(db), null)
 
   const { cols, placeholders, vals } = toInsert({
     id,

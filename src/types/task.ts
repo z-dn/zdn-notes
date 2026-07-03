@@ -38,6 +38,7 @@ export interface CreateTaskDTO {
   startDate?: number | null
   reminderTime?: number | null
   parentId?: string | null
+  orderIndex?: number
   tags?: string[]
   owner?: string
   categoryId?: string | null

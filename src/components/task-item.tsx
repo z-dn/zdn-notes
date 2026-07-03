@@ -16,9 +16,10 @@ interface TaskItemProps {
   task: Task
   depth: number
   hasChildren: boolean
+  onContextMenu?: (e: React.MouseEvent, task: Task) => void
 }
 
-export function TaskItem({ task, depth, hasChildren }: TaskItemProps) {
+export function TaskItem({ task, depth, hasChildren, onContextMenu }: TaskItemProps) {
   const toggleDone = useTaskStore((s) => s.toggleDone)
   const selectTask = useTaskStore((s) => s.selectTask)
   const selectedTask = useTaskStore((s) => s.selectedTask)
@@ -38,6 +39,7 @@ export function TaskItem({ task, depth, hasChildren }: TaskItemProps) {
       } ${isDone ? 'opacity-60' : ''}`}
       style={{ paddingLeft: `${12 + depth * 20}px` }}
       onClick={(e) => { e.stopPropagation(); selectTask(task) }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(e, task) }}
     >
       {hasChildren ? (
         <button
