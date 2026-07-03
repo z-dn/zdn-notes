@@ -85,7 +85,7 @@ export function DetailPanel() {
         <span className="text-xs text-muted-foreground shrink-0">分类</span>
         <Select
           value={selectedTask.categoryId ?? ''}
-          onChange={(v) => updateTask({ id: selectedTask.id, categoryId: v || null })}
+          onChange={(v) => updateTask({ id: selectedTask.id, categoryId: v || '__uncategorized' })}
           options={[
             { value: '', label: '未分类' },
             ...categories.filter((c) => c.id !== '__uncategorized').map((c) => ({ value: c.id, label: c.name })),

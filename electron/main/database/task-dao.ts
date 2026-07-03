@@ -44,6 +44,7 @@ function rowToTask(row: Row): Task {
     else if (key === 'meta' && typeof val === 'string') task[key] = JSON.parse(val)
     else task[key] = val ?? null
   }
+  if (task.categoryId === null) task.categoryId = '__uncategorized'
   return task as unknown as Task
 }
 
@@ -94,7 +95,7 @@ export function createTask(dto: CreateTaskDTO, _db?: Database): Task {
     orderIndex,
     tags: dto.tags ?? [],
     owner: dto.owner ?? '',
-    categoryId: dto.categoryId ?? null,
+    categoryId: dto.categoryId ?? '__uncategorized',
     meta: {},
     createdAt: now,
     updatedAt: now,
