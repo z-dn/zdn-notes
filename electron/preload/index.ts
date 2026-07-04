@@ -16,4 +16,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   categoryGetTaskCounts: () => ipcRenderer.invoke('category:getTaskCounts'),
 
   exportMarkdown: () => ipcRenderer.invoke('task:exportMarkdown'),
+
+  updateCheck: () => ipcRenderer.invoke('update:check'),
+  updateDownload: () => ipcRenderer.invoke('update:download'),
+  updateInstall: () => ipcRenderer.invoke('update:install'),
+  onUpdateChecking: (cb: () => void) => {
+    ipcRenderer.on('update:checking', () => cb())
+    return () => ipcRenderer.removeAllListeners('update:checking')
+  },
+  onUpdateAvailable: (cb: (info: unknown) => void) => {
+    ipcRenderer.on('update:available', (_e, info) => cb(info))
+    return () => ipcRenderer.removeAllListeners('update:available')
+  },
+  onUpdateNotAvailable: (cb: (info: unknown) => void) => {
+    ipcRenderer.on('update:not-available', (_e, info) => cb(info))
+    return () => ipcRenderer.removeAllListeners('update:not-available')
+  },
+  onUpdateError: (cb: (msg: string) => void) => {
+    ipcRenderer.on('update:error', (_e, msg) => cb(msg))
+    return () => ipcRenderer.removeAllListeners('update:error')
+  },
+  onUpdateProgress: (cb: (progress: unknown) => void) => {
+    ipcRenderer.on('update:progress', (_e, progress) => cb(progress))
+    return () => ipcRenderer.removeAllListeners('update:progress')
+  },
+  onUpdateDownloaded: (cb: (info: unknown) => void) => {
+    ipcRenderer.on('update:downloaded', (_e, info) => cb(info))
+    return () => ipcRenderer.removeAllListeners('update:downloaded')
+  },
 })

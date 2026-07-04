@@ -1,5 +1,6 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { join } from 'path'
+import { autoUpdater } from 'electron-updater'
 import { initDB, closeDB } from './database'
 import { registerIpcHandlers } from './ipc'
 
@@ -31,12 +32,52 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow.webContents.send('update:checking')
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    mainWindow.webContents.send('update:available', info)
+  })
+
+  autoUpdater.on('update-not-available', (info) => {
+    mainWindow.webContents.send('update:not-available', info)
+  })
+
+  autoUpdater.on('error', (err) => {
+    mainWindow.webContents.send('update:error', err.message)
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow.webContents.send('update:progress', progress)
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    mainWindow.webContents.send('update:downloaded', info)
+  })
 }
+
+ipcMain.handle('update:check', () => {
+  autoUpdater.checkForUpdates()
+})
+
+ipcMain.handle('update:download', () => {
+  autoUpdater.downloadUpdate()
+})
+
+ipcMain.handle('update:install', () => {
+  autoUpdater.quitAndInstall()
+})
 
 app.whenReady().then(async () => {
   await initDB()
   registerIpcHandlers()
   createWindow()
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdates()
+  }, 3000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

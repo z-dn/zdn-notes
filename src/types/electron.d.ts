@@ -18,6 +18,16 @@ declare global {
       categoryGetTaskCounts(): Promise<Record<string, number>>
 
       exportMarkdown(): Promise<boolean>
+
+      updateCheck(): Promise<void>
+      updateDownload(): Promise<void>
+      updateInstall(): Promise<void>
+      onUpdateChecking(cb: () => void): () => void
+      onUpdateAvailable(cb: (info: unknown) => void): () => void
+      onUpdateNotAvailable(cb: (info: unknown) => void): () => void
+      onUpdateError(cb: (msg: string) => void): () => void
+      onUpdateProgress(cb: (progress: unknown) => void): () => void
+      onUpdateDownloaded(cb: (info: unknown) => void): () => void
     }
   }
 }
