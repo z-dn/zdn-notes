@@ -26,6 +26,8 @@ export function DetailPanel() {
   const [newOwner, setNewOwner] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
   const tagInput = useRef<HTMLInputElement>(null)
+  const titleTimer = useRef<number>(undefined)
+  const descTimer = useRef<number>(undefined)
 
   useEffect(() => {
     if (selectedTask) {
@@ -57,11 +59,21 @@ export function DetailPanel() {
     <div className="flex h-full flex-col gap-4 p-4">
       <Input
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(e) => {
+          setTitle(e.target.value)
+          clearTimeout(titleTimer.current)
+          titleTimer.current = setTimeout(() => {
+            const trimmed = e.target.value.trim()
+            if (trimmed && trimmed !== selectedTask.title) {
+              updateTask({ id: selectedTask.id, title: trimmed })
+            }
+          }, 500)
+        }}
         onBlur={() => {
+          clearTimeout(titleTimer.current)
           if (title.trim() && title !== selectedTask.title) {
             updateTask({ id: selectedTask.id, title: title.trim() })
-          } else {
+          } else if (!title.trim()) {
             setTitle(selectedTask.title)
           }
         }}
@@ -271,8 +283,19 @@ export function DetailPanel() {
         ) : (
           <textarea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={() => updateTask({ id: selectedTask.id, description })}
+            onChange={(e) => {
+              setDescription(e.target.value)
+              clearTimeout(descTimer.current)
+              descTimer.current = setTimeout(() => {
+                updateTask({ id: selectedTask.id, description: e.target.value })
+              }, 500)
+            }}
+            onBlur={() => {
+              clearTimeout(descTimer.current)
+              if (description !== selectedTask.description) {
+                updateTask({ id: selectedTask.id, description })
+              }
+            }}
             placeholder="支持 Markdown 格式..."
             className="h-full min-h-[80px] w-full resize-none rounded-md border border-input bg-transparent p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
