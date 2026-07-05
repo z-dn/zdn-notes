@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron'
 import { join } from 'path'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
@@ -72,6 +72,7 @@ ipcMain.handle('update:install', () => {
 })
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null)
   await initDB()
   registerIpcHandlers()
   createWindow()
