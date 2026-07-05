@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   categoryGetTaskCounts: () => ipcRenderer.invoke('category:getTaskCounts'),
 
   exportMarkdown: () => ipcRenderer.invoke('task:exportMarkdown'),
+  settingsGetAll: () => ipcRenderer.invoke('settings:getAll'),
+  settingsSet: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
 
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateDownload: () => ipcRenderer.invoke('update:download'),

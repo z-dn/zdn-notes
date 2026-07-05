@@ -2,6 +2,7 @@ import { ipcMain, dialog } from 'electron'
 import { writeFileSync } from 'fs'
 import { createTask, getTaskById, getAllTasks, updateTask, deleteTask, updateTaskStatus } from './database/task-dao'
 import { createCategory, getAllCategories, updateCategory, deleteCategory, getCategoryTaskCounts } from './database/category-dao'
+import { getAllSettings, setSetting } from './database/settings-dao'
 import type { Task, Status } from '@/types/task'
 
 export function registerIpcHandlers(): void {
@@ -17,6 +18,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('category:update', (_e, id, data) => updateCategory(id, data))
   ipcMain.handle('category:delete', (_e, id) => deleteCategory(id))
   ipcMain.handle('category:getTaskCounts', () => getCategoryTaskCounts())
+
+  ipcMain.handle('settings:getAll', () => getAllSettings())
+  ipcMain.handle('settings:set', (_e, key, value) => setSetting(key, value))
 
   ipcMain.handle('task:exportMarkdown', async () => {
     const tasks = getAllTasks()

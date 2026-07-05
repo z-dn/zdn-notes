@@ -1,10 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
+import { useSettingsStore } from '@/stores/settings-store'
 import { TaskInput } from '@/components/task-input'
 import { TaskList } from '@/components/task-list'
 import { DetailPanel } from '@/components/detail-panel'
 import { CategorySidebar } from '@/components/category-sidebar'
+import { SettingsDialog } from '@/components/settings-dialog'
 import { ToastContainer } from '@/components/toast'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
@@ -13,11 +15,14 @@ import { toast } from '@/lib/toast'
 export default function App() {
   const loadTasks = useTaskStore((s) => s.loadTasks)
   const loadCategories = useCategoryStore((s) => s.loadCategories)
+  const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     loadTasks()
     loadCategories()
-  }, [loadTasks, loadCategories])
+    loadSettings()
+  }, [loadTasks, loadCategories, loadSettings])
 
   async function handleExport() {
     const ok = await window.electronAPI.exportMarkdown()
@@ -28,9 +33,14 @@ export default function App() {
     <div className="flex h-screen flex-col bg-background text-foreground">
       <header className="flex items-center justify-between border-b px-4 py-2">
         <h1 className="text-lg font-bold">ZDNotes</h1>
-        <button onClick={handleExport} className="rounded px-2 py-1 text-xs transition-colors hover:bg-accent">
-          导出为 Markdown
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setShowSettings(true)} className="rounded px-2 py-1 text-xs transition-colors hover:bg-accent" title="设置">
+            ⚙️
+          </button>
+          <button onClick={handleExport} className="rounded px-2 py-1 text-xs transition-colors hover:bg-accent">
+            导出为 Markdown
+          </button>
+        </div>
       </header>
 
       <div className="border-b px-4 py-2">
@@ -50,6 +60,7 @@ export default function App() {
           <DetailPanel />
         </aside>
       </div>
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
       <ToastContainer />
       <ConfirmDialog />
     </div>

@@ -17,6 +17,9 @@ declare global {
       categoryDelete(id: string): Promise<boolean>
       categoryGetTaskCounts(): Promise<Record<string, number>>
 
+      settingsGetAll(): Promise<Record<string, string>>
+      settingsSet(key: string, value: string): Promise<void>
+
       exportMarkdown(): Promise<boolean>
 
       updateCheck(): Promise<void>

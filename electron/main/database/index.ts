@@ -38,6 +38,11 @@ CREATE INDEX IF NOT EXISTS idx_tasks_due_date     ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent_id    ON tasks(parent_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_order_index  ON tasks(order_index);
 
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+);
+
 `
 
 let db: SqlJsDatabase | null = null
@@ -56,6 +61,7 @@ export async function initDB(): Promise<void> {
     try { db.run("ALTER TABLE categories ADD COLUMN parent_id TEXT") } catch (e) { /* column may already exist */ }
     try { db.run("UPDATE categories SET parent_id = NULL") } catch (e) { /* ignore */ }
     try { db.run("ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL") } catch (e) { /* column may already exist */ }
+    try { db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)") } catch (e) { /* table may already exist */ }
   } else {
     db = new SQL.Database()
     db.run(SCHEMA_SQL)
