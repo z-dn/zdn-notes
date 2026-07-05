@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { marked } from 'marked'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
@@ -17,6 +17,7 @@ const PRIORITY_OPTIONS: Priority[] = ['P0', 'P1', 'P2', 'P3']
 export function DetailPanel() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
   const updateTask = useTaskStore((s) => s.updateTask)
+  const tasks = useTaskStore((s) => s.tasks)
   const categories = useCategoryStore((s) => s.categories)
   const [description, setDescription] = useState('')
   const [title, setTitle] = useState('')
@@ -28,6 +29,8 @@ export function DetailPanel() {
   const tagInput = useRef<HTMLInputElement>(null)
   const titleTimer = useRef<number>(undefined)
   const descTimer = useRef<number>(undefined)
+  const ownerInputRef = useRef<HTMLInputElement>(null)
+  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false)
 
   useEffect(() => {
     if (selectedTask) {
@@ -46,6 +49,23 @@ export function DetailPanel() {
       )
     }
   }, [selectedTask])
+
+  const recentOwners = useMemo(() => {
+    const seen = new Set<string>()
+    return [...tasks]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .filter((t) => {
+        if (!t.owner || t.owner === selectedTask?.owner || seen.has(t.owner)) return false
+        seen.add(t.owner)
+        return true
+      })
+      .slice(0, 10)
+      .map((t) => t.owner)
+  }, [tasks, selectedTask?.owner])
+
+  const filteredOwners = showOwnerDropdown
+    ? recentOwners.filter((o) => !newOwner || o.toLowerCase().includes(newOwner.toLowerCase()))
+    : []
 
   if (!selectedTask) {
     return (
@@ -147,7 +167,7 @@ export function DetailPanel() {
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1 relative">
         <div className="flex flex-wrap gap-1">
           {selectedTask.owner && (
             <Badge variant="secondary" className="text-[10px]">
@@ -161,18 +181,56 @@ export function DetailPanel() {
             </Badge>
           )}
         </div>
-        <input
-          value={newOwner}
-          onChange={(e) => setNewOwner(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && newOwner.trim()) {
-              updateTask({ id: selectedTask.id, owner: newOwner.trim() })
-              setNewOwner('')
-            }
-          }}
-          placeholder="添加负责人..."
-          className="h-6 w-full rounded border border-input bg-transparent px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
-        />
+        <div className="relative">
+          <input
+            ref={ownerInputRef}
+            value={newOwner}
+            onChange={(e) => {
+              setNewOwner(e.target.value)
+              setShowOwnerDropdown(true)
+            }}
+            onFocus={() => setShowOwnerDropdown(true)}
+            onBlur={() => setShowOwnerDropdown(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newOwner.trim()) {
+                updateTask({ id: selectedTask.id, owner: newOwner.trim() })
+                setNewOwner('')
+                setShowOwnerDropdown(false)
+              }
+              if (e.key === 'Escape') {
+                setShowOwnerDropdown(false)
+              }
+            }}
+            placeholder="添加负责人..."
+            className="h-6 w-full rounded border border-input bg-transparent px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
+          />
+          {showOwnerDropdown && filteredOwners.length > 0 && (
+            <div
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-40 overflow-y-auto rounded-md border border-input bg-popover shadow-md"
+            >
+              {filteredOwners.map((owner) => (
+                <button
+                  key={owner}
+                  type="button"
+                  onMouseDown={() => {
+                    updateTask({ id: selectedTask.id, owner })
+                    setNewOwner('')
+                    setShowOwnerDropdown(false)
+                    ownerInputRef.current?.blur()
+                  }}
+                  className={`flex w-full items-center px-2 py-1.5 text-left text-xs transition-colors ${
+                    owner === selectedTask.owner
+                      ? 'bg-accent text-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  {owner}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="space-y-1">
