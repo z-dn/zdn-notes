@@ -12,6 +12,7 @@ export function CategorySidebar() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const editRef = useRef<HTMLInputElement>(null)
+  const editContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (editingId && editRef.current) {
@@ -19,6 +20,17 @@ export function CategorySidebar() {
       editRef.current.select()
     }
   }, [editingId])
+
+  useEffect(() => {
+    if (!editingId) return
+    function handleMouseDown(e: MouseEvent) {
+      if (editContainerRef.current && !editContainerRef.current.contains(e.target as Node)) {
+        saveEdit()
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [editingId, editValue])
 
   const handleCreate = async () => {
     if (!newName.trim()) return
@@ -97,17 +109,16 @@ export function CategorySidebar() {
               />
 
               {editing ? (
-                <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+                <div ref={editContainerRef} className="flex flex-1 flex-col gap-1.5 min-w-0">
                   <div className="flex items-center gap-1">
                     <input
                       ref={editRef}
                       value={editValue}
                       onChange={(e) => setEditValue(e.target.value)}
                       onKeyDown={handleEditKeyDown}
-                      onBlur={saveEdit}
                       onClick={(e) => e.stopPropagation()}
                       placeholder="请输入分类名称"
-                      className="flex-1 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+                      className="min-w-0 flex-1 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
                     />
                     <button
                       onClick={(e) => { e.stopPropagation(); saveEdit() }}
