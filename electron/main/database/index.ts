@@ -58,6 +58,7 @@ export async function initDB(): Promise<void> {
     try { db.run("ALTER TABLE tasks RENAME COLUMN project TO owner") } catch (e) { /* already renamed */ }
     try { db.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''") } catch (e) { /* column may already exist */ }
     try { db.run("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)") } catch (e) { /* table may already exist */ }
+    try { db.run("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'") } catch (e) { /* column may already exist */ }
     try { db.run("ALTER TABLE categories ADD COLUMN parent_id TEXT") } catch (e) { /* column may already exist */ }
     try { db.run("UPDATE categories SET parent_id = NULL") } catch (e) { /* ignore */ }
     try { db.run("ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL") } catch (e) { /* column may already exist */ }
