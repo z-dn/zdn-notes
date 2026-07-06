@@ -97,32 +97,46 @@ export function CategorySidebar() {
               />
 
               {editing ? (
-                <>
-                  <input
-                    ref={editRef}
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onKeyDown={handleEditKeyDown}
-                    onBlur={saveEdit}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="请输入分类名称"
-                    className="flex-1 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
-                  />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); saveEdit() }}
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-600 hover:bg-green-100"
-                    title="保存"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); cancelEdit() }}
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
-                    title="取消"
-                  >
-                    ✕
-                  </button>
-                </>
+                <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1">
+                    <input
+                      ref={editRef}
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      onBlur={saveEdit}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="请输入分类名称"
+                      className="flex-1 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+                    />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); saveEdit() }}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-600 hover:bg-green-100"
+                      title="保存"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); cancelEdit() }}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+                      title="取消"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {COLORS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={(e) => { e.stopPropagation(); updateCategory(cat.id, { color: c }) }}
+                        className={`h-3.5 w-3.5 rounded-full border transition-transform ${
+                          cat.color === c ? 'scale-125 ring-1 ring-ring ring-offset-1' : ''
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <>
                   <span
