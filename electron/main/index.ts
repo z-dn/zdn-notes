@@ -4,6 +4,7 @@ import pkg from 'electron-updater'
 const { autoUpdater } = pkg
 import { initDB, closeDB } from './database'
 import { registerIpcHandlers } from './ipc'
+import { getAllSettings } from './database/settings-dao'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -77,9 +78,10 @@ app.whenReady().then(async () => {
   registerIpcHandlers()
   createWindow()
 
-  setTimeout(() => {
-    autoUpdater.checkForUpdates()
-  }, 3000)
+  const settings = getAllSettings()
+  if (settings.autoUpdate !== 'false') {
+    setTimeout(() => autoUpdater.checkForUpdates(), 3000)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

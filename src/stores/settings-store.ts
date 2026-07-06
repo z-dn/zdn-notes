@@ -6,6 +6,7 @@ const DEFAULTS: Settings = {
   theme: 'system',
   defaultView: 'list',
   reminderEnabled: true,
+  autoUpdate: true,
 }
 
 function api() {
@@ -38,6 +39,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (raw.theme && ['system', 'light', 'dark'].includes(raw.theme)) saved.theme = raw.theme as Settings['theme']
       if (raw.defaultView && ['list', 'kanban', 'today'].includes(raw.defaultView)) saved.defaultView = raw.defaultView as Settings['defaultView']
       if (raw.reminderEnabled !== undefined) saved.reminderEnabled = raw.reminderEnabled === 'true'
+      if (raw.autoUpdate !== undefined) saved.autoUpdate = raw.autoUpdate === 'true'
       set({ saved, editing: { ...saved }, loading: false, dirty: false })
     } catch {
       toast('加载设置失败')

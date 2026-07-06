@@ -57,4 +57,5 @@ export interface Settings {
   theme: 'system' | 'light' | 'dark'
   defaultView: 'list' | 'kanban' | 'today'
   reminderEnabled: boolean
+  autoUpdate: boolean
 }
