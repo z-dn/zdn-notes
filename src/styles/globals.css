@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
+@theme {
   --color-background: hsl(0 0% 100%);
   --color-foreground: hsl(222.2 84% 4.9%);
   --color-card: hsl(0 0% 100%);
@@ -113,5 +113,34 @@
   * {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
+  }
+
+  .titlebar-btn {
+    -webkit-app-region: no-drag;
+    width: 36px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--color-foreground);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.12s;
+    outline: none;
+    flex-shrink: 0;
+  }
+  .titlebar-btn:hover {
+    background: var(--color-accent);
+  }
+  .titlebar-btn:active {
+    background: var(--color-muted);
+  }
+  .titlebar-close:hover {
+    background: var(--color-accent);
+  }
+  .titlebar-close:active {
+    background: var(--color-muted);
   }
 }

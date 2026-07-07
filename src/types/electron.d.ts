@@ -20,6 +20,12 @@ declare global {
       settingsGetAll(): Promise<Record<string, string>>
       settingsSet(key: string, value: string): Promise<void>
 
+      windowMinimize(): Promise<void>
+      windowMaximizeToggle(): Promise<void>
+      windowClose(): Promise<void>
+      setThemeSource(source: 'system' | 'light' | 'dark'): Promise<void>
+      onWindowMaximizedChange(cb: (maximized: boolean) => void): () => void
+
       exportMarkdown(): Promise<boolean>
 
       updateCheck(): Promise<void>

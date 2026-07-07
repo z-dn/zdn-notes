@@ -7,16 +7,19 @@ import { TaskList } from '@/components/task-list'
 import { DetailPanel } from '@/components/detail-panel'
 import { CategorySidebar } from '@/components/category-sidebar'
 import { SettingsDialog } from '@/components/settings-dialog'
+import { useTheme } from '@/hooks/use-theme'
 import { ToastContainer } from '@/components/toast'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
 import { toast } from '@/lib/toast'
 
 export default function App() {
+  useTheme()
   const loadTasks = useTaskStore((s) => s.loadTasks)
   const loadCategories = useCategoryStore((s) => s.loadCategories)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const [showSettings, setShowSettings] = useState(false)
+  const [maximized, setMaximized] = useState(false)
 
   useEffect(() => {
     loadTasks()
@@ -24,22 +27,58 @@ export default function App() {
     loadSettings()
   }, [loadTasks, loadCategories, loadSettings])
 
+  useEffect(() => {
+    const unsub = window.electronAPI.onWindowMaximizedChange((v) => setMaximized(v))
+    return () => unsub()
+  }, [])
+
   async function handleExport() {
     const ok = await window.electronAPI.exportMarkdown()
     toast(ok ? '导出成功' : '取消导出')
   }
 
+  const DRAG = { WebkitAppRegion: 'drag' as string }
+  const NO_DRAG = { WebkitAppRegion: 'no-drag' as string }
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center justify-between border-b px-4 py-2">
-        <h1 className="text-lg font-bold">ZDNotes</h1>
-        <div className="flex items-center gap-1">
-          <button onClick={() => setShowSettings(true)} className="rounded px-2 py-1 text-xs transition-colors hover:bg-accent" title="设置">
-            ⚙️
-          </button>
-          <button onClick={handleExport} className="rounded px-2 py-1 text-xs transition-colors hover:bg-accent">
-            导出为 Markdown
-          </button>
+      <header className="flex items-center justify-between border-b px-3" style={DRAG}>
+        <h1 className="text-sm font-bold tracking-wide select-none">ZDNotes</h1>
+        <div className="flex items-center">
+          <div className="flex items-center gap-1" style={NO_DRAG}>
+            <button onClick={() => setShowSettings(true)} className="rounded px-2 py-1.5 text-xs transition-colors hover:bg-accent" title="设置">
+              ⚙️
+            </button>
+            <button onClick={handleExport} className="rounded px-2 py-1.5 text-xs transition-colors hover:bg-accent">
+              导出
+            </button>
+          </div>
+          <span className="mx-1 h-4 w-px bg-border" />
+          <div className="flex" style={NO_DRAG}>
+            <button onClick={() => window.electronAPI.windowMinimize()} className="titlebar-btn" title="最小化">
+              <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.2}>
+                <line x1="2" y1="6" x2="10" y2="6" />
+              </svg>
+            </button>
+            <button onClick={() => window.electronAPI.windowMaximizeToggle()} className="titlebar-btn" title={maximized ? '还原' : '最大化'}>
+              {maximized ? (
+                <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.2}>
+                  <rect x="1" y="1.5" width="9" height="9" rx="0.5" opacity="0.4" />
+                  <rect x="3" y="3" width="8.5" height="8.5" rx="0.5" fill="var(--color-background)" stroke="currentColor" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.2}>
+                  <rect x="1.5" y="1.5" width="9" height="9" rx="0.5" />
+                </svg>
+              )}
+            </button>
+            <button onClick={() => window.electronAPI.windowClose()} className="titlebar-btn titlebar-close" title="关闭">
+              <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.2}>
+                <line x1="2.5" y1="2.5" x2="9.5" y2="9.5" />
+                <line x1="9.5" y1="2.5" x2="2.5" y2="9.5" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 

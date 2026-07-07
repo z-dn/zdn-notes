@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, nativeTheme } from 'electron'
 import { join } from 'path'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
@@ -13,7 +13,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false,
-    title: 'ZDNotes',
+    frame: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       sandbox: false
@@ -28,6 +28,18 @@ function createWindow(): void {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+
+  ipcMain.handle('window:minimize', () => mainWindow.minimize())
+  ipcMain.handle('window:maximizeToggle', () => {
+    mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
+  })
+  ipcMain.handle('window:close', () => mainWindow.close())
+  ipcMain.handle('window:setThemeSource', (_e, source: 'system' | 'light' | 'dark') => {
+    nativeTheme.themeSource = source
+  })
+
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximizedChange', true))
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximizedChange', false))
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])

@@ -15,6 +15,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   categoryDelete: (id: string) => ipcRenderer.invoke('category:delete', id),
   categoryGetTaskCounts: () => ipcRenderer.invoke('category:getTaskCounts'),
 
+  windowMinimize: () => ipcRenderer.invoke('window:minimize'),
+  windowMaximizeToggle: () => ipcRenderer.invoke('window:maximizeToggle'),
+  windowClose: () => ipcRenderer.invoke('window:close'),
+  setThemeSource: (source: string) => ipcRenderer.invoke('window:setThemeSource', source),
+  onWindowMaximizedChange: (cb: (maximized: boolean) => void) => {
+    const handler = (_e: unknown, v: boolean) => cb(v)
+    ipcRenderer.on('window:maximizedChange', handler)
+    return () => ipcRenderer.removeAllListeners('window:maximizedChange')
+  },
+
   exportMarkdown: () => ipcRenderer.invoke('task:exportMarkdown'),
   settingsGetAll: () => ipcRenderer.invoke('settings:getAll'),
   settingsSet: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
