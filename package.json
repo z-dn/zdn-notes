@@ -31,7 +31,7 @@
       "target": [
         "nsis"
       ],
-      "icon": null
+      "icon": "resources/icon.svg"
     },
     "nsis": {
       "oneClick": false,
