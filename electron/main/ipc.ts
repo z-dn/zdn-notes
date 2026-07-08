@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog } from 'electron'
 import { writeFileSync } from 'fs'
 import { createTask, getTaskById, getAllTasks, updateTask, deleteTask, updateTaskStatus } from './database/task-dao'
 import { createCategory, getAllCategories, updateCategory, deleteCategory, getCategoryTaskCounts } from './database/category-dao'
@@ -18,6 +18,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('category:update', (_e, id, data) => updateCategory(id, data))
   ipcMain.handle('category:delete', (_e, id) => deleteCategory(id))
   ipcMain.handle('category:getTaskCounts', () => getCategoryTaskCounts())
+
+  ipcMain.handle('app:getVersion', () => app.getVersion())
 
   ipcMain.handle('settings:getAll', () => getAllSettings())
   ipcMain.handle('settings:set', (_e, key, value) => setSetting(key, value))

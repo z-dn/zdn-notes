@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeAllListeners('window:maximizedChange')
   },
 
+  getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+
   exportMarkdown: () => ipcRenderer.invoke('task:exportMarkdown'),
   settingsGetAll: () => ipcRenderer.invoke('settings:getAll'),
   settingsSet: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),

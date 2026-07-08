@@ -29,6 +29,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const resetEditing = useSettingsStore((s) => s.resetEditing)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle')
   const [updateInfo, setUpdateInfo] = useState<string>('')
+  const [appVersion, setAppVersion] = useState('')
 
   useEffect(() => {
     if (!open) {
@@ -36,6 +37,10 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       setUpdateInfo('')
     }
   }, [open])
+
+  useEffect(() => {
+    window.electronAPI.getAppVersion().then(setAppVersion)
+  }, [])
 
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -224,20 +229,23 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t px-5 py-3">
-          <button
-            onClick={handleCancel}
-            className="rounded-md border border-input bg-background px-4 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!dirty}
-            className="rounded-md bg-primary px-4 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            保存
-          </button>
+        <div className="flex items-center justify-between border-t px-5 py-3">
+          <p className="text-xs text-muted-foreground">v{appVersion}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleCancel}
+              className="rounded-md border border-input bg-background px-4 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!dirty}
+              className="rounded-md bg-primary px-4 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              保存
+            </button>
+          </div>
         </div>
       </div>
     </div>
