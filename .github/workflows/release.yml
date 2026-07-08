@@ -28,6 +28,8 @@ jobs:
 
       - name: Generate and create Release
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ github.ref_name }}"
           $version = $tag -replace '^v',''
