@@ -24,6 +24,8 @@ jobs:
 
       - run: npx electron-vite build
 
-      - run: npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npx electron-builder --win
+
+      - name: Create GitHub Release
+        shell: pwsh
+        run: gh release create "${{ github.ref_name }}" release/*.exe release/*.exe.blockmap release/latest.yml --title "${{ github.ref_name }}" --generate-notes
