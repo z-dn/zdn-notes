@@ -24,6 +24,27 @@ jobs:
 
       - run: npx electron-vite build
 
-      - run: npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npx electron-builder --win --publish never
+
+      - name: Generate and create Release
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v',''
+          $exe = Get-Item release/*.exe | Where-Object { $_.Name -notlike '*uninstaller*' -and $_.Name -notlike '*.exe.blockmap' }
+          $exeBytes = [System.IO.File]::ReadAllBytes($exe.FullName)
+          $sha = [Convert]::ToBase64String([System.Security.Cryptography.SHA512]::Create().ComputeHash($exeBytes))
+          $size = $exe.Length
+          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+          $yml = @"
+version: $version
+files:
+  - url: $($exe.Name)
+    sha512: $sha
+    size: $size
+path: $($exe.Name)
+sha512: $sha
+releaseDate: $date
+"@
+          $yml | Out-File -FilePath release/latest.yml -Encoding utf8
+          gh release create $tag release/*.exe release/*.exe.blockmap release/latest.yml --title $tag --generate-notes
