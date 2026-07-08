@@ -55,7 +55,7 @@ export interface CreateCategoryDTO {
 
 export interface Settings {
   theme: 'system' | 'light' | 'dark'
-  defaultView: 'list' | 'kanban' | 'today'
+  defaultView: 'list'
   reminderEnabled: boolean
   autoUpdate: boolean
 }

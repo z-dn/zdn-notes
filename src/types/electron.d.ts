@@ -26,6 +26,8 @@ declare global {
       setThemeSource(source: 'system' | 'light' | 'dark'): Promise<void>
       onWindowMaximizedChange(cb: (maximized: boolean) => void): () => void
 
+      getAppVersion(): Promise<string>
+
       exportMarkdown(): Promise<boolean>
 
       updateCheck(): Promise<void>

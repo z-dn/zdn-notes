@@ -15,11 +15,7 @@ const THEME_OPTIONS: { value: 'system' | 'light' | 'dark'; label: string }[] = [
   { value: 'dark', label: '深色' },
 ]
 
-const VIEW_OPTIONS: { value: 'list' | 'kanban' | 'today'; label: string }[] = [
-  { value: 'list', label: '列表视图' },
-  { value: 'kanban', label: '看板视图' },
-  { value: 'today', label: '今日聚焦' },
-]
+
 
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const editing = useSettingsStore((s) => s.editing)
@@ -154,26 +150,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             </div>
           </div>
 
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">默认视图</label>
-            <div className="relative">
-              <select
-                value={editing.defaultView}
-                onChange={(e) => updateEditing('defaultView', e.target.value as typeof editing.defaultView)}
-                className="flex h-8 w-full items-center rounded-md border border-input bg-background px-2 text-xs text-foreground appearance-none cursor-pointer hover:bg-accent transition-colors"
-              >
-                {VIEW_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <svg
-                className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground"
-                fill="none" viewBox="0 0 24 24" stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
+
 
           <div>
             <label className="flex items-center gap-2 cursor-pointer">
