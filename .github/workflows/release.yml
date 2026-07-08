@@ -36,15 +36,6 @@ jobs:
           $sha = [Convert]::ToBase64String([System.Security.Cryptography.SHA512]::Create().ComputeHash($exeBytes))
           $size = $exe.Length
           $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-          $yml = @"
-version: $version
-files:
-  - url: $($exe.Name)
-    sha512: $sha
-    size: $size
-path: $($exe.Name)
-sha512: $sha
-releaseDate: $date
-"@
+          $yml = @("version: $version","files:","  - url: $($exe.Name)","    sha512: $sha","    size: $size","path: $($exe.Name)","sha512: $sha","releaseDate: $date") -join "`r`n"
           $yml | Out-File -FilePath release/latest.yml -Encoding utf8
           gh release create $tag release/*.exe release/*.exe.blockmap release/latest.yml --title $tag --generate-notes
