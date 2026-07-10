@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { useSettingsStore } from '@/stores/settings-store'
-import { TaskInput } from '@/components/task-input'
 import { TaskList } from '@/components/task-list'
 import { DetailPanel } from '@/components/detail-panel'
 import { CategorySidebar } from '@/components/category-sidebar'
@@ -16,7 +15,9 @@ import { toast } from '@/lib/toast'
 export default function App() {
   useTheme()
   const loadTasks = useTaskStore((s) => s.loadTasks)
+  const selectTask = useTaskStore((s) => s.selectTask)
   const loadCategories = useCategoryStore((s) => s.loadCategories)
+  const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const [showSettings, setShowSettings] = useState(false)
   const [maximized, setMaximized] = useState(false)
@@ -31,6 +32,10 @@ export default function App() {
     const unsub = window.electronAPI.onWindowMaximizedChange((v) => setMaximized(v))
     return () => unsub()
   }, [])
+
+  useEffect(() => {
+    selectTask(null)
+  }, [activeCategoryId, selectTask])
 
   async function handleExport() {
     const ok = await window.electronAPI.exportMarkdown()
@@ -81,10 +86,6 @@ export default function App() {
           </div>
         </div>
       </header>
-
-      <div className="border-b px-4 py-2">
-        <TaskInput />
-      </div>
 
       <div className="flex flex-1 overflow-hidden">
         <aside className="hidden h-full md:block">

@@ -96,6 +96,7 @@ export function TaskList() {
   const [sortField, setSortField] = useState<SortField>('order')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; task: Task } | null>(null)
+  const [blankMenuPos, setBlankMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [inlineInput, setInlineInput] = useState<{
     afterTaskId: string
     parentId: string | null
@@ -232,6 +233,21 @@ export function TaskList() {
     setInlineInput({ afterTaskId: task.id, parentId: task.id, orderIndex, depth })
   }, [tasks, flatList, expandedIds, toggleExpand])
 
+  const handleBlankAdd = useCallback(() => {
+    const rootTasks = flatList.filter((f) => f.task.parentId === null)
+    const lastRoot = rootTasks[rootTasks.length - 1]
+    const orderIndex = lastRoot
+      ? generateBetween(lastRoot.task.orderIndex, null)
+      : generateBetween(null, null)
+    setInlineInput({
+      afterTaskId: lastRoot?.task.id ?? '__root__',
+      parentId: null,
+      orderIndex,
+      depth: 0,
+    })
+    setBlankMenuPos(null)
+  }, [flatList])
+
   function toggleSort(field: SortField) {
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -273,12 +289,18 @@ export function TaskList() {
         ))}
       </div>
 
-      <div ref={listRef} className="space-y-0.5" onClick={() => { if (!dragIdRef.current) selectTask(null) }}>
+      <div ref={listRef} className="space-y-0.5" onClick={() => { if (!dragIdRef.current) selectTask(null) }}
+        onContextMenu={(e) => {
+          if ((e.target as HTMLElement).closest('[data-task-id]')) return
+          e.preventDefault()
+          setBlankMenuPos({ x: e.clientX, y: e.clientY })
+        }}
+      >
         {flatList.flatMap(({ task, depth, hasChildren }, flatIndex) => [
           dropTargetIndex === flatIndex && dragIdRef.current && (
             <div key={`drop-${flatIndex}`} className="h-0.5 rounded bg-blue-500" />
           ),
-          <div key={task.id} data-task-wrap>
+          <div key={task.id} data-task-wrap className="animate-fade-slide-up" style={{ animationDelay: `${flatIndex * 25}ms` }}>
             <TaskItem
               task={task}
               depth={depth}
@@ -301,6 +323,15 @@ export function TaskList() {
         {dropTargetIndex === flatList.length && dragIdRef.current && (
           <div key="drop-end" className="h-0.5 rounded bg-blue-500" />
         )}
+        {inlineInput && !flatList.some((f) => f.task.id === inlineInput.afterTaskId) && (
+          <InlineTaskInput
+            key="inline-root-input"
+            parentId={inlineInput.parentId}
+            orderIndex={inlineInput.orderIndex}
+            depth={inlineInput.depth}
+            onClose={() => setInlineInput(null)}
+          />
+        )}
       </div>
       {contextMenu && (
         <ContextMenu
@@ -310,6 +341,14 @@ export function TaskList() {
           onClose={() => setContextMenu(null)}
           onAddSibling={handleAddSibling}
           onAddChild={handleAddChild}
+        />
+      )}
+      {blankMenuPos && (
+        <ContextMenu
+          x={blankMenuPos.x}
+          y={blankMenuPos.y}
+          onClose={() => setBlankMenuPos(null)}
+          onAddTask={handleBlankAdd}
         />
       )}
     </div>

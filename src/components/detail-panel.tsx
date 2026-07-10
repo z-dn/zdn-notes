@@ -69,14 +69,14 @@ export function DetailPanel() {
 
   if (!selectedTask) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div key="no-task" className="animate-fade-slide-up flex h-full items-center justify-center text-sm text-muted-foreground">
         选择一个任务查看详情
       </div>
     )
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4">
+    <div key={selectedTask.id} className="animate-fade-slide-up flex h-full flex-col gap-4 p-4">
       <Input
         value={title}
         onChange={(e) => {

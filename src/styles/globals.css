@@ -34,6 +34,13 @@
   --color-sidebar-accent-foreground: hsl(240 5.9% 10%);
   --color-sidebar-border: hsl(220 13% 91%);
   --color-sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  --animate-fade-slide-up: fade-slide-up 0.25s ease-out both;
+}
+
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .dark {

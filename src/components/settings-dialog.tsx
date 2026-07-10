@@ -26,11 +26,19 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle')
   const [updateInfo, setUpdateInfo] = useState<string>('')
   const [appVersion, setAppVersion] = useState('')
+  const [mounted, setMounted] = useState(false)
+  const [show, setShow] = useState(false)
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setMounted(true)
+      requestAnimationFrame(() => setShow(true))
+    } else {
+      setShow(false)
+      const t = setTimeout(() => setMounted(false), 200)
       setUpdateStatus('idle')
       setUpdateInfo('')
+      return () => clearTimeout(t)
     }
   }, [open])
 
@@ -82,7 +90,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     return () => unsubs.forEach((fn) => fn())
   }, [open])
 
-  if (!open) return null
+  if (!mounted) return null
 
   async function handleSave() {
     const ok = await saveSettings()
@@ -115,11 +123,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={handleOverlayClick}
-    >
-      <div className="w-[420px] rounded-lg border bg-background shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={handleOverlayClick}>
+      <div className={`absolute inset-0 bg-black transition-opacity duration-200 ${show ? 'opacity-40' : 'opacity-0'}`} />
+      <div className={`relative w-[420px] rounded-lg border bg-background shadow-xl transition-all duration-200 ${show ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
         <div className="flex items-center justify-between border-b px-5 py-3">
           <h2 className="text-base font-semibold">⚙️ 设置</h2>
           <button
