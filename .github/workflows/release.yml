@@ -1,7 +1,6 @@
 name: Release
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -13,31 +12,20 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
-          cache: npm
+          node-version: 20
 
       - run: npm ci
 
-      - run: npx electron-vite build
+      - run: npm run dist
 
-      - run: npx electron-builder --win --publish never
-
-      - name: Generate and create Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "${{ github.ref_name }}"
-          $version = $tag -replace '^v',''
-          $exe = Get-Item release/*.exe | Where-Object { $_.Name -notlike '*uninstaller*' -and $_.Name -notlike '*.exe.blockmap' }
-          $exeBytes = [System.IO.File]::ReadAllBytes($exe.FullName)
-          $sha = [Convert]::ToBase64String([System.Security.Cryptography.SHA512]::Create().ComputeHash($exeBytes))
-          $size = $exe.Length
-          $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-          $yml = @("version: $version","files:","  - url: $($exe.Name)","    sha512: $sha","    size: $size","path: $($exe.Name)","sha512: $sha","releaseDate: $date") -join "`r`n"
-          $yml | Out-File -FilePath release/latest.yml -Encoding utf8
-          gh release create $tag release/*.exe release/*.exe.blockmap release/latest.yml --title $tag --generate-notes
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/ZDNotes-Setup-*.exe
+            release/ZDNotes-Setup-*.exe.blockmap
+            release/latest.yml
+          generate_release_notes: true
