@@ -5,6 +5,7 @@ import { useSettingsStore } from '@/stores/settings-store'
 import { TaskList } from '@/components/task-list'
 import { DetailPanel } from '@/components/detail-panel'
 import { CategorySidebar } from '@/components/category-sidebar'
+import { ExpandedDescription } from '@/components/expanded-description'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { useTheme } from '@/hooks/use-theme'
 import { ToastContainer } from '@/components/toast'
@@ -18,6 +19,7 @@ export default function App() {
   const selectTask = useTaskStore((s) => s.selectTask)
   const loadCategories = useCategoryStore((s) => s.loadCategories)
   const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
+  const expandedDescId = useTaskStore((s) => s.expandedDescId)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const [showSettings, setShowSettings] = useState(false)
   const [maximized, setMaximized] = useState(false)
@@ -92,8 +94,23 @@ export default function App() {
           <CategorySidebar />
         </aside>
 
-        <div className="flex-1 overflow-y-auto p-3">
-          <TaskList />
+        <div className="relative flex-1 overflow-hidden">
+          <div
+            className={`absolute inset-0 transition-all duration-300 ease-in-out ${
+              expandedDescId ? 'opacity-0 -translate-y-1 pointer-events-none' : 'opacity-100 translate-y-0'
+            }`}
+          >
+            <div className="h-full overflow-y-auto p-3">
+              <TaskList />
+            </div>
+          </div>
+          <div
+            className={`absolute inset-0 transition-all duration-300 ease-in-out ${
+              expandedDescId ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1 pointer-events-none'
+            }`}
+          >
+            <ExpandedDescription />
+          </div>
         </div>
 
         <aside className="hidden w-80 border-l md:block">

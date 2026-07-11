@@ -17,6 +17,7 @@ const PRIORITY_OPTIONS: Priority[] = ['P0', 'P1', 'P2', 'P3']
 export function DetailPanel() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
   const updateTask = useTaskStore((s) => s.updateTask)
+  const setExpandedDesc = useTaskStore((s) => s.setExpandedDesc)
   const tasks = useTaskStore((s) => s.tasks)
   const categories = useCategoryStore((s) => s.categories)
   const [description, setDescription] = useState('')
@@ -76,7 +77,7 @@ export function DetailPanel() {
   }
 
   return (
-    <div key={selectedTask.id} className="animate-fade-slide-up flex h-full flex-col gap-4 overflow-y-auto p-4">
+    <div key={selectedTask.id} className="animate-fade-slide-up flex h-full flex-col gap-4 p-4">
       <Input
         value={title}
         onChange={(e) => {
@@ -323,19 +324,28 @@ export function DetailPanel() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-1.5">
+      <div className="flex-1 space-y-1.5 overflow-y-auto min-h-0">
         <div className="flex items-center justify-between">
           <label className="text-xs text-muted-foreground">描述</label>
-          <button
-            onClick={() => setPreviewMode((p) => !p)}
-            className="text-[10px] text-muted-foreground/50 hover:text-foreground"
-          >
-            {previewMode ? '编辑' : '预览'}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setExpandedDesc(selectedTask.id)}
+              className="text-[10px] text-muted-foreground/50 hover:text-foreground"
+              title="展开描述"
+            >
+              ↗
+            </button>
+            <button
+              onClick={() => setPreviewMode((p) => !p)}
+              className="text-[10px] text-muted-foreground/50 hover:text-foreground"
+            >
+              {previewMode ? '编辑' : '预览'}
+            </button>
+          </div>
         </div>
         {previewMode ? (
           <div
-            className="h-full min-h-[80px] w-full overflow-y-auto rounded-md border border-input bg-transparent p-2 text-sm [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-2 [&_blockquote]:text-muted-foreground [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-medium"
+            className="h-full min-h-[80px] w-full overflow-auto break-words rounded-md border border-input bg-transparent p-2 text-sm [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-2 [&_blockquote]:text-muted-foreground [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-medium"
             dangerouslySetInnerHTML={{ __html: marked.parse(description || '', { async: false }) as string }}
           />
         ) : (
@@ -355,7 +365,7 @@ export function DetailPanel() {
               }
             }}
             placeholder="支持 Markdown 格式..."
-            className="h-full min-h-[80px] w-full resize-none rounded-md border border-input bg-transparent p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-full min-h-[80px] w-full resize-none overflow-x-auto rounded-md border border-input bg-transparent p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
         )}
       </div>

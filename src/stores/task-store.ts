@@ -13,6 +13,7 @@ interface TaskStore {
   loading: boolean
   selectedTask: Task | null
   expandedIds: Set<string>
+  expandedDescId: string | null
   loadTasks: () => Promise<void>
   createTask: (dto: CreateTaskDTO) => Promise<Task | null>
   updateTask: (dto: UpdateTaskDTO) => Promise<void>
@@ -20,6 +21,7 @@ interface TaskStore {
   toggleDone: (id: string, currentStatus: string) => Promise<void>
   selectTask: (task: Task | null) => void
   toggleExpand: (id: string) => void
+  setExpandedDesc: (id: string | null) => void
 }
 
 function api() {
@@ -31,6 +33,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   loading: false,
   selectedTask: null,
   expandedIds: new Set<string>(),
+  expandedDescId: null,
 
   loadTasks: async () => {
     try {
@@ -117,4 +120,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     else next.add(id)
     set({ expandedIds: next })
   },
+
+  setExpandedDesc: (id) => set({ expandedDescId: id }),
 }))
