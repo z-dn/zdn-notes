@@ -14,6 +14,7 @@ interface TaskStore {
   selectedTask: Task | null
   expandedIds: Set<string>
   expandedDescId: string | null
+  expandedDescOrigin: { x: number; y: number; width: number; height: number } | null
   loadTasks: () => Promise<void>
   createTask: (dto: CreateTaskDTO) => Promise<Task | null>
   updateTask: (dto: UpdateTaskDTO) => Promise<void>
@@ -21,7 +22,7 @@ interface TaskStore {
   toggleDone: (id: string, currentStatus: string) => Promise<void>
   selectTask: (task: Task | null) => void
   toggleExpand: (id: string) => void
-  setExpandedDesc: (id: string | null) => void
+  setExpandedDesc: (id: string | null, origin?: { x: number; y: number; width: number; height: number }) => void
 }
 
 function api() {
@@ -34,6 +35,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   selectedTask: null,
   expandedIds: new Set<string>(),
   expandedDescId: null,
+  expandedDescOrigin: null,
 
   loadTasks: async () => {
     try {
@@ -121,5 +123,5 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set({ expandedIds: next })
   },
 
-  setExpandedDesc: (id) => set({ expandedDescId: id }),
+  setExpandedDesc: (id, origin) => set({ expandedDescId: id, ...(origin ? { expandedDescOrigin: origin } : {}) }),
 }))

@@ -6,9 +6,14 @@ export function ExpandedDescription() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
   const updateTask = useTaskStore((s) => s.updateTask)
   const setExpandedDesc = useTaskStore((s) => s.setExpandedDesc)
+  const expandedDescId = useTaskStore((s) => s.expandedDescId)
+  const origin = useTaskStore((s) => s.expandedDescOrigin)
   const [description, setDescription] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
   const descTimer = useRef<number>(undefined)
+  const elRef = useRef<HTMLDivElement>(null)
+  const originRef = useRef(origin)
+  originRef.current = origin
 
   useEffect(() => {
     if (selectedTask) {
@@ -16,16 +21,67 @@ export function ExpandedDescription() {
     }
   }, [selectedTask])
 
+  const prevId = useRef<string | null>(null)
+
+  useEffect(() => {
+    const el = elRef.current
+    if (!el) return
+
+    const entering = expandedDescId && !prevId.current
+    const exiting = !expandedDescId && prevId.current
+    prevId.current = expandedDescId
+
+    if (entering) {
+      const o = originRef.current
+      const parent = el.parentElement
+      if (!o || !parent) { el.style.opacity = '1'; return }
+
+      const cr = parent.getBoundingClientRect()
+      const tx = o.x - cr.left
+      const ty = o.y - cr.top
+      const sx = o.width / cr.width
+      const sy = o.height / cr.height
+
+      el.style.transition = 'none'
+      el.style.transformOrigin = '0 0'
+      el.style.transform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`
+      el.style.opacity = '0'
+
+      void el.offsetHeight
+
+      el.style.transition = 'transform 300ms ease-out, opacity 300ms ease-out'
+      el.style.transform = 'translate(0, 0) scale(1, 1)'
+      el.style.opacity = '1'
+    } else if (exiting) {
+      const o = originRef.current
+      const parent = el.parentElement
+      if (!o || !parent) { el.style.opacity = '0'; return }
+
+      const cr = parent.getBoundingClientRect()
+      const tx = o.x - cr.left
+      const ty = o.y - cr.top
+      const sx = o.width / cr.width
+      const sy = o.height / cr.height
+
+      el.style.transition = 'transform 300ms ease-in, opacity 300ms ease-in'
+      el.style.transform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`
+      el.style.opacity = '0'
+    } else if (!expandedDescId) {
+      el.style.transition = 'none'
+      el.style.opacity = '0'
+    }
+  }, [expandedDescId])
+
   if (!selectedTask) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div ref={elRef} className="flex h-full items-center justify-center text-sm text-muted-foreground" style={{ opacity: 0 }}>
         未选择任务
       </div>
     )
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={elRef} className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-4 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <h2 className="truncate text-sm font-semibold">{selectedTask.title}</h2>

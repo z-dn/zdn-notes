@@ -31,6 +31,7 @@ export function DetailPanel() {
   const titleTimer = useRef<number>(undefined)
   const descTimer = useRef<number>(undefined)
   const ownerInputRef = useRef<HTMLInputElement>(null)
+  const descRef = useRef<HTMLDivElement>(null)
   const [showOwnerDropdown, setShowOwnerDropdown] = useState(false)
 
   useEffect(() => {
@@ -324,12 +325,16 @@ export function DetailPanel() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-1.5 overflow-y-auto min-h-0">
+      <div ref={descRef} className="flex-1 space-y-1.5 overflow-y-auto min-h-0">
         <div className="flex items-center justify-between">
           <label className="text-xs text-muted-foreground">描述</label>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setExpandedDesc(selectedTask.id)}
+              onClick={() => {
+                const rect = descRef.current?.getBoundingClientRect()
+                if (rect) setExpandedDesc(selectedTask.id, { x: rect.left, y: rect.top, width: rect.width, height: rect.height })
+                else setExpandedDesc(selectedTask.id)
+              }}
               className="text-[10px] text-muted-foreground/50 hover:text-foreground"
               title="展开描述"
             >
