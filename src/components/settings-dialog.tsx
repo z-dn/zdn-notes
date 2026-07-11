@@ -35,7 +35,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       requestAnimationFrame(() => setShow(true))
     } else {
       setShow(false)
-      const t = setTimeout(() => setMounted(false), 200)
+      const t = setTimeout(() => setMounted(false), 1000)
       setUpdateStatus('idle')
       setUpdateInfo('')
       return () => clearTimeout(t)
@@ -124,8 +124,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={handleOverlayClick}>
-      <div className={`absolute inset-0 bg-black transition-opacity duration-200 ${show ? 'opacity-40' : 'opacity-0'}`} />
-      <div className={`relative w-[420px] rounded-lg border bg-background shadow-xl transition-all duration-200 ${show ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+      <div className={`absolute inset-0 bg-black/40 ${show ? 'animated fadeIn' : 'animated fadeOut'}`} />
+      <div className={`relative w-[420px] rounded-lg border bg-background shadow-xl ${show ? 'animated vanishIn' : 'animated vanishOut'}`}>
         <div className="flex items-center justify-between border-b px-5 py-3">
           <h2 className="text-base font-semibold">⚙️ 设置</h2>
           <button
@@ -157,6 +157,28 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           </div>
 
 
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">描述编辑方式</label>
+            <div className="flex gap-2">
+              {[
+                { value: 'edit' as const, label: '编辑即显示' },
+                { value: 'toggle' as const, label: '手动切换' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => updateEditing('descriptionMode', opt.value)}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                    editing.descriptionMode === opt.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div>
             <label className="flex items-center gap-2 cursor-pointer">

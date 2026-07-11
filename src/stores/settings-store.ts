@@ -5,6 +5,7 @@ import { toast } from '@/lib/toast'
 const DEFAULTS: Settings = {
   theme: 'system',
   defaultView: 'list',
+  descriptionMode: 'toggle',
   reminderEnabled: true,
   autoUpdate: true,
 }
@@ -38,6 +39,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const saved = { ...DEFAULTS } as Settings
       if (raw.theme && ['system', 'light', 'dark'].includes(raw.theme)) saved.theme = raw.theme as Settings['theme']
       if (raw.defaultView && ['list'].includes(raw.defaultView)) saved.defaultView = raw.defaultView as Settings['defaultView']
+      if (raw.descriptionMode && ['edit', 'toggle'].includes(raw.descriptionMode)) saved.descriptionMode = raw.descriptionMode as Settings['descriptionMode']
       if (raw.reminderEnabled !== undefined) saved.reminderEnabled = raw.reminderEnabled === 'true'
       if (raw.autoUpdate !== undefined) saved.autoUpdate = raw.autoUpdate === 'true'
       set({ saved, editing: { ...saved }, loading: false, dirty: false })

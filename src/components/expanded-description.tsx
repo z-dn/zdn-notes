@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { marked } from 'marked'
 import { useTaskStore } from '@/stores/task-store'
+import { useSettingsStore } from '@/stores/settings-store'
+import { MilkdownEditor } from '@/components/milkdown-editor'
 
 export function ExpandedDescription() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
@@ -8,6 +10,7 @@ export function ExpandedDescription() {
   const setExpandedDesc = useTaskStore((s) => s.setExpandedDesc)
   const expandedDescId = useTaskStore((s) => s.expandedDescId)
   const origin = useTaskStore((s) => s.expandedDescOrigin)
+  const descriptionMode = useSettingsStore((s) => s.saved.descriptionMode)
   const [description, setDescription] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
   const descTimer = useRef<number>(undefined)
@@ -88,12 +91,14 @@ export function ExpandedDescription() {
           <span className="shrink-0 text-[10px] text-muted-foreground/50">描述</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => setPreviewMode((p) => !p)}
-            className="rounded px-2 py-1 text-[11px] text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
-          >
-            {previewMode ? '编辑' : '预览'}
-          </button>
+          {descriptionMode === 'toggle' && (
+            <button
+              onClick={() => setPreviewMode((p) => !p)}
+              className="rounded px-2 py-1 text-[11px] text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              {previewMode ? '编辑' : '预览'}
+            </button>
+          )}
           <button
             onClick={() => setExpandedDesc(null)}
             className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
@@ -104,7 +109,18 @@ export function ExpandedDescription() {
       </div>
 
       <div className="flex-1 min-h-0 p-4">
-        {previewMode ? (
+        {descriptionMode === 'edit' ? (
+          <div className="h-full rounded-md border border-input overflow-hidden">
+            <MilkdownEditor key={selectedTask.id} content={description} onChange={(markdown) => {
+                setDescription(markdown)
+                clearTimeout(descTimer.current)
+                descTimer.current = setTimeout(() => {
+                  updateTask({ id: selectedTask.id, description: markdown })
+                }, 500)
+              }}
+            />
+          </div>
+        ) : descriptionMode === 'toggle' && previewMode ? (
           <div
             className="h-full w-full overflow-auto break-words rounded-md border border-input bg-transparent p-4 text-sm
               [&_ul]:list-disc [&_ul]:pl-4

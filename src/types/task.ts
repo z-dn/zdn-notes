@@ -56,6 +56,7 @@ export interface CreateCategoryDTO {
 export interface Settings {
   theme: 'system' | 'light' | 'dark'
   defaultView: 'list'
+  descriptionMode: 'edit' | 'toggle'
   reminderEnabled: boolean
   autoUpdate: boolean
 }
