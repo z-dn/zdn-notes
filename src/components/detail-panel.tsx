@@ -76,7 +76,7 @@ export function DetailPanel() {
   }
 
   return (
-    <div key={selectedTask.id} className="animate-fade-slide-up flex h-full flex-col gap-4 p-4">
+    <div key={selectedTask.id} className="animate-fade-slide-up flex h-full flex-col gap-4 overflow-y-auto p-4">
       <Input
         value={title}
         onChange={(e) => {
