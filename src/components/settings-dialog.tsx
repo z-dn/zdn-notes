@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSettingsStore } from '@/stores/settings-store'
 import { toast } from '@/lib/toast'
+import { useFlipDialog } from '@/hooks/use-flip-dialog'
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 
@@ -26,21 +27,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle')
   const [updateInfo, setUpdateInfo] = useState<string>('')
   const [appVersion, setAppVersion] = useState('')
-  const [mounted, setMounted] = useState(false)
-  const [show, setShow] = useState(false)
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true)
-      requestAnimationFrame(() => setShow(true))
-    } else {
-      setShow(false)
-      const t = setTimeout(() => setMounted(false), 1000)
-      setUpdateStatus('idle')
-      setUpdateInfo('')
-      return () => clearTimeout(t)
-    }
-  }, [open])
+  const { contentRef, overlayRef, mounted, playClose } = useFlipDialog(open, onClose)
 
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
@@ -94,16 +81,14 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
   async function handleSave() {
     const ok = await saveSettings()
-    if (ok) onClose()
+    if (ok) playClose()
   }
 
   function handleCancel() {
     resetEditing()
-    onClose()
-  }
-
-  function handleOverlayClick(e: React.MouseEvent) {
-    if (e.target === e.currentTarget) handleCancel()
+    setUpdateStatus('idle')
+    setUpdateInfo('')
+    playClose()
   }
 
   function handleCheckUpdate() {
@@ -123,9 +108,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={handleOverlayClick}>
-      <div className={`absolute inset-0 bg-black/40 ${show ? 'animated fadeIn' : 'animated fadeOut'}`} />
-      <div className={`relative w-[420px] rounded-lg border bg-background shadow-xl ${show ? 'animated vanishIn' : 'animated vanishOut'}`}>
+    <div className="fixed inset-0 z-50">
+      <div ref={overlayRef} className="absolute inset-0 bg-black/40" onClick={() => playClose()} />
+      <div ref={contentRef} className="fixed left-1/2 top-1/2 w-[420px] rounded-lg border bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-3">
           <h2 className="text-base font-semibold">⚙️ 设置</h2>
           <button
