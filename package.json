@@ -9,6 +9,7 @@
     "postinstall": "electron-builder install-app-deps",
     "pack": "electron-vite build && electron-builder --win --dir",
     "dist": "electron-vite build && electron-builder --win",
+    "dist:ci": "electron-vite build && electron-builder --win --publish=never",
     "preview": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
