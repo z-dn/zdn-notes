@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Settings } from 'lucide-react'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { useSettingsStore } from '@/stores/settings-store'
@@ -53,8 +54,8 @@ export default function App() {
         <h1 className="text-sm font-bold tracking-wide select-none">ZDNotes</h1>
         <div className="flex items-center">
           <div className="flex items-center gap-1" style={NO_DRAG}>
-            <button onClick={() => setShowSettings(true)} className="rounded px-2 py-1.5 text-xs transition-colors hover:bg-accent" title="设置">
-              ⚙️
+            <button onClick={() => setShowSettings(true)} className="rounded px-2 py-1.5 transition-colors hover:bg-accent" title="设置">
+              <Settings className="size-3.5" />
             </button>
             <button onClick={handleExport} className="rounded px-2 py-1.5 text-xs transition-colors hover:bg-accent">
               导出

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Settings } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings-store'
 import { toast } from '@/lib/toast'
 import { useFlipDialog } from '@/hooks/use-flip-dialog'
@@ -112,7 +113,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       <div ref={overlayRef} className="absolute inset-0 bg-black/40" onClick={() => playClose()} />
       <div ref={contentRef} className="fixed left-1/2 top-1/2 w-[420px] rounded-lg border bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-3">
-          <h2 className="text-base font-semibold">⚙️ 设置</h2>
+          <h2 className="flex items-center gap-1.5 text-base font-semibold"><Settings className="size-4" /> 设置</h2>
           <button
             onClick={handleCancel}
             className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
