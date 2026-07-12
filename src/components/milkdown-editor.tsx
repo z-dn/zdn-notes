@@ -1,14 +1,29 @@
 import { useRef } from 'react'
-import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx } from '@milkdown/core'
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
-import { nord } from '@milkdown/theme-nord'
-import '@milkdown/theme-nord/style.css'
+import './milkdown-theme.css'
 
 interface MilkdownEditorProps {
   content: string
   onChange: (markdown: string) => void
+}
+
+function milkdownTheme(ctx: any) {
+  ctx.update(editorViewOptionsCtx, (prev) => {
+    const prevClass = prev.attributes
+    return {
+      ...prev,
+      attributes: (state: any) => {
+        const attrs = typeof prevClass === 'function' ? prevClass(state) : prevClass
+        return {
+          ...attrs,
+          class: ['milkdown-editor', attrs?.class || ''].filter(Boolean).join(' '),
+        }
+      },
+    }
+  })
 }
 
 function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
@@ -18,7 +33,7 @@ function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
   useEditor(
     (root) => {
       return Editor.make()
-        .config(nord)
+        .config(milkdownTheme)
         .config((ctx) => {
           ctx.set(rootCtx, root)
           ctx.set(defaultValueCtx, content)

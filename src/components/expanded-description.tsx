@@ -91,7 +91,7 @@ export function ExpandedDescription() {
 
   return (
     <div ref={elRef} className="flex h-full flex-col" style={{ opacity: expandedDescId ? undefined : 0 }}>
-      <div className="flex items-center justify-between border-b px-4 py-2.5">
+      <div className="flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2 min-w-0">
           <h2 className="truncate text-sm font-semibold">{selectedTask.title}</h2>
           <span className="shrink-0 text-[10px] text-muted-foreground/50">描述</span>
@@ -116,7 +116,7 @@ export function ExpandedDescription() {
 
       <div className="flex-1 min-h-0 p-4">
         {descriptionMode === 'edit' ? (
-          <div className="h-full rounded-md border border-input overflow-y-auto">
+          <div className="h-full rounded-md border border-input overflow-y-auto p-4">
             <MilkdownEditor key={selectedTask.id} content={selectedTask.description || ''} onChange={(markdown) => {
                 setDescription(markdown)
                 clearTimeout(descTimer.current)

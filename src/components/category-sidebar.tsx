@@ -70,8 +70,8 @@ export function CategorySidebar() {
 
   return (
     <div className="group relative flex h-full w-48 flex-col border-r bg-muted/20">
-      <div className="border-b px-3 py-2 text-xs font-semibold uppercase text-muted-foreground">
-        分类
+      <div className="flex h-11 items-center border-b px-3">
+        <span className="text-xs font-semibold uppercase text-muted-foreground">分类</span>
       </div>
 
       <div className="flex-1 space-y-0.5 overflow-y-auto p-2">

@@ -360,7 +360,7 @@ export function DetailPanel() {
           </div>
         </div>
         {descriptionMode === 'edit' ? (
-          <div className="flex-1 min-h-0 rounded-md border border-input overflow-y-auto">
+          <div className="flex-1 min-h-0 rounded-md border border-input overflow-y-auto p-2">
             <MilkdownEditor key={selectedTask.id}
               content={selectedTask.description || ''}
               onChange={(markdown) => {
