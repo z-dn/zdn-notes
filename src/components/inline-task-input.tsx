@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
-import { parseNLP } from '@/lib/nlp'
 
 interface InlineTaskInputProps {
   parentId: string | null
@@ -23,14 +22,8 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
   async function handleSubmit() {
     const text = value.trim()
     if (!text) return
-    const p = parseNLP(text)
     await createTask({
-      title: p.title || text,
-      priority: p.priority ?? 'P2',
-      dueDate: p.dueDate,
-      startDate: p.startDate,
-      tags: p.tags,
-      owner: p.owner ?? '',
+      title: text,
       parentId,
       orderIndex,
       categoryId: activeCategoryId ?? null,

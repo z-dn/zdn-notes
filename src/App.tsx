@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { useSettingsStore } from '@/stores/settings-store'
+import { TaskInput } from '@/components/task-input'
 import { TaskList } from '@/components/task-list'
 import { DetailPanel } from '@/components/detail-panel'
 import { CategorySidebar } from '@/components/category-sidebar'
@@ -100,8 +101,13 @@ export default function App() {
               expandedDescId ? 'opacity-0 -translate-y-1 pointer-events-none' : 'opacity-100 translate-y-0'
             }`}
           >
-            <div className="h-full overflow-y-auto p-3">
-              <TaskList />
+            <div className="flex h-full flex-col overflow-y-auto p-3">
+              <div className="mb-3 shrink-0">
+                <TaskInput />
+              </div>
+              <div className="flex-1 min-h-0">
+                <TaskList />
+              </div>
             </div>
           </div>
           <div className={`absolute inset-0 ${!expandedDescId ? 'pointer-events-none' : ''}`}>
