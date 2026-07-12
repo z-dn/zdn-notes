@@ -116,7 +116,7 @@ export function ExpandedDescription() {
 
       <div className="flex-1 min-h-0 p-4">
         {descriptionMode === 'edit' ? (
-          <div className="h-full rounded-md border border-input overflow-hidden">
+          <div className="h-full rounded-md border border-input overflow-y-auto">
             <MilkdownEditor key={selectedTask.id} content={selectedTask.description || ''} onChange={(markdown) => {
                 setDescription(markdown)
                 clearTimeout(descTimer.current)
