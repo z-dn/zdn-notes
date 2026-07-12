@@ -13,6 +13,7 @@ export function ExpandedDescription() {
   const descriptionMode = useSettingsStore((s) => s.saved.descriptionMode)
   const [description, setDescription] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
+  const [renderedDesc, setRenderedDesc] = useState('')
   const descTimer = useRef<number>(undefined)
   const elRef = useRef<HTMLDivElement>(null)
   const originRef = useRef(origin)
@@ -21,8 +22,13 @@ export function ExpandedDescription() {
   useEffect(() => {
     if (selectedTask) {
       setDescription(selectedTask.description || '')
+      setPreviewMode(false)
     }
   }, [selectedTask])
+
+  useEffect(() => {
+    Promise.resolve(marked.parse(description || '')).then(setRenderedDesc)
+  }, [description])
 
   const prevId = useRef<string | null>(null)
 
@@ -84,7 +90,7 @@ export function ExpandedDescription() {
   }
 
   return (
-    <div ref={elRef} className="flex h-full flex-col">
+    <div ref={elRef} className="flex h-full flex-col" style={{ opacity: expandedDescId ? undefined : 0 }}>
       <div className="flex items-center justify-between border-b px-4 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <h2 className="truncate text-sm font-semibold">{selectedTask.title}</h2>
@@ -111,7 +117,7 @@ export function ExpandedDescription() {
       <div className="flex-1 min-h-0 p-4">
         {descriptionMode === 'edit' ? (
           <div className="h-full rounded-md border border-input overflow-hidden">
-            <MilkdownEditor key={selectedTask.id} content={description} onChange={(markdown) => {
+            <MilkdownEditor key={selectedTask.id} content={selectedTask.description || ''} onChange={(markdown) => {
                 setDescription(markdown)
                 clearTimeout(descTimer.current)
                 descTimer.current = setTimeout(() => {
@@ -131,7 +137,7 @@ export function ExpandedDescription() {
               [&_h1]:text-lg [&_h1]:font-bold
               [&_h2]:text-base [&_h2]:font-semibold
               [&_h3]:text-sm [&_h3]:font-medium"
-            dangerouslySetInnerHTML={{ __html: marked.parse(description || '', { async: false }) as string }}
+            dangerouslySetInnerHTML={{ __html: renderedDesc }}
           />
         ) : (
           <textarea

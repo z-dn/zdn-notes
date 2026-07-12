@@ -30,6 +30,7 @@ export function DetailPanel() {
   const [newTag, setNewTag] = useState('')
   const [newOwner, setNewOwner] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
+  const [renderedDesc, setRenderedDesc] = useState('')
   const tagInput = useRef<HTMLInputElement>(null)
   const titleTimer = useRef<number>(undefined)
   const descTimer = useRef<number>(undefined)
@@ -42,6 +43,7 @@ export function DetailPanel() {
       setTitle(selectedTask.title)
       setDescription(selectedTask.description || '')
       setNewOwner('')
+      setPreviewMode(false)
       setDueDate(
         selectedTask.dueDate
           ? new Date(selectedTask.dueDate).toISOString().slice(0, 10)
@@ -54,6 +56,10 @@ export function DetailPanel() {
       )
     }
   }, [selectedTask])
+
+  useEffect(() => {
+    Promise.resolve(marked.parse(description || '')).then(setRenderedDesc)
+  }, [description])
 
   const recentOwners = useMemo(() => {
     const seen = new Set<string>()
@@ -355,8 +361,8 @@ export function DetailPanel() {
         </div>
         {descriptionMode === 'edit' ? (
           <div className="flex-1 min-h-0 rounded-md border border-input overflow-hidden">
-            <MilkdownEditor
-              content={description}
+            <MilkdownEditor key={selectedTask.id}
+              content={selectedTask.description || ''}
               onChange={(markdown) => {
                 setDescription(markdown)
                 clearTimeout(descTimer.current)
@@ -369,7 +375,7 @@ export function DetailPanel() {
         ) : descriptionMode === 'toggle' && previewMode ? (
           <div
             className="flex-1 min-h-[80px] overflow-auto break-words rounded-md border border-input bg-transparent p-2 text-sm [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-2 [&_blockquote]:text-muted-foreground [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-medium"
-            dangerouslySetInnerHTML={{ __html: marked.parse(description || '', { async: false }) as string }}
+            dangerouslySetInnerHTML={{ __html: renderedDesc }}
           />
         ) : (
           <textarea
