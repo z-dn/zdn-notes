@@ -265,16 +265,8 @@ export function TaskList() {
     )
   }
 
-  if (flatList.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-        暂无任务，在上方输入框添加
-      </div>
-    )
-  }
-
   return (
-    <div>
+    <div className="flex flex-col min-h-full">
       <div className="mb-2 flex gap-1 border-b pb-1.5 text-[11px] text-muted-foreground/60">
         {(['order', 'priority', 'dueDate', 'createdAt'] as SortField[]).map((f) => (
           <button
@@ -289,14 +281,20 @@ export function TaskList() {
         ))}
       </div>
 
-      <div ref={listRef} className="space-y-0.5" onClick={() => { if (!dragIdRef.current) selectTask(null) }}
+      <div ref={listRef} className="relative flex-1 space-y-0.5" onClick={() => { if (!dragIdRef.current) selectTask(null) }}
         onContextMenu={(e) => {
           if ((e.target as HTMLElement).closest('[data-task-id]')) return
           e.preventDefault()
-          setBlankMenuPos({ x: e.clientX, y: e.clientY })
+          const r = listRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
+          setContextMenu(null)
+          setBlankMenuPos({ x: e.clientX - r.left, y: e.clientY - r.top })
         }}
       >
-        {flatList.flatMap(({ task, depth, hasChildren }, flatIndex) => [
+        {flatList.length === 0 ? (
+          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground select-none">
+            暂无任务，在上方输入框添加
+          </div>
+        ) : flatList.flatMap(({ task, depth, hasChildren }, flatIndex) => [
           dropTargetIndex === flatIndex && dragIdRef.current && (
             <div key={`drop-${flatIndex}`} className="h-0.5 rounded bg-blue-500" />
           ),
@@ -305,7 +303,11 @@ export function TaskList() {
               task={task}
               depth={depth}
               hasChildren={hasChildren}
-              onContextMenu={(e, t) => setContextMenu({ x: e.clientX, y: e.clientY, task: t })}
+              onContextMenu={(e, t) => {
+                const r = listRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
+                setBlankMenuPos(null)
+                setContextMenu({ x: e.clientX - r.left, y: e.clientY - r.top, task: t })
+              }}
               draggable={sortField === 'order'}
               isDragging={dragIdRef.current === task.id}
             />
@@ -319,7 +321,7 @@ export function TaskList() {
               onClose={() => setInlineInput(null)}
             />
           ),
-        ])}
+        ]        )}
         {dropTargetIndex === flatList.length && dragIdRef.current && (
           <div key="drop-end" className="h-0.5 rounded bg-blue-500" />
         )}
@@ -332,25 +334,25 @@ export function TaskList() {
             onClose={() => setInlineInput(null)}
           />
         )}
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            task={contextMenu.task}
+            onClose={() => setContextMenu(null)}
+            onAddSibling={handleAddSibling}
+            onAddChild={handleAddChild}
+          />
+        )}
+        {blankMenuPos && (
+          <ContextMenu
+            x={blankMenuPos.x}
+            y={blankMenuPos.y}
+            onClose={() => setBlankMenuPos(null)}
+            onAddTask={handleBlankAdd}
+          />
+        )}
       </div>
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          task={contextMenu.task}
-          onClose={() => setContextMenu(null)}
-          onAddSibling={handleAddSibling}
-          onAddChild={handleAddChild}
-        />
-      )}
-      {blankMenuPos && (
-        <ContextMenu
-          x={blankMenuPos.x}
-          y={blankMenuPos.y}
-          onClose={() => setBlankMenuPos(null)}
-          onAddTask={handleBlankAdd}
-        />
-      )}
     </div>
   )
 }
