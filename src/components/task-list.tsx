@@ -292,7 +292,7 @@ export function TaskList() {
       >
         {flatList.length === 0 ? (
           <div className="flex h-32 items-center justify-center text-sm text-muted-foreground select-none">
-            暂无任务，在上方输入框添加
+            暂无任务，右键点击添加
           </div>
         ) : flatList.flatMap(({ task, depth, hasChildren }, flatIndex) => [
           dropTargetIndex === flatIndex && dragIdRef.current && (
