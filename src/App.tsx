@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Settings } from 'lucide-react'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { useSettingsStore } from '@/stores/settings-store'
@@ -49,7 +50,8 @@ export default function App() {
   const NO_DRAG = { WebkitAppRegion: 'no-drag' as string }
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <TooltipProvider>
+      <div className="flex h-screen flex-col bg-background text-foreground">
       <header className="flex items-center justify-between border-b px-3" style={DRAG}>
         <h1 className="text-sm font-bold tracking-wide select-none">ZDNotes</h1>
         <div className="flex items-center">
@@ -118,5 +120,6 @@ export default function App() {
       <ToastContainer />
       <ConfirmDialog />
     </div>
+    </TooltipProvider>
   )
 }

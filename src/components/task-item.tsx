@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Task } from '@/types/task'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { useTaskStore } from '@/stores/task-store'
 
@@ -125,13 +126,20 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
           className="flex-1 rounded border border-input bg-background px-1 text-sm outline-none focus:ring-1 focus:ring-ring"
         />
       ) : (
-        <span
-          className={`flex-1 truncate text-sm ${
-            isDone ? 'line-through text-muted-foreground' : ''
-          } ${isCancelled ? 'line-through text-muted-foreground/50' : ''}`}
-        >
-          {task.title}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={`flex-1 truncate text-sm ${
+                isDone ? 'line-through text-muted-foreground' : ''
+              } ${isCancelled ? 'line-through text-muted-foreground/50' : ''}`}
+            >
+              {task.title}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start">
+            <p className="max-w-xs break-words">{task.title}</p>
+          </TooltipContent>
+        </Tooltip>
       )}
 
       <Badge className={`${PRIORITY_COLORS[task.priority] || ''} text-[10px]`}>

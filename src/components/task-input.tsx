@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 
@@ -41,9 +42,16 @@ export function TaskInput() {
       {isSubtask && (
         <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
           <Badge variant="outline" className="text-[10px]">子任务</Badge>
-          <span className="max-w-[200px] truncate font-medium text-foreground">
-            {selectedTask.title}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="max-w-[200px] truncate font-medium text-foreground">
+                {selectedTask.title}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="start">
+              <p className="max-w-xs break-words">{selectedTask.title}</p>
+            </TooltipContent>
+          </Tooltip>
           <button
             onClick={() => selectTask(null)}
             className="ml-0.5 rounded-sm px-1 hover:bg-accent hover:text-foreground"

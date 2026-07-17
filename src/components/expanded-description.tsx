@@ -3,6 +3,7 @@ import { marked } from 'marked'
 import { useTaskStore } from '@/stores/task-store'
 import { useSettingsStore } from '@/stores/settings-store'
 import { MilkdownEditor } from '@/components/milkdown-editor'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 export function ExpandedDescription() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
@@ -93,7 +94,14 @@ export function ExpandedDescription() {
     <div ref={elRef} className="flex h-full flex-col" style={{ opacity: expandedDescId ? undefined : 0 }}>
       <div className="flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2 min-w-0">
-          <h2 className="truncate text-sm font-semibold">{selectedTask.title}</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <h2 className="truncate text-sm font-semibold">{selectedTask.title}</h2>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="start">
+              <p className="max-w-xs break-words">{selectedTask.title}</p>
+            </TooltipContent>
+          </Tooltip>
           <span className="shrink-0 text-[10px] text-muted-foreground/50">描述</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
