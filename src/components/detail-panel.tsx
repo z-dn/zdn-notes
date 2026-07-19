@@ -7,6 +7,7 @@ import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { useSettingsStore } from '@/stores/settings-store'
 import { MilkdownEditor } from '@/components/milkdown-editor'
+import { DescriptionMinimap } from '@/components/description-minimap'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
@@ -20,6 +21,7 @@ export function DetailPanel() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
   const updateTask = useTaskStore((s) => s.updateTask)
   const setExpandedDesc = useTaskStore((s) => s.setExpandedDesc)
+  const expandedDescId = useTaskStore((s) => s.expandedDescId)
   const descriptionMode = useSettingsStore((s) => s.saved.descriptionMode)
   const tasks = useTaskStore((s) => s.tasks)
   const categories = useCategoryStore((s) => s.categories)
@@ -336,7 +338,8 @@ export function DetailPanel() {
 
       <div ref={descRef} className="flex-1 flex flex-col gap-1.5 overflow-y-auto min-h-0">
         <div className="flex items-center justify-between flex-none">
-          <label className="text-xs text-muted-foreground">描述</label>
+          <label className="text-xs text-muted-foreground">{expandedDescId ? '结构' : '描述'}</label>
+          {!expandedDescId && (
           <div className="flex items-center gap-1">
             <button
               onClick={() => {
@@ -358,8 +361,13 @@ export function DetailPanel() {
               </button>
             )}
           </div>
+          )}
         </div>
-        {descriptionMode === 'edit' ? (
+        {expandedDescId ? (
+          <div className="flex-1 min-h-0 rounded-md border border-input overflow-hidden">
+            <DescriptionMinimap content={description} />
+          </div>
+        ) : descriptionMode === 'edit' ? (
           <div className="flex-1 min-h-0 rounded-md border border-input overflow-y-auto p-2">
             <MilkdownEditor key={selectedTask.id}
               content={selectedTask.description || ''}
