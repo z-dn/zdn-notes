@@ -48,12 +48,12 @@ export function DetailPanel() {
       setPreviewMode(false)
       setDueDate(
         selectedTask.dueDate
-          ? new Date(selectedTask.dueDate).toISOString().slice(0, 10)
+          ? format(new Date(selectedTask.dueDate), 'yyyy-MM-dd')
           : '',
       )
       setStartDate(
         selectedTask.startDate
-          ? new Date(selectedTask.startDate).toISOString().slice(0, 10)
+          ? format(new Date(selectedTask.startDate), 'yyyy-MM-dd')
           : '',
       )
     }
