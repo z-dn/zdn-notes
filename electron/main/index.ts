@@ -67,6 +67,7 @@ function createWindow(): void {
   })
 
   autoUpdater.on('error', (err) => {
+    console.error('[autoUpdater]', err.message)
     mainWindow.webContents.send('update:error', err.message)
   })
 

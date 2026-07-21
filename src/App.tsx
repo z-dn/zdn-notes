@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Settings } from 'lucide-react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useTaskStore } from '@/stores/task-store'
@@ -25,6 +25,7 @@ export default function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings)
   const [showSettings, setShowSettings] = useState(false)
   const [maximized, setMaximized] = useState(false)
+  const [pendingUpdate, setPendingUpdate] = useState('')
 
   useEffect(() => {
     loadTasks()
@@ -35,6 +36,20 @@ export default function App() {
   useEffect(() => {
     const unsub = window.electronAPI.onWindowMaximizedChange((v) => setMaximized(v))
     return () => unsub()
+  }, [])
+
+  useEffect(() => {
+    const a = window.electronAPI.onUpdateAvailable((info) => {
+      const ver = (info as { version?: string }).version ?? ''
+      setPendingUpdate(ver)
+    })
+    const b = window.electronAPI.onUpdateNotAvailable(() => {
+      /* noop */
+    })
+    const c = window.electronAPI.onUpdateError((msg) => {
+      console.warn('[update]', msg)
+    })
+    return () => { a?.(); b?.(); c?.() }
   }, [])
 
   useEffect(() => {
@@ -56,8 +71,9 @@ export default function App() {
         <h1 className="text-sm font-bold tracking-wide select-none">ZDNotes</h1>
         <div className="flex items-center">
           <div className="flex items-center gap-1" style={NO_DRAG}>
-            <button onClick={() => setShowSettings(true)} className="rounded px-2 py-1.5 transition-colors hover:bg-accent" title="设置">
+            <button onClick={() => { setShowSettings(true); setPendingUpdate('') }} className="relative rounded px-2 py-1.5 transition-colors hover:bg-accent" title="设置">
               <Settings className="size-3.5" />
+              {pendingUpdate && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-green-500" />}
             </button>
             <button onClick={handleExport} className="rounded px-2 py-1.5 text-xs transition-colors hover:bg-accent">
               导出
@@ -116,7 +132,7 @@ export default function App() {
           <DetailPanel />
         </aside>
       </div>
-      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} pendingVersion={pendingUpdate || undefined} />
       <ToastContainer />
       <ConfirmDialog />
     </div>

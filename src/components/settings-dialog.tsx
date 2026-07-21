@@ -9,6 +9,7 @@ type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downl
 interface SettingsDialogProps {
   open: boolean
   onClose: () => void
+  pendingVersion?: string
 }
 
 const THEME_OPTIONS: { value: 'system' | 'light' | 'dark'; label: string }[] = [
@@ -19,7 +20,7 @@ const THEME_OPTIONS: { value: 'system' | 'light' | 'dark'; label: string }[] = [
 
 
 
-export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialogProps) {
   const editing = useSettingsStore((s) => s.editing)
   const dirty = useSettingsStore((s) => s.dirty)
   const updateEditing = useSettingsStore((s) => s.updateEditing)
@@ -33,6 +34,16 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
   }, [])
+
+  useEffect(() => {
+    if (pendingVersion) {
+      setUpdateStatus('available')
+      setUpdateInfo(`发现新版本 ${pendingVersion}`)
+    } else {
+      setUpdateStatus('idle')
+      setUpdateInfo('')
+    }
+  }, [pendingVersion])
 
   useEffect(() => {
     const unsubs: (() => void)[] = []
