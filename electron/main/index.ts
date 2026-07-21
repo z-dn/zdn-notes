@@ -1,10 +1,16 @@
-import { app, BrowserWindow, shell, ipcMain, Menu, nativeTheme } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Menu, nativeTheme, protocol, net } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
+import fs from 'fs'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
 import { initDB, closeDB } from './database'
 import { registerIpcHandlers } from './ipc'
 import { getAllSettings } from './database/settings-dao'
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'zdn-img', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
+])
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -89,6 +95,16 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
   await initDB()
   registerIpcHandlers()
+
+  const imagesDir = join(app.getPath('userData'), 'images')
+  fs.mkdirSync(imagesDir, { recursive: true })
+  protocol.handle('zdn-img', (request) => {
+    const url = new URL(request.url)
+    const filename = url.pathname.replace(/^\//, '')
+    const fullPath = join(app.getPath('userData'), 'images', filename)
+    return net.fetch(pathToFileURL(fullPath).href)
+  })
+
   createWindow()
 
   const settings = getAllSettings()

@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
 
   exportMarkdown: () => ipcRenderer.invoke('task:exportMarkdown'),
+  saveImageFromData: (dataUri: string) => ipcRenderer.invoke('image:saveFromData', dataUri),
+  pickAndSaveImage: () => ipcRenderer.invoke('image:pickAndSave'),
+  deleteImage: (url: string) => ipcRenderer.invoke('image:delete', url),
   settingsGetAll: () => ipcRenderer.invoke('settings:getAll'),
   settingsSet: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
 

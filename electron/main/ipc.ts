@@ -1,5 +1,7 @@
 import { app, ipcMain, dialog } from 'electron'
-import { writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs'
+import { join } from 'path'
 import { createTask, getTaskById, getAllTasks, updateTask, deleteTask, updateTaskStatus } from './database/task-dao'
 import { createCategory, getAllCategories, updateCategory, deleteCategory, getCategoryTaskCounts } from './database/category-dao'
 import { getAllSettings, setSetting } from './database/settings-dao'
@@ -10,7 +12,29 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('task:getById', (_e, id) => getTaskById(id))
   ipcMain.handle('task:getAll', () => getAllTasks())
   ipcMain.handle('task:update', (_e, dto) => updateTask(dto))
-  ipcMain.handle('task:delete', (_e, id) => deleteTask(id))
+  ipcMain.handle('task:delete', (_e, id) => {
+    const task = getTaskById(id)
+    if (!task) return false
+
+    const imageUrls = task.description?.match(/zdn-img:\/\/\/(\S+?)(?=[\s")}\]]|$)/g) || []
+
+    const result = deleteTask(id)
+    if (!result) return false
+
+    if (imageUrls.length) {
+      const imageDir = join(app.getPath('userData'), 'images')
+      const allTasks = getAllTasks()
+      for (const url of imageUrls) {
+        const filename = url.replace('zdn-img:///', '')
+        const stillUsed = allTasks.some((t) => t.description?.includes(filename))
+        if (!stillUsed) {
+          const filePath = join(imageDir, filename)
+          try { if (existsSync(filePath)) unlinkSync(filePath) } catch { /* ignore */ }
+        }
+      }
+    }
+    return true
+  })
   ipcMain.handle('task:updateStatus', (_e, id, status) => updateTaskStatus(id, status))
 
   ipcMain.handle('category:create', (_e, dto) => createCategory(dto))
@@ -23,6 +47,38 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('settings:getAll', () => getAllSettings())
   ipcMain.handle('settings:set', (_e, key, value) => setSetting(key, value))
+
+  ipcMain.handle('image:saveFromData', (_e, dataUri: string) => {
+    const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/)
+    if (!matches) throw new Error('Invalid image data URI')
+    let ext = matches[1]
+    if (ext === 'jpeg') ext = 'jpg'
+    const buffer = Buffer.from(matches[2], 'base64')
+    const imageDir = join(app.getPath('userData'), 'images')
+    const filename = `${randomUUID()}.${ext}`
+    writeFileSync(join(imageDir, filename), buffer)
+    return `zdn-img:///${filename}`
+  })
+
+  ipcMain.handle('image:pickAndSave', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] }]
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    const srcPath = result.filePaths[0]
+    const ext = srcPath.split('.').pop()?.toLowerCase() || 'png'
+    const imageDir = join(app.getPath('userData'), 'images')
+    const filename = `${randomUUID()}.${ext}`
+    copyFileSync(srcPath, join(imageDir, filename))
+    return `zdn-img:///${filename}`
+  })
+
+  ipcMain.handle('image:delete', (_e, url: string) => {
+    const filename = url.replace('zdn-img:///', '')
+    const filePath = join(app.getPath('userData'), 'images', filename)
+    if (existsSync(filePath)) unlinkSync(filePath)
+  })
 
   ipcMain.handle('task:exportMarkdown', async () => {
     const tasks = getAllTasks()
