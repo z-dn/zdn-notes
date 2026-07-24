@@ -1,6 +1,6 @@
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3'
 
-export type Status = 'todo' | 'in_progress' | 'done' | 'cancelled'
+export type Status = 'todo' | 'done'
 
 export interface Category {
   id: string

@@ -167,7 +167,7 @@ export function updateTask(dto: UpdateTaskDTO, _db?: Database): Task | null {
     db.run(`UPDATE tasks SET ${setClauses} WHERE id = ?`, [...vals, dto.id as SqlValue])
     const modified = db.getRowsModified()
     if (modified === 0) { db.run('ROLLBACK'); return null }
-    if (newStatus === 'done' || newStatus === 'cancelled') {
+    if (newStatus === 'done') {
       cascadeStatus(db, dto.id, newStatus)
     }
     db.run('COMMIT')
@@ -217,14 +217,14 @@ export function updateTaskStatus(id: string, newStatus: string, _db?: Database):
   const existing = getRowById(db, id)
   if (!existing) return null
 
-  if (!['todo', 'in_progress', 'done', 'cancelled'].includes(newStatus)) {
+  if (!['todo', 'done'].includes(newStatus)) {
     throw new Error(`Invalid status: ${newStatus}`)
   }
 
   try {
     db.run('BEGIN')
     db.run('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?', [newStatus, Date.now(), id])
-    if (newStatus === 'done' || newStatus === 'cancelled') {
+    if (newStatus === 'done') {
       cascadeStatus(db, id, newStatus)
     }
     db.run('COMMIT')

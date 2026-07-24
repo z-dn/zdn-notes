@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   title         TEXT NOT NULL,
   description   TEXT DEFAULT '',
   status        TEXT NOT NULL DEFAULT 'todo'
-                  CHECK(status IN ('todo','in_progress','done','cancelled')),
+                  CHECK(status IN ('todo','done')),
   priority      TEXT NOT NULL DEFAULT 'P2'
                   CHECK(priority IN ('P0','P1','P2','P3')),
   due_date      INTEGER,
@@ -63,12 +63,12 @@ describe('createTask', () => {
     expect(task.updatedAt).toBe(task.createdAt)
   })
 
-  it('creates a task with custom values', () => {
+    it('creates a task with custom values', () => {
     const db = createDB()
     const task = createTask({
       title: 'Custom task',
       description: 'Desc',
-      status: 'in_progress',
+      status: 'done',
       priority: 'P0',
       dueDate: 999999,
       startDate: 100000,
@@ -77,7 +77,7 @@ describe('createTask', () => {
     }, db)
     expect(task.title).toBe('Custom task')
     expect(task.description).toBe('Desc')
-    expect(task.status).toBe('in_progress')
+    expect(task.status).toBe('done')
     expect(task.priority).toBe('P0')
     expect(task.dueDate).toBe(999999)
     expect(task.startDate).toBe(100000)
@@ -159,14 +159,6 @@ describe('status cascade', () => {
     expect(getTaskById(grandchild.id, db)!.status).toBe('done')
   })
 
-  it('updates children when parent set to cancelled', () => {
-    const db = createDB()
-    const p = createTask({ title: 'P' }, db)
-    const c = createTask({ title: 'C', parentId: p.id }, db)
-    updateTask({ id: p.id, status: 'cancelled' }, db)
-    expect(getTaskById(c.id, db)!.status).toBe('cancelled')
-  })
-
   it('does NOT reverse-cascade when child completed', () => {
     const db = createDB()
     const p = createTask({ title: 'P' }, db)
@@ -183,13 +175,6 @@ describe('status cascade', () => {
     expect(getTaskById(c.id, db)!.status).toBe('done')
   })
 
-  it('does not cascade when status changes to in_progress', () => {
-    const db = createDB()
-    const p = createTask({ title: 'P' }, db)
-    const c = createTask({ title: 'C', parentId: p.id }, db)
-    updateTask({ id: p.id, status: 'in_progress' }, db)
-    expect(getTaskById(c.id, db)!.status).toBe('todo')
-  })
 })
 
 describe('cycle detection', () => {
@@ -300,22 +285,6 @@ describe('T-12: Hierarchy stress tests', () => {
     expect(all.every((t) => t.status === 'done')).toBe(true)
   })
 
-  it('cascades cancelled through 50-level tree without stack overflow', () => {
-    const db = createDB()
-    let parentId: string | null = null
-    for (let i = 0; i < 50; i++) {
-      const t = createTask({ title: `L${i}`, parentId }, db)
-      parentId = t.id
-    }
-
-    expect(() => {
-      const root = getRowByIdForTest(db)
-      updateTaskStatus(root!.id, 'cancelled', db)
-    }).not.toThrow()
-
-    const all = getAllTasks(db)
-    expect(all.every((t) => t.status === 'cancelled')).toBe(true)
-  })
 })
 
 describe('T-13: Data integrity tests', () => {

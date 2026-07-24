@@ -100,7 +100,6 @@ export function registerIpcHandlers(): void {
 
     function statusCheckbox(s: Status): string {
       if (s === 'todo') return '[ ]'
-      if (s === 'in_progress') return '[/]'
       if (s === 'done') return '[x]'
       return '[~]'
     }
@@ -123,9 +122,7 @@ export function registerIpcHandlers(): void {
 
     const sections: { status: Status; icon: string; label: string }[] = [
       { status: 'todo', icon: '📋', label: '待办' },
-      { status: 'in_progress', icon: '🔄', label: '进行中' },
       { status: 'done', icon: '✅', label: '已完成' },
-      { status: 'cancelled', icon: '❌', label: '已取消' },
     ]
 
     for (const { status, icon, label } of sections) {

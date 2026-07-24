@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   title         TEXT NOT NULL,
   description   TEXT DEFAULT '',
   status        TEXT NOT NULL DEFAULT 'todo'
-                  CHECK(status IN ('todo','in_progress','done','cancelled')),
+                  CHECK(status IN ('todo','done')),
   priority      TEXT NOT NULL DEFAULT 'P2'
                   CHECK(priority IN ('P0','P1','P2','P3')),
   due_date      INTEGER,

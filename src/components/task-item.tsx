@@ -38,7 +38,6 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
   const isSelected = selectedTask?.id === task.id
 
   const isDone = task.status === 'done'
-  const isCancelled = task.status === 'cancelled'
 
   useEffect(() => {
     if (editing && editRef.current) {
@@ -113,7 +112,7 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
         checked={isDone}
         onCheckedChange={() => toggleDone(task.id, task.status)}
         onClick={(e) => e.stopPropagation()}
-        className={`shrink-0 ${isCancelled ? 'opacity-40' : ''}`}
+        className="shrink-0"
       />
 
       {editing ? (
@@ -131,7 +130,7 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
             <span
               className={`flex-1 truncate text-sm ${
                 isDone ? 'line-through text-muted-foreground' : ''
-              } ${isCancelled ? 'line-through text-muted-foreground/50' : ''}`}
+              }`}
             >
               {task.title}
             </span>
