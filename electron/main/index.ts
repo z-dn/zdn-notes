@@ -48,6 +48,12 @@ function createWindow(): void {
   mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximizedChange', true))
   mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximizedChange', false))
 
+  mainWindow.webContents.on('before-input-event', (_e, input) => {
+    if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
+      mainWindow.webContents.toggleDevTools()
+    }
+  })
+
   if (process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {

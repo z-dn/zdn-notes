@@ -104,9 +104,12 @@ export function TaskList() {
     depth: number
   } | null>(null)
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
+  const [dropTargetLevelChange, setDropTargetLevelChange] = useState(false)
+  const [dropDepth, setDropDepth] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const dragIdRef = useRef<string | null>(null)
   const dropIdxRef = useRef<number | null>(null)
+  const dropDepthRef = useRef(0)
 
   const flatList = useMemo(() => {
     const filtered = activeCategoryId ? tasks.filter((t) => t.categoryId === activeCategoryId) : tasks
@@ -124,13 +127,51 @@ export function TaskList() {
     const onDragOver = (e: DragEvent) => {
       e.preventDefault()
       const childEls = el.querySelectorAll(':scope > [data-task-wrap]')
+      const dragId = dragIdRef.current
+
+      // Determine which task element is hovered and gap targetIdx via midpoints
+      let hoveredIdx = -1
       let targetIdx = childEls.length
       childEls.forEach((child, i) => {
         const r = child.getBoundingClientRect()
+        if (e.clientY >= r.top && e.clientY <= r.bottom) hoveredIdx = i
         if (e.clientY > r.top + r.height / 2) targetIdx = i + 1
       })
-      dropIdxRef.current = targetIdx
+
+      // Quadrant logic: cursor directly on a different task
+      if (hoveredIdx >= 0 && dragId && flatList[hoveredIdx]?.task.id !== dragId) {
+        const child = childEls[hoveredIdx]
+        const r = child.getBoundingClientRect()
+        const relX = (e.clientX - r.left) / r.width
+        const taskDepth = flatList[hoveredIdx].depth
+
+        if (relX >= 0.5) {
+          // Right half → child of the hovered task
+          dropDepthRef.current = taskDepth + 1
+          setDropDepth(taskDepth + 1)
+          setDropTargetLevelChange(true)
+          targetIdx = hoveredIdx + 1
+        } else {
+          // Left half → same level as hovered task
+          const isTop = e.clientY < r.top + r.height / 2
+          dropDepthRef.current = taskDepth
+          setDropDepth(taskDepth)
+          setDropTargetLevelChange(false)
+          targetIdx = isTop ? hoveredIdx : hoveredIdx + 1
+        }
+
+        dropIdxRef.current = targetIdx
+        setDropTargetIndex(targetIdx)
+        return
+      }
+
+      // Gap logic (or cursor on own task)
       setDropTargetIndex(targetIdx)
+      dropIdxRef.current = targetIdx
+      const baseDepth = targetIdx === 0 ? 0 : (flatList[targetIdx - 1]?.depth ?? 0)
+      dropDepthRef.current = baseDepth
+      setDropDepth(baseDepth)
+      setDropTargetLevelChange(false)
     }
 
     const onDrop = (e: DragEvent) => {
@@ -140,12 +181,26 @@ export function TaskList() {
       if (!dragId || dropIdx === null) return
 
       const draggedTask = tasks.find((t) => t.id === dragId)
-      if (!draggedTask) { dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); return }
+      if (!draggedTask) { console.log('[dnd] no draggedTask'); dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); setDropTargetLevelChange(false); setDropDepth(0); dropDepthRef.current = 0; return }
 
-      const newParentId = dropIdx === 0 ? null : (flatList[dropIdx - 1]?.task.parentId ?? null)
+      const dropDepth = dropDepthRef.current
+      let newParentId: string | null = null
+      if (dropDepth === 0) {
+        newParentId = null
+      } else {
+        for (let i = dropIdx - 1; i >= 0; i--) {
+          if (flatList[i].depth === dropDepth - 1 && flatList[i].task.id !== dragId) {
+            newParentId = flatList[i].task.id
+            break
+          }
+        }
+      }
+      if (!newParentId) {
+        newParentId = dropIdx === 0 ? null : (flatList[dropIdx - 1]?.task.parentId ?? null)
+      }
 
       if (newParentId === draggedTask.id || (newParentId && isDescendantOf(draggedTask.id, newParentId, tasks))) {
-        dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); return
+        dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); setDropTargetLevelChange(false); setDropDepth(0); dropDepthRef.current = 0; return
       }
 
       let siblingAbove: Task | null = null
@@ -173,8 +228,9 @@ export function TaskList() {
         newOrderIndex = generateBetween(siblingAbove?.orderIndex ?? null, siblingBelow?.orderIndex ?? null)
       }
 
+      console.log('[dnd] drop', JSON.stringify({ dragId, dropIdx, dropDepth, newParentId, oldParentId: draggedTask.parentId }))
       updateTask({ id: dragId, orderIndex: newOrderIndex, parentId: newParentId })
-      dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null)
+      dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); setDropTargetLevelChange(false); setDropDepth(0); dropDepthRef.current = 0
     }
 
     const onDragStart = (e: DragEvent) => {
@@ -188,6 +244,9 @@ export function TaskList() {
       dragIdRef.current = null
       dropIdxRef.current = null
       setDropTargetIndex(null)
+      setDropTargetLevelChange(false)
+      setDropDepth(0)
+      dropDepthRef.current = 0
     }
 
     el.addEventListener('dragover', onDragOver)
@@ -296,7 +355,7 @@ export function TaskList() {
           </div>
         ) : flatList.flatMap(({ task, depth, hasChildren }, flatIndex) => [
           dropTargetIndex === flatIndex && dragIdRef.current && (
-            <div key={`drop-${flatIndex}`} className="h-0.5 rounded bg-blue-500" />
+            <div key={`drop-${flatIndex}`} className="h-0.5 rounded bg-foreground/60" style={{ marginLeft: `${12 + dropDepth * 20}px`, width: dropTargetLevelChange ? '24px' : `calc(100% - ${12 + dropDepth * 20}px)` }} />
           ),
           <div key={task.id} data-task-wrap className="animate-fade-slide-up" style={{ animationDelay: `${flatIndex * 25}ms` }}>
             <TaskItem
@@ -323,7 +382,7 @@ export function TaskList() {
           ),
         ]        )}
         {dropTargetIndex === flatList.length && dragIdRef.current && (
-          <div key="drop-end" className="h-0.5 rounded bg-blue-500" />
+          <div key="drop-end" className="h-0.5 rounded bg-foreground/60" style={{ marginLeft: `${12 + dropDepth * 20}px`, width: dropTargetLevelChange ? '24px' : `calc(100% - ${12 + dropDepth * 20}px)` }} />
         )}
         {inlineInput && !flatList.some((f) => f.task.id === inlineInput.afterTaskId) && (
           <InlineTaskInput
