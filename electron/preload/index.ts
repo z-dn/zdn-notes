@@ -3,7 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   taskCreate: (dto: unknown) => ipcRenderer.invoke('task:create', dto),
-  taskGetAll: () => ipcRenderer.invoke('task:getAll'),
+  taskGetAll: (filter: unknown) => ipcRenderer.invoke('task:getAll', filter),
   taskGetById: (id: string) => ipcRenderer.invoke('task:getById', id),
   taskUpdate: (dto: unknown) => ipcRenderer.invoke('task:update', dto),
   taskDelete: (id: string) => ipcRenderer.invoke('task:delete', id),

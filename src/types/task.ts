@@ -2,6 +2,11 @@ export type Priority = 'P0' | 'P1' | 'P2' | 'P3'
 
 export type Status = 'todo' | 'done'
 
+export interface TaskFilter {
+  search?: string
+  status?: Status
+}
+
 export interface Category {
   id: string
   name: string

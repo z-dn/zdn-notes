@@ -10,7 +10,7 @@ import type { Task, Status } from '@/types/task'
 export function registerIpcHandlers(): void {
   ipcMain.handle('task:create', (_e, dto) => createTask(dto))
   ipcMain.handle('task:getById', (_e, id) => getTaskById(id))
-  ipcMain.handle('task:getAll', () => getAllTasks())
+  ipcMain.handle('task:getAll', (_e, filter) => getAllTasks(filter))
   ipcMain.handle('task:update', (_e, dto) => updateTask(dto))
   ipcMain.handle('task:delete', (_e, id) => {
     const task = getTaskById(id)

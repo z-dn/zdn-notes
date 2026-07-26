@@ -113,7 +113,7 @@ describe('getTaskById', () => {
 describe('getAllTasks', () => {
   it('returns empty array when no tasks', () => {
     const db = createDB()
-    expect(getAllTasks(db)).toEqual([])
+    expect(getAllTasks(undefined, db)).toEqual([])
   })
 
   it('returns all tasks ordered by order_index', () => {
@@ -121,7 +121,7 @@ describe('getAllTasks', () => {
     const t1 = createTask({ title: 'C' }, db)
     const t2 = createTask({ title: 'A' }, db)
     const t3 = createTask({ title: 'B' }, db)
-    const all = getAllTasks(db)
+    const all = getAllTasks(undefined, db)
     expect(all).toHaveLength(3)
     expect(all[0].title).toBe('C')
     expect(all[1].title).toBe('A')
@@ -231,7 +231,7 @@ describe('deleteTask', () => {
     const child = createTask({ title: 'Child', parentId: parent.id }, db)
     const grandchild = createTask({ title: 'Grandchild', parentId: child.id }, db)
     deleteTask(parent.id, db)
-    expect(getAllTasks(db)).toHaveLength(0)
+    expect(getAllTasks(undefined, db)).toHaveLength(0)
   })
 
   it('returns false for non-existent id', () => {
@@ -263,7 +263,7 @@ describe('T-12: Hierarchy stress tests', () => {
       const t = createTask({ title: `Level ${i}`, parentId }, db)
       parentId = t.id
     }
-    const all = getAllTasks(db)
+    const all = getAllTasks(undefined, db)
     expect(all).toHaveLength(50)
   })
 
@@ -281,7 +281,7 @@ describe('T-12: Hierarchy stress tests', () => {
     const elapsed = performance.now() - start
 
     expect(elapsed).toBeLessThan(100)
-    const all = getAllTasks(db)
+    const all = getAllTasks(undefined, db)
     expect(all.every((t) => t.status === 'done')).toBe(true)
   })
 

@@ -4,6 +4,7 @@ import { useCategoryStore } from '@/stores/category-store'
 import { TaskItem } from './task-item'
 import { ContextMenu } from './context-menu'
 import { InlineTaskInput } from './inline-task-input'
+import { FilterBar } from './filter-bar'
 import { generateBetween, rebalance } from '@/lib/lexorank'
 import type { Task } from '@/types/task'
 
@@ -316,14 +317,6 @@ export function TaskList() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-        加载中...
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col min-h-full">
       <div className="mb-2 flex gap-1 border-b pb-1.5 text-[11px] text-muted-foreground/60">
@@ -339,6 +332,14 @@ export function TaskList() {
           </button>
         ))}
       </div>
+
+      <FilterBar />
+
+      {loading ? (
+        <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+          加载中...
+        </div>
+      ) : (
 
       <div ref={listRef} className="relative flex-1 space-y-0.5" onClick={() => { if (!dragIdRef.current) selectTask(null) }}
         onContextMenu={(e) => {
@@ -412,6 +413,7 @@ export function TaskList() {
           />
         )}
       </div>
+      )}
     </div>
   )
 }

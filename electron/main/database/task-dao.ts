@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import type { Database, SqlValue } from 'sql.js'
-import type { Task, CreateTaskDTO, UpdateTaskDTO } from '@/types/task'
+import type { Task, TaskFilter, CreateTaskDTO, UpdateTaskDTO } from '@/types/task'
 import { generateBetween } from '@/lib/lexorank'
 import { getDB, saveAsync } from './index'
 
@@ -48,8 +48,9 @@ function rowToTask(row: Row): Task {
   return task as unknown as Task
 }
 
-function rowsToTasks(db: Database): Task[] {
-  const r = db.exec('SELECT * FROM tasks ORDER BY order_index ASC')
+function rowsToTasks(db: Database, whereClause?: string, params?: SqlValue[]): Task[] {
+  const sql = `SELECT * FROM tasks${whereClause ? ` WHERE ${whereClause}` : ''} ORDER BY order_index ASC`
+  const r = db.exec(sql, params ?? [])
   if (!r[0] || !r[0].values.length) return []
   const cols = r[0].columns
   return r[0].values.map((vals) => {
@@ -120,8 +121,22 @@ export function getTaskById(id: string, _db?: Database): Task | null {
   return row ? rowToTask(row) : null
 }
 
-export function getAllTasks(_db?: Database): Task[] {
-  return rowsToTasks(_db ?? getDB())
+export function getAllTasks(filter?: TaskFilter, _db?: Database): Task[] {
+  const db = _db ?? getDB()
+  const where: string[] = []
+  const params: SqlValue[] = []
+
+  if (filter?.status) {
+    where.push('status = ?')
+    params.push(filter.status)
+  }
+  if (filter?.search) {
+    where.push('title LIKE ?')
+    params.push(`%${filter.search}%`)
+  }
+
+  const whereClause = where.length > 0 ? where.join(' AND ') : undefined
+  return rowsToTasks(db, whereClause, params)
 }
 
 export function updateTask(dto: UpdateTaskDTO, _db?: Database): Task | null {

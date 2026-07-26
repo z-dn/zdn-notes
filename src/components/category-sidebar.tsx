@@ -83,7 +83,17 @@ export function CategorySidebar() {
               : 'hover:bg-muted text-muted-foreground hover:text-foreground'
           }`}
         >
-          <span className="text-xs">📋</span>
+          <span className="inline-flex items-center justify-center">
+            <svg viewBox="0 0 16 16" className="size-2.5">
+              <circle cx="8" cy="8" r="6.5" fill="#ef4444" />
+              <path d="M8 1.5 A6.5 6.5 0 0 1 14.5 8 L8 8 Z" fill="#f97316" />
+              <path d="M8 8 L14.5 8 A6.5 6.5 0 0 1 11.75 14.03 L8 8 Z" fill="#eab308" />
+              <path d="M8 8 L11.75 14.03 A6.5 6.5 0 0 1 4.25 14.03 L8 8 Z" fill="#22c55e" />
+              <path d="M8 8 L4.25 14.03 A6.5 6.5 0 0 1 1.5 8 L8 8 Z" fill="#06b6d4" />
+              <path d="M8 8 L1.5 8 A6.5 6.5 0 0 1 8 1.5 Z" fill="#3b82f6" />
+              <circle cx="8" cy="8" r="2.5" fill="#f8fafc" />
+            </svg>
+          </span>
           <span className="flex-1 truncate">全部</span>
           <span className="text-xs tabular-nums text-muted-foreground">{totalCount}</span>
         </button>

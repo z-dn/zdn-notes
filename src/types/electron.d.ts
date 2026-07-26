@@ -1,11 +1,11 @@
-import type { Task, CreateTaskDTO, UpdateTaskDTO, Category, CreateCategoryDTO } from './task'
+import type { Task, TaskFilter, CreateTaskDTO, UpdateTaskDTO, Category, CreateCategoryDTO } from './task'
 
 declare global {
   interface Window {
     electronAPI: {
       platform: string
       taskCreate(dto: CreateTaskDTO): Promise<Task>
-      taskGetAll(): Promise<Task[]>
+      taskGetAll(filter?: TaskFilter): Promise<Task[]>
       taskGetById(id: string): Promise<Task | null>
       taskUpdate(dto: UpdateTaskDTO): Promise<Task | null>
       taskDelete(id: string): Promise<boolean>

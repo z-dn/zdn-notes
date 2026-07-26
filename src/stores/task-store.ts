@@ -1,11 +1,18 @@
 import { create } from 'zustand'
-import type { Task, CreateTaskDTO, UpdateTaskDTO } from '@/types/task'
+import type { Task, TaskFilter, CreateTaskDTO, UpdateTaskDTO } from '@/types/task'
 import { toast } from '@/lib/toast'
 import { showConfirm } from '@/components/confirm-dialog'
 import { useCategoryStore } from './category-store'
 
 function reloadCategories() {
   useCategoryStore.getState().loadCategories()
+}
+
+function cleanFilter(f: TaskFilter): TaskFilter | undefined {
+  const out: TaskFilter = {}
+  if (f.search) out.search = f.search
+  if (f.status) out.status = f.status
+  return out.search || out.status ? out : undefined
 }
 
 interface TaskStore {
@@ -15,7 +22,9 @@ interface TaskStore {
   expandedIds: Set<string>
   expandedDescId: string | null
   expandedDescOrigin: { x: number; y: number; width: number; height: number } | null
+  filters: TaskFilter
   loadTasks: () => Promise<void>
+  setFilter: (changes: Partial<TaskFilter>) => void
   createTask: (dto: CreateTaskDTO) => Promise<Task | null>
   updateTask: (dto: UpdateTaskDTO) => Promise<void>
   deleteTask: (id: string) => Promise<void>
@@ -36,16 +45,24 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   expandedIds: new Set<string>(),
   expandedDescId: null,
   expandedDescOrigin: null,
+  filters: {},
 
   loadTasks: async () => {
     try {
       set({ loading: true })
-      const tasks = await api().taskGetAll()
+      const { filters } = get()
+      const tasks = await api().taskGetAll(cleanFilter(filters))
       set({ tasks, loading: false })
     } catch (e) {
       toast('加载任务失败')
       set({ loading: false })
     }
+  },
+
+  setFilter: (changes) => {
+    const next = { ...get().filters, ...changes }
+    set({ filters: next })
+    get().loadTasks()
   },
 
   createTask: async (dto) => {
@@ -56,6 +73,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       if (dto.parentId) nextExpanded.add(dto.parentId)
       set({ tasks: [...tasks, task], expandedIds: nextExpanded })
       reloadCategories()
+      get().loadTasks()
       return task
     } catch (e) {
       toast('创建任务失败')
@@ -76,10 +94,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       set({ tasks: nextTasks, selectedTask: nextSelected })
       await api().taskUpdate(dto)
       reloadCategories()
+      get().loadTasks()
     } catch (e) {
       toast('更新任务失败')
-      const reloaded = await api().taskGetAll().catch(() => get().tasks)
-      set({ tasks: reloaded })
+      get().loadTasks()
     }
   },
 
@@ -90,12 +108,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       if (!target) return
       if (!(await showConfirm('确认删除', `确定要删除「${target.title}」及其所有子任务吗？`))) return
       await api().taskDelete(id)
-      const { tasks: updatedTasks, selectedTask } = get()
-      set({
-        tasks: updatedTasks.filter((t) => t.id !== id),
-        selectedTask: selectedTask?.id === id ? null : selectedTask,
-      })
       reloadCategories()
+      get().loadTasks()
     } catch (e) {
       toast('删除任务失败')
     }
@@ -105,9 +119,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     try {
       const newStatus = currentStatus === 'done' ? 'todo' : 'done'
       await api().taskUpdateStatus(id, newStatus)
-      const reloaded = await api().taskGetAll()
-      set({ tasks: reloaded })
       reloadCategories()
+      get().loadTasks()
     } catch (e) {
       toast('切换状态失败')
     }
