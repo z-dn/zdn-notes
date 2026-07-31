@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useCategoryStore } from '@/stores/category-store'
 import type { Category } from '@/types/task'
+import { ColorPicker } from '@/components/color-picker'
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899']
 
@@ -11,6 +12,8 @@ export function CategorySidebar() {
   const [newColor, setNewColor] = useState('#6b7280')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  const colorPickerOpenRef = useRef(false)
   const editRef = useRef<HTMLInputElement>(null)
   const editContainerRef = useRef<HTMLDivElement>(null)
 
@@ -22,8 +25,13 @@ export function CategorySidebar() {
   }, [editingId])
 
   useEffect(() => {
+    colorPickerOpenRef.current = colorPickerOpen
+  }, [colorPickerOpen])
+
+  useEffect(() => {
     if (!editingId) return
     function handleMouseDown(e: MouseEvent) {
+      if (colorPickerOpenRef.current) return
       if (editContainerRef.current && !editContainerRef.current.contains(e.target as Node)) {
         saveEdit()
       }
@@ -83,17 +91,13 @@ export function CategorySidebar() {
               : 'hover:bg-muted text-muted-foreground hover:text-foreground'
           }`}
         >
-          <span className="inline-flex items-center justify-center">
-            <svg viewBox="0 0 16 16" className="size-2.5">
-              <circle cx="8" cy="8" r="6.5" fill="#ef4444" />
-              <path d="M8 1.5 A6.5 6.5 0 0 1 14.5 8 L8 8 Z" fill="#f97316" />
-              <path d="M8 8 L14.5 8 A6.5 6.5 0 0 1 11.75 14.03 L8 8 Z" fill="#eab308" />
-              <path d="M8 8 L11.75 14.03 A6.5 6.5 0 0 1 4.25 14.03 L8 8 Z" fill="#22c55e" />
-              <path d="M8 8 L4.25 14.03 A6.5 6.5 0 0 1 1.5 8 L8 8 Z" fill="#06b6d4" />
-              <path d="M8 8 L1.5 8 A6.5 6.5 0 0 1 8 1.5 Z" fill="#3b82f6" />
-              <circle cx="8" cy="8" r="2.5" fill="#f8fafc" />
-            </svg>
-          </span>
+          <span
+            className="block h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{
+              background:
+                'conic-gradient(red, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, red)',
+            }}
+          />
           <span className="flex-1 truncate">全部</span>
           <span className="text-xs tabular-nums text-muted-foreground">{totalCount}</span>
         </button>
@@ -156,6 +160,11 @@ export function CategorySidebar() {
                         style={{ backgroundColor: c }}
                       />
                     ))}
+                    <ColorPicker
+                      value={cat.color}
+                      onChange={(color) => updateCategory(cat.id, { color })}
+                      onOpenChange={setColorPickerOpen}
+                    />
                   </div>
                 </div>
               ) : (
@@ -208,6 +217,11 @@ export function CategorySidebar() {
                   style={{ backgroundColor: c }}
                 />
               ))}
+              <ColorPicker
+                value={newColor}
+                onChange={setNewColor}
+                onOpenChange={setColorPickerOpen}
+              />
             </div>
             <div className="flex gap-1">
               <button
