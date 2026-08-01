@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 interface Option {
   value: string
   label: string
+  color?: string
 }
 
 export function Select({
@@ -39,8 +40,16 @@ export function Select({
         onClick={() => setOpen(!open)}
         className="flex h-7 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-xs text-foreground hover:bg-accent transition-colors"
       >
-        <span className={cn('truncate', !selected && 'text-muted-foreground')}>
-          {selected ? selected.label : placeholder ?? '选择...'}
+        <span className="flex min-w-0 items-center gap-1.5">
+          {selected?.color && (
+            <span
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: selected.color }}
+            />
+          )}
+          <span className={cn('truncate', !selected && 'text-muted-foreground')}>
+            {selected ? selected.label : placeholder ?? '选择...'}
+          </span>
         </span>
         <svg
           className={cn('h-3 w-3 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
@@ -59,13 +68,19 @@ export function Select({
               type="button"
               onClick={() => { onChange(opt.value); setOpen(false) }}
               className={cn(
-                'flex w-full items-center px-2 py-1.5 text-left text-xs transition-colors',
+                'flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs transition-colors',
                 opt.value === value
                   ? 'bg-accent text-foreground font-medium'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
             >
-              {opt.label}
+              {opt.color && (
+                <span
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: opt.color }}
+                />
+              )}
+              <span className="truncate">{opt.label}</span>
             </button>
           ))}
         </div>

@@ -85,7 +85,7 @@ export function CategorySidebar() {
       <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
         <button
           onClick={() => selectCategory(null)}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+          className={`flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
             activeCategoryId === null
               ? 'bg-primary/10 text-primary font-medium'
               : 'hover:bg-muted text-muted-foreground hover:text-foreground'
@@ -100,6 +100,8 @@ export function CategorySidebar() {
           />
           <span className="flex-1 truncate">全部</span>
           <span className="text-xs tabular-nums text-muted-foreground">{totalCount}</span>
+          <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
+          <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
         </button>
 
         {categories.map((cat) => {
@@ -117,10 +119,21 @@ export function CategorySidebar() {
               }`}
               onClick={editing ? undefined : () => selectCategory(cat.id)}
             >
-              <span
-                className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: cat.color }}
-              />
+              {!editing && cat.id !== '__uncategorized' ? (
+                <ColorPicker
+                  value={cat.color}
+                  onChange={(color) => updateCategory(cat.id, { color })}
+                  onOpenChange={setColorPickerOpen}
+                  triggerClassName="h-2.5 w-2.5"
+                  triggerStyle={{ background: cat.color }}
+                  title="修改颜色"
+                />
+              ) : (
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: cat.color }}
+                />
+              )}
 
               {editing ? (
                 <div ref={editContainerRef} className="flex flex-1 flex-col gap-1.5 min-w-0">
@@ -176,14 +189,28 @@ export function CategorySidebar() {
                     {cat.name}
                   </span>
                   <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
-                  {cat.id !== '__uncategorized' && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id) }}
-                      className="invisible ml-auto text-muted-foreground hover:text-destructive group-hover/item:visible"
-                      title="删除"
-                    >
-                      ✕
-                    </button>
+                  {cat.id !== '__uncategorized' ? (
+                    <>
+                      <button
+                        onClick={(e) => startEdit(cat, e)}
+                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground group-hover/item:visible"
+                        title="重命名"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id) }}
+                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-destructive group-hover/item:visible"
+                        title="删除"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
+                      <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
+                    </>
                   )}
                 </>
               )}
@@ -241,7 +268,11 @@ export function CategorySidebar() {
           </div>
         ) : (
           <button
-            onClick={() => setShowCreator(true)}
+            onClick={() => {
+              const active = categories.find((c) => c.id === activeCategoryId)
+              setNewColor(active?.color ?? '#6b7280')
+              setShowCreator(true)
+            }}
             className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             <span className="text-base leading-none">+</span>

@@ -1,14 +1,28 @@
 import { useState } from 'react'
 import { HexColorPicker } from 'react-colorful'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 
 interface ColorPickerProps {
   value: string
   onChange: (color: string) => void
   onOpenChange?: (open: boolean) => void
+  triggerClassName?: string
+  triggerStyle?: React.CSSProperties
+  title?: string
 }
 
-export function ColorPicker({ value, onChange, onOpenChange }: ColorPickerProps) {
+const RAINBOW_BG =
+  'conic-gradient(red, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, red)'
+
+export function ColorPicker({
+  value,
+  onChange,
+  onOpenChange,
+  triggerClassName,
+  triggerStyle,
+  title,
+}: ColorPickerProps) {
   const [open, setOpen] = useState(false)
   return (
     <Popover
@@ -20,12 +34,10 @@ export function ColorPicker({ value, onChange, onOpenChange }: ColorPickerProps)
     >
       <PopoverTrigger asChild>
         <button
-          className="h-4 w-4 cursor-pointer rounded-full border border-input"
-          style={{
-            background:
-              'conic-gradient(red, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, red)',
-          }}
-          title="自定义颜色"
+          className={cn('h-4 w-4 cursor-pointer rounded-full border border-input', triggerClassName)}
+          style={{ background: RAINBOW_BG, ...triggerStyle }}
+          title={title ?? '自定义颜色'}
+          onClick={(e) => e.stopPropagation()}
         />
       </PopoverTrigger>
       <PopoverContent
@@ -46,7 +58,16 @@ export function ColorPicker({ value, onChange, onOpenChange }: ColorPickerProps)
             value={value.replace('#', '')}
             onChange={(e) => {
               const raw = e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6)
-              if (raw.length === 6 || raw.length === 3) {
+              if (raw.length === 3) {
+                onChange(
+                  '#' +
+                    raw
+                      .split('')
+                      .map((ch) => ch + ch)
+                      .join('')
+                      .toLowerCase(),
+                )
+              } else if (raw.length === 6) {
                 onChange('#' + raw.toLowerCase())
               }
             }}

@@ -138,8 +138,10 @@ export function DetailPanel() {
           value={selectedTask.categoryId ?? ''}
           onChange={(v) => updateTask({ id: selectedTask.id, categoryId: v || '__uncategorized' })}
           options={[
-            { value: '', label: '未分类' },
-            ...categories.filter((c) => c.id !== '__uncategorized').map((c) => ({ value: c.id, label: c.name })),
+            { value: '', label: '未分类', color: '#9ca3af' },
+            ...categories
+              .filter((c) => c.id !== '__uncategorized')
+              .map((c) => ({ value: c.id, label: c.name, color: c.color })),
           ]}
           placeholder="未分类"
           className="flex-1"
