@@ -23,7 +23,7 @@ interface TaskStore {
   expandedDescId: string | null
   expandedDescOrigin: { x: number; y: number; width: number; height: number } | null
   filters: TaskFilter
-  loadTasks: () => Promise<void>
+  loadTasks: (silent?: boolean) => Promise<void>
   setFilter: (changes: Partial<TaskFilter>) => void
   createTask: (dto: CreateTaskDTO) => Promise<Task | null>
   updateTask: (dto: UpdateTaskDTO) => Promise<void>
@@ -47,9 +47,9 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   expandedDescOrigin: null,
   filters: {},
 
-  loadTasks: async () => {
+  loadTasks: async (silent = false) => {
     try {
-      set({ loading: true })
+      if (!silent) set({ loading: true })
       const { filters } = get()
       const tasks = await api().taskGetAll(cleanFilter(filters))
       set({ tasks, loading: false })
@@ -120,7 +120,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const newStatus = currentStatus === 'done' ? 'todo' : 'done'
       await api().taskUpdateStatus(id, newStatus)
       reloadCategories()
-      get().loadTasks()
+      get().loadTasks(true)
     } catch (e) {
       toast('切换状态失败')
     }
