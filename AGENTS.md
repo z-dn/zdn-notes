@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-ZDNotes 是一款基于 Electron 的本地笔记与任务管理桌面应用，支持自然语言输入创建任务（时间、优先级、标签等自动解析）。仅支持 Windows 平台（NSIS 安装包）。
+ZDNotes 是一款基于 Electron 的本地笔记与任务管理桌面应用，支持快速输入创建任务。仅支持 Windows 平台（NSIS 安装包）。
 
 ---
 
@@ -57,7 +57,6 @@ src/                    → 渲染进程 (React)
 | 状态管理 | Zustand 5 |
 | 富文本编辑器 | Milkdown 7 (preset-commonmark + React + Nord theme) |
 | 数据库 | SQL.js (SQLite WASM) |
-| NLP 时间解析 | chrono-node 2 |
 | 日期工具 | date-fns 3 |
 | 自动更新 | electron-updater 6 |
 | 测试 | Vitest 4 + jsdom + @testing-library/react |
@@ -92,7 +91,7 @@ src/                    → 渲染进程 (React)
 - `src/components/ui/` — shadcn/ui 原始组件（不要直接修改）
 - `src/components/` — 业务组件
 - `src/stores/` — Zustand store（task-store, category-store, settings-store）
-- `src/lib/` — 工具函数（nlp.ts, lexorank.ts, utils.ts）
+- `src/lib/` — 工具函数（lexorank.ts, utils.ts, markdown.ts）
 - `src/types/` — TypeScript 类型定义（task.ts, electron.d.ts）
 - `tests/` — 测试文件
 - `electron/main/database/` — DAO 层
@@ -155,7 +154,7 @@ src/                    → 渲染进程 (React)
 - **运行**：`npm run test`
 - **目录**：`tests/`，文件命名 `*.test.ts`
 
-当前包含测试：`lexorank.test.ts`, `nlp.test.ts`, `task-dao.test.ts`, `example.test.ts`
+当前包含测试：`lexorank.test.ts`, `task-dao.test.ts`, `example.test.ts`
 
 ---
 
