@@ -7,6 +7,14 @@ import { createCategory, getAllCategories, updateCategory, deleteCategory, getCa
 import { getAllSettings, setSetting } from './database/settings-dao'
 import type { Task, Status } from '@/types/task'
 
+const IMAGE_FILENAME_RE = /^[\w.-]+$/
+
+function isSafeImageFilename(filename: string): boolean {
+  if (!filename) return false
+  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false
+  return IMAGE_FILENAME_RE.test(filename)
+}
+
 export function registerIpcHandlers(): void {
   ipcMain.handle('task:create', (_e, dto) => createTask(dto))
   ipcMain.handle('task:getById', (_e, id) => getTaskById(id))
@@ -26,6 +34,7 @@ export function registerIpcHandlers(): void {
       const allTasks = getAllTasks()
       for (const url of imageUrls) {
         const filename = url.replace('zdn-img:///', '')
+        if (!isSafeImageFilename(filename)) continue
         const stillUsed = allTasks.some((t) => t.description?.includes(filename))
         if (!stillUsed) {
           const filePath = join(imageDir, filename)
@@ -76,6 +85,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('image:delete', (_e, url: string) => {
     const filename = url.replace('zdn-img:///', '')
+    if (!isSafeImageFilename(filename)) return
     const filePath = join(app.getPath('userData'), 'images', filename)
     if (existsSync(filePath)) unlinkSync(filePath)
   })

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { marked } from 'marked'
 import { useTaskStore } from '@/stores/task-store'
 import { useSettingsStore } from '@/stores/settings-store'
 import { MilkdownEditor } from '@/components/milkdown-editor'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { renderMarkdown } from '@/lib/markdown'
 
 export function ExpandedDescription() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
@@ -28,7 +28,7 @@ export function ExpandedDescription() {
   }, [selectedTask])
 
   useEffect(() => {
-    Promise.resolve(marked.parse(description || '')).then(setRenderedDesc)
+    renderMarkdown(description).then(setRenderedDesc)
   }, [description])
 
   const prevId = useRef<string | null>(null)

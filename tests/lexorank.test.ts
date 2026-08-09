@@ -37,7 +37,7 @@ describe('generateBetween', () => {
   })
 
   it('throws when precision exhausted', () => {
-    let low = 0
+    const low = 0
     let high = 1
     for (let i = 0; i < 50; i++) {
       const mid = (low + high) / 2
@@ -45,7 +45,7 @@ describe('generateBetween', () => {
         expect(() => generateBetween(low, high)).toThrow('Lexorank precision exhausted')
         return
       }
-      ;[low, high] = [low, mid]
+      high = mid
       if (i === 49) {
         expect(() => generateBetween(low, high)).toThrow('Lexorank precision exhausted')
       }

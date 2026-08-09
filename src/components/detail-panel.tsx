@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { marked } from 'marked'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -13,6 +12,7 @@ import { Select } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
 import { PRIORITY_COLORS } from './task-item'
+import { renderMarkdown } from '@/lib/markdown'
 import type { Priority } from '@/types/task'
 
 const PRIORITY_OPTIONS: Priority[] = ['P0', 'P1', 'P2', 'P3']
@@ -60,7 +60,7 @@ export function DetailPanel() {
   }, [selectedTask])
 
   useEffect(() => {
-    Promise.resolve(marked.parse(description || '')).then(setRenderedDesc)
+    renderMarkdown(description).then(setRenderedDesc)
   }, [description])
 
   const recentOwners = useMemo(() => {

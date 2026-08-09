@@ -182,7 +182,7 @@ export function TaskList() {
       if (!dragId || dropIdx === null) return
 
       const draggedTask = tasks.find((t) => t.id === dragId)
-      if (!draggedTask) { console.log('[dnd] no draggedTask'); dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); setDropTargetLevelChange(false); setDropDepth(0); dropDepthRef.current = 0; return }
+      if (!draggedTask) { dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); setDropTargetLevelChange(false); setDropDepth(0); dropDepthRef.current = 0; return }
 
       const dropDepth = dropDepthRef.current
       let newParentId: string | null = null
@@ -229,7 +229,6 @@ export function TaskList() {
         newOrderIndex = generateBetween(siblingAbove?.orderIndex ?? null, siblingBelow?.orderIndex ?? null)
       }
 
-      console.log('[dnd] drop', JSON.stringify({ dragId, dropIdx, dropDepth, newParentId, oldParentId: draggedTask.parentId }))
       updateTask({ id: dragId, orderIndex: newOrderIndex, parentId: newParentId })
       dragIdRef.current = null; dropIdxRef.current = null; setDropTargetIndex(null); setDropTargetLevelChange(false); setDropDepth(0); dropDepthRef.current = 0
     }

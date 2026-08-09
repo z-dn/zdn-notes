@@ -38,10 +38,11 @@ export function rebalance(ranks: number[]): number[] {
   if (ranks.length === 0) return []
   if (ranks.length === 1) return [0]
 
-  const sorted = [...ranks].sort((a, b) => a - b)
-  const rankMap = new Map<number, number>()
-  sorted.forEach((rank, i) => {
-    rankMap.set(rank, i * 65536)
+  const indexed = ranks.map((rank, index) => ({ rank, index }))
+  indexed.sort((a, b) => a.rank - b.rank || a.index - b.index)
+  const newRanks: number[] = []
+  indexed.forEach((item, i) => {
+    newRanks[item.index] = i * 65536
   })
-  return ranks.map((rank) => rankMap.get(rank)!)
+  return newRanks
 }
