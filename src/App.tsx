@@ -61,8 +61,8 @@ export default function App() {
     toast(ok ? '导出成功' : '取消导出')
   }
 
-  const DRAG = { WebkitAppRegion: 'drag' as string }
-  const NO_DRAG = { WebkitAppRegion: 'no-drag' as string }
+  const DRAG = { WebkitAppRegion: 'drag' } as React.CSSProperties
+  const NO_DRAG = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
   return (
     <TooltipProvider>

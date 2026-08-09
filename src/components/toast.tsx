@@ -4,7 +4,7 @@ import { setToast } from '@/lib/toast'
 export function ToastContainer() {
   const [msg, setMsg] = useState('')
   const [visible, setVisible] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     setToast((m: string) => {

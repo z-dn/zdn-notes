@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import type { Database } from 'sql.js'
+import type { Database, SqlValue } from 'sql.js'
 import type { Category, CreateCategoryDTO } from '@/types/task'
 import { getDB, saveAsync } from './index'
 
@@ -68,7 +68,7 @@ export function updateCategory(id: string, data: Partial<Pick<Category, 'name' |
   if (!existing[0]?.values.length) return null
 
   const setClause: string[] = []
-  const vals: unknown[] = []
+  const vals: SqlValue[] = []
 
   if (data.name !== undefined) { setClause.push('name = ?'); vals.push(data.name) }
   if (data.color !== undefined) { setClause.push('color = ?'); vals.push(data.color) }

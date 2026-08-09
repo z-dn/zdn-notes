@@ -12,7 +12,7 @@ interface MilkdownEditorProps {
 }
 
 function milkdownTheme(ctx: any) {
-  ctx.update(editorViewOptionsCtx, (prev) => {
+  ctx.update(editorViewOptionsCtx, (prev: any) => {
     const prevClass = prev.attributes
     return {
       ...prev,
