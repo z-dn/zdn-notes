@@ -5,6 +5,7 @@ import { join } from 'path'
 import { createTask, getTaskById, getAllTasks, updateTask, deleteTask, updateTaskStatus } from './database/task-dao'
 import { createCategory, getAllCategories, updateCategory, deleteCategory, getCategoryTaskCounts } from './database/category-dao'
 import { getAllSettings, setSetting } from './database/settings-dao'
+import { backupDatabase, restoreDatabase } from './backup'
 import type { Task, Status } from '@/types/task'
 
 const IMAGE_FILENAME_RE = /^[\w.-]+$/
@@ -53,6 +54,38 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('category:getTaskCounts', () => getCategoryTaskCounts())
 
   ipcMain.handle('app:getVersion', () => app.getVersion())
+
+  ipcMain.handle('db:export', async () => {
+    const result = await dialog.showSaveDialog({
+      title: '备份数据',
+      defaultPath: `zdn-notes-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+      filters: [{ name: 'ZDNotes 备份', extensions: ['zip'] }],
+    })
+    if (result.canceled || !result.filePath) return false
+    try {
+      backupDatabase(result.filePath)
+      return true
+    } catch (e) {
+      console.error('[db:export]', e)
+      return false
+    }
+  })
+
+  ipcMain.handle('db:import', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '恢复数据',
+      properties: ['openFile'],
+      filters: [{ name: 'ZDNotes 备份', extensions: ['zip'] }],
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, error: '已取消' }
+    try {
+      await restoreDatabase(result.filePaths[0])
+      return { ok: true }
+    } catch (e) {
+      console.error('[db:import]', e)
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
 
   ipcMain.handle('settings:getAll', () => getAllSettings())
   ipcMain.handle('settings:set', (_e, key, value) => setSetting(key, value))

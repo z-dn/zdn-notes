@@ -30,6 +30,9 @@ declare global {
 
       exportMarkdown(): Promise<boolean>
 
+      exportBackup(): Promise<boolean>
+      importBackup(): Promise<{ ok: boolean; error?: string }>
+
       saveImageFromData(dataUri: string): Promise<string>
       pickAndSaveImage(): Promise<string | null>
       deleteImage(url: string): Promise<void>

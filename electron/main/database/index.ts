@@ -48,6 +48,31 @@ CREATE TABLE IF NOT EXISTS settings (
 let db: SqlJsDatabase | null = null
 let dbPath: string = ''
 
+export function runMigrations(database: SqlJsDatabase): void {
+  try { database.run("ALTER TABLE tasks RENAME COLUMN project TO owner") } catch (e) { /* already renamed */ }
+  try { database.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''") } catch (e) { /* column may already exist */ }
+  try { database.run("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)") } catch (e) { /* table may already exist */ }
+  try { database.run("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'") } catch (e) { /* column may already exist */ }
+  try { database.run("ALTER TABLE categories ADD COLUMN parent_id TEXT") } catch (e) { /* column may already exist */ }
+  try { database.run("UPDATE categories SET parent_id = NULL") } catch (e) { /* ignore */ }
+  try { database.run("ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL") } catch (e) { /* column may already exist */ }
+  try { database.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)") } catch (e) { /* table may already exist */ }
+}
+
+export function ensureDefaultCategory(database: SqlJsDatabase): void {
+  const existingDefault = database.exec("SELECT id FROM categories WHERE name = '未分类'")
+  if (!existingDefault[0]?.values.length) {
+    database.run("INSERT INTO categories (id, name, color, sort_order, created_at) VALUES ('__uncategorized', '未分类', '#9ca3af', 0, ?)", [Date.now()])
+  }
+}
+
+export function assertIntegrity(database: SqlJsDatabase): void {
+  const check = database.exec('PRAGMA integrity_check')
+  if (check[0]?.values[0]?.[0] !== 'ok') {
+    throw new Error('Database integrity check failed: ' + String(check[0]?.values[0]?.[0]))
+  }
+}
+
 export async function initDB(): Promise<void> {
   const SQL = await initSqlJs()
   dbPath = path.join(app.getPath('userData'), 'zdn-notes.db')
@@ -55,29 +80,52 @@ export async function initDB(): Promise<void> {
   if (fs.existsSync(dbPath)) {
     const buffer = fs.readFileSync(dbPath)
     db = new SQL.Database(buffer)
-    try { db.run("ALTER TABLE tasks RENAME COLUMN project TO owner") } catch (e) { /* already renamed */ }
-    try { db.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''") } catch (e) { /* column may already exist */ }
-    try { db.run("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)") } catch (e) { /* table may already exist */ }
-    try { db.run("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'") } catch (e) { /* column may already exist */ }
-    try { db.run("ALTER TABLE categories ADD COLUMN parent_id TEXT") } catch (e) { /* column may already exist */ }
-    try { db.run("UPDATE categories SET parent_id = NULL") } catch (e) { /* ignore */ }
-    try { db.run("ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL") } catch (e) { /* column may already exist */ }
-    try { db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)") } catch (e) { /* table may already exist */ }
+    runMigrations(db)
   } else {
     db = new SQL.Database()
     db.run(SCHEMA_SQL)
     save()
   }
-  const existingDefault = db.exec("SELECT id FROM categories WHERE name = '未分类'")
-  if (!existingDefault[0]?.values.length) {
-    db.run("INSERT INTO categories (id, name, color, sort_order, created_at) VALUES ('__uncategorized', '未分类', '#9ca3af', 0, ?)", [Date.now()])
-    save()
+  ensureDefaultCategory(db)
+  try {
+    assertIntegrity(db)
+  } catch (e) {
+    console.error('[db] integrity check failed:', e)
   }
+}
 
-  const check = db.exec('PRAGMA integrity_check')
-  if (check[0]?.values[0]?.[0] !== 'ok') {
-    console.error('[db] integrity check failed:', check[0]?.values[0]?.[0])
+export function loadValidatedDB(
+  buffer: Uint8Array,
+  SQL: Awaited<ReturnType<typeof initSqlJs>>
+): SqlJsDatabase {
+  let database: SqlJsDatabase
+  try {
+    database = new SQL.Database(buffer)
+  } catch (e) {
+    throw new Error('无法解析数据库文件', { cause: e })
   }
+  try {
+    runMigrations(database)
+    const tables = database.exec("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tasks','categories','settings')")
+    const present = new Set<string>()
+    for (const row of tables[0]?.values ?? []) present.add(String(row[0]))
+    for (const t of ['tasks', 'categories', 'settings']) {
+      if (!present.has(t)) throw new Error('数据库缺少必需的表: ' + t)
+    }
+    ensureDefaultCategory(database)
+    assertIntegrity(database)
+  } catch (e) {
+    database.close()
+    throw e
+  }
+  return database
+}
+
+export function replaceDB(newDb: SqlJsDatabase): void {
+  const old = db
+  db = newDb
+  save()
+  old?.close()
 }
 
 export function getDB(): SqlJsDatabase {

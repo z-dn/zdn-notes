@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Settings } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings-store'
+import { useTaskStore } from '@/stores/task-store'
+import { useCategoryStore } from '@/stores/category-store'
+import { showConfirm } from '@/components/confirm-dialog'
 import { toast } from '@/lib/toast'
 import { useFlipDialog } from '@/hooks/use-flip-dialog'
 
@@ -119,6 +122,25 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     window.electronAPI.updateInstall()
   }
 
+  async function handleBackup() {
+    const ok = await window.electronAPI.exportBackup()
+    toast(ok ? '备份成功' : '备份已取消')
+  }
+
+  async function handleRestore() {
+    if (!(await showConfirm('恢复数据', '恢复将覆盖当前所有任务、分类和设置，且不可撤销。确定继续吗？'))) return
+    const result = await window.electronAPI.importBackup()
+    if (result.ok) {
+      useTaskStore.getState().selectTask(null)
+      useTaskStore.getState().loadTasks()
+      useCategoryStore.getState().loadCategories()
+      useSettingsStore.getState().loadSettings()
+      toast('恢复成功')
+    } else {
+      toast(`恢复失败: ${result.error ?? '未知错误'}`)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50">
       <div ref={overlayRef} className="absolute inset-0 bg-black/40" onClick={() => playClose()} />
@@ -187,6 +209,25 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
               />
               <span className="text-xs font-medium text-muted-foreground">启用到期提醒</span>
             </label>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">数据备份</label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleBackup}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                备份数据
+              </button>
+              <button
+                onClick={handleRestore}
+                className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
+              >
+                恢复数据
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">备份包含数据库与图片，恢复将覆盖当前全部数据。</p>
           </div>
 
           <div>
