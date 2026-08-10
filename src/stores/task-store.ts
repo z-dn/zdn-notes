@@ -94,7 +94,6 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       set({ tasks: nextTasks, selectedTask: nextSelected })
       await api().taskUpdate(dto)
       reloadCategories()
-      get().loadTasks()
     } catch (e) {
       toast('更新任务失败')
       get().loadTasks()

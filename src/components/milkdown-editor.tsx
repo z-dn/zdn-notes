@@ -102,6 +102,16 @@ function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
               }
               return false
             },
+            handleKeyDown: (view, event) => {
+              if (event.key !== 'Tab') return false
+              const { $from } = view.state.selection
+              for (let d = $from.depth; d > 0; d--) {
+                const name = $from.node(d).type.name
+                if (name === 'list_item' || name === 'bullet_list' || name === 'ordered_list') return false
+              }
+              event.preventDefault()
+              return true
+            },
           }))
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
             onChangeRef.current(markdown)

@@ -39,6 +39,7 @@ export function DetailPanel() {
   const ownerInputRef = useRef<HTMLInputElement>(null)
   const descRef = useRef<HTMLDivElement>(null)
   const [showOwnerDropdown, setShowOwnerDropdown] = useState(false)
+  const [showTagDropdown, setShowTagDropdown] = useState(false)
 
   useEffect(() => {
     if (selectedTask) {
@@ -78,6 +79,23 @@ export function DetailPanel() {
 
   const filteredOwners = showOwnerDropdown
     ? recentOwners.filter((o) => !newOwner || o.toLowerCase().includes(newOwner.toLowerCase()))
+    : []
+
+  const recentTags = useMemo(() => {
+    const seen = new Set<string>()
+    return [...tasks]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .flatMap((t) => t.tags)
+      .filter((tag) => {
+        if (selectedTask?.tags.includes(tag) || seen.has(tag)) return false
+        seen.add(tag)
+        return true
+      })
+      .slice(0, 10)
+  }, [tasks, selectedTask?.tags])
+
+  const filteredTags = showTagDropdown
+    ? recentTags.filter((t) => !newTag || t.toLowerCase().includes(newTag.toLowerCase()))
     : []
 
   if (!selectedTask) {
@@ -165,20 +183,56 @@ export function DetailPanel() {
             </Badge>
           ))}
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 relative">
           <input
             ref={tagInput}
             value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
+            onChange={(e) => {
+              setNewTag(e.target.value)
+              setShowTagDropdown(true)
+            }}
+            onFocus={() => setShowTagDropdown(true)}
+            onBlur={() => setShowTagDropdown(false)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && newTag.trim()) {
-                updateTask({ id: selectedTask.id, tags: [...selectedTask.tags, newTag.trim()] })
+                const trimmed = newTag.trim()
+                if (!selectedTask.tags.includes(trimmed)) {
+                  updateTask({ id: selectedTask.id, tags: [...selectedTask.tags, trimmed] })
+                }
                 setNewTag('')
+                setShowTagDropdown(false)
+              }
+              if (e.key === 'Escape') {
+                setShowTagDropdown(false)
               }
             }}
             placeholder="添加标签..."
             className="h-6 flex-1 rounded border border-input bg-transparent px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
           />
+          {showTagDropdown && filteredTags.length > 0 && (
+            <div
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-40 overflow-y-auto rounded-md border border-input bg-popover shadow-md"
+            >
+              {filteredTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onMouseDown={() => {
+                    if (!selectedTask.tags.includes(tag)) {
+                      updateTask({ id: selectedTask.id, tags: [...selectedTask.tags, tag] })
+                    }
+                    setNewTag('')
+                    setShowTagDropdown(false)
+                    tagInput.current?.blur()
+                  }}
+                  className="flex w-full items-center px-2 py-1.5 text-left text-xs transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -401,6 +455,23 @@ export function DetailPanel() {
               clearTimeout(descTimer.current)
               if (description !== selectedTask.description) {
                 updateTask({ id: selectedTask.id, description })
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Tab') {
+                e.preventDefault()
+                const el = e.currentTarget
+                const start = el.selectionStart ?? 0
+                const end = el.selectionEnd ?? start
+                const next = description.slice(0, start) + '\t' + description.slice(end)
+                setDescription(next)
+                clearTimeout(descTimer.current)
+                descTimer.current = setTimeout(() => {
+                  updateTask({ id: selectedTask.id, description: next })
+                }, 500)
+                requestAnimationFrame(() => {
+                  el.selectionStart = el.selectionEnd = start + 1
+                })
               }
             }}
             placeholder="支持 Markdown 格式..."

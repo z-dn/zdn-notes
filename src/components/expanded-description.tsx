@@ -4,6 +4,7 @@ import { useSettingsStore } from '@/stores/settings-store'
 import { MilkdownEditor } from '@/components/milkdown-editor'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { renderMarkdown } from '@/lib/markdown'
+import { setMinimapSource, publishMinimapContent } from '@/lib/minimap-bus'
 
 export function ExpandedDescription() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
@@ -20,9 +21,19 @@ export function ExpandedDescription() {
   const originRef = useRef(origin)
   originRef.current = origin
 
+  const updateDescription = (md: string) => {
+    setDescription(md)
+    publishMinimapContent(md)
+  }
+
+  const registerScroll = (el: HTMLElement | null) => {
+    setMinimapSource(el)
+  }
+
   useEffect(() => {
     if (selectedTask) {
       setDescription(selectedTask.description || '')
+      publishMinimapContent(selectedTask.description || '')
       setPreviewMode(false)
     }
   }, [selectedTask])
@@ -124,9 +135,9 @@ export function ExpandedDescription() {
 
       <div className="flex-1 min-h-0 p-4">
         {descriptionMode === 'edit' ? (
-          <div className="h-full rounded-md border border-input overflow-y-auto p-4">
+          <div ref={registerScroll} className="h-full rounded-md border border-input overflow-y-auto p-4">
             <MilkdownEditor key={selectedTask.id} content={selectedTask.description || ''} onChange={(markdown) => {
-                setDescription(markdown)
+                updateDescription(markdown)
                 clearTimeout(descTimer.current)
                 descTimer.current = setTimeout(() => {
                   updateTask({ id: selectedTask.id, description: markdown })
@@ -136,6 +147,7 @@ export function ExpandedDescription() {
           </div>
         ) : descriptionMode === 'toggle' && previewMode ? (
           <div
+            ref={registerScroll}
             className="h-full w-full overflow-auto break-words rounded-md border border-input bg-transparent p-4 text-sm
               [&_ul]:list-disc [&_ul]:pl-4
               [&_ol]:list-decimal [&_ol]:pl-4
@@ -149,9 +161,10 @@ export function ExpandedDescription() {
           />
         ) : (
           <textarea
+            ref={registerScroll}
             value={description}
             onChange={(e) => {
-              setDescription(e.target.value)
+              updateDescription(e.target.value)
               clearTimeout(descTimer.current)
               descTimer.current = setTimeout(() => {
                 updateTask({ id: selectedTask.id, description: e.target.value })
@@ -161,6 +174,23 @@ export function ExpandedDescription() {
               clearTimeout(descTimer.current)
               if (description !== selectedTask.description) {
                 updateTask({ id: selectedTask.id, description })
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Tab') {
+                e.preventDefault()
+                const el = e.currentTarget
+                const start = el.selectionStart ?? 0
+                const end = el.selectionEnd ?? start
+                const next = description.slice(0, start) + '\t' + description.slice(end)
+                updateDescription(next)
+                clearTimeout(descTimer.current)
+                descTimer.current = setTimeout(() => {
+                  updateTask({ id: selectedTask.id, description: next })
+                }, 500)
+                requestAnimationFrame(() => {
+                  el.selectionStart = el.selectionEnd = start + 1
+                })
               }
             }}
             placeholder="支持 Markdown 格式..."

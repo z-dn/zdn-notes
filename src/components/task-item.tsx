@@ -146,8 +146,19 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
       </Badge>
 
       {task.owner && (
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" className="shrink-0 text-[10px]">
           @{task.owner}
+        </Badge>
+      )}
+
+      {task.tags.slice(0, 2).map((tag) => (
+        <Badge key={tag} variant="outline" className="shrink-0 text-[10px]">
+          #{tag}
+        </Badge>
+      ))}
+      {task.tags.length > 2 && (
+        <Badge variant="outline" className="shrink-0 text-[10px]">
+          +{task.tags.length - 2}
         </Badge>
       )}
 
