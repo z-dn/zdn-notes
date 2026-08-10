@@ -1,11 +1,19 @@
 import { app, ipcMain, dialog } from 'electron'
 import { randomUUID } from 'crypto'
 import { writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs'
-import { join } from 'path'
+import { join, isAbsolute } from 'path'
 import { createTask, getTaskById, getAllTasks, updateTask, deleteTask, updateTaskStatus } from './database/task-dao'
 import { createCategory, getAllCategories, updateCategory, deleteCategory, getCategoryTaskCounts } from './database/category-dao'
 import { getAllSettings, setSetting } from './database/settings-dao'
 import { backupDatabase, restoreDatabase } from './backup'
+import { getDB, reloadDB, getActiveDataDir, getDataDirFallback, isDBReady } from './database'
+import {
+  getDataDir,
+  getImagesDir,
+  copyDataTo,
+  clearDataDir,
+  writeDataDirConfig,
+} from './data-location'
 import type { Task, Status } from '@/types/task'
 
 const IMAGE_FILENAME_RE = /^[\w.-]+$/
@@ -31,7 +39,7 @@ export function registerIpcHandlers(): void {
     if (!result) return false
 
     if (imageUrls.length) {
-      const imageDir = join(app.getPath('userData'), 'images')
+      const imageDir = getImagesDir()
       const allTasks = getAllTasks()
       for (const url of imageUrls) {
         const filename = url.replace('zdn-img:///', '')
@@ -87,6 +95,45 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('db:getDataDir', () => getActiveDataDir())
+
+  ipcMain.handle('db:getDataDirFallback', () => getDataDirFallback())
+
+  ipcMain.handle('db:chooseDataDir', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择数据存储位置',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('db:setDataDir', async (_e, target: string) => {
+    const currentDir = getDataDir()
+    const targetDir = target && target.trim() ? target.trim() : app.getPath('userData')
+    if (targetDir === currentDir) return { ok: true, path: currentDir }
+    if (!isAbsolute(targetDir)) return { ok: false, error: '存储位置必须是绝对路径' }
+    try {
+      const oldImagesDir = getImagesDir()
+      const dbBuffer = getDB().export()
+      copyDataTo(targetDir, dbBuffer, oldImagesDir)
+      await reloadDB(join(targetDir, 'zdn-notes.db'))
+      writeDataDirConfig(targetDir)
+      clearDataDir(currentDir)
+      return { ok: true, path: targetDir }
+    } catch (e) {
+      console.error('[db:setDataDir]', e)
+      if (!isDBReady()) {
+        try {
+          await reloadDB()
+        } catch (e2) {
+          console.error('[db:setDataDir] rollback failed', e2)
+        }
+      }
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
   ipcMain.handle('settings:getAll', () => getAllSettings())
   ipcMain.handle('settings:set', (_e, key, value) => setSetting(key, value))
 
@@ -96,7 +143,7 @@ export function registerIpcHandlers(): void {
     let ext = matches[1]
     if (ext === 'jpeg') ext = 'jpg'
     const buffer = Buffer.from(matches[2], 'base64')
-    const imageDir = join(app.getPath('userData'), 'images')
+    const imageDir = getImagesDir()
     const filename = `${randomUUID()}.${ext}`
     writeFileSync(join(imageDir, filename), buffer)
     return `zdn-img:///${filename}`
@@ -110,7 +157,7 @@ export function registerIpcHandlers(): void {
     if (result.canceled || result.filePaths.length === 0) return null
     const srcPath = result.filePaths[0]
     const ext = srcPath.split('.').pop()?.toLowerCase() || 'png'
-    const imageDir = join(app.getPath('userData'), 'images')
+    const imageDir = getImagesDir()
     const filename = `${randomUUID()}.${ext}`
     copyFileSync(srcPath, join(imageDir, filename))
     return `zdn-img:///${filename}`
@@ -119,7 +166,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('image:delete', (_e, url: string) => {
     const filename = url.replace('zdn-img:///', '')
     if (!isSafeImageFilename(filename)) return
-    const filePath = join(app.getPath('userData'), 'images', filename)
+    const filePath = join(getImagesDir(), filename)
     if (existsSync(filePath)) unlinkSync(filePath)
   })
 

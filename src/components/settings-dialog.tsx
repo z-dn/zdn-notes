@@ -32,10 +32,14 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle')
   const [updateInfo, setUpdateInfo] = useState<string>('')
   const [appVersion, setAppVersion] = useState('')
+  const [dataDir, setDataDir] = useState('')
+  const [dataDirWarning, setDataDirWarning] = useState<string | null>(null)
   const { contentRef, overlayRef, mounted, playClose } = useFlipDialog(open, onClose)
 
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
+    window.electronAPI.getDataDir().then(setDataDir)
+    window.electronAPI.getDataDirFallback().then(setDataDirWarning)
   }, [])
 
   useEffect(() => {
@@ -141,6 +145,42 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     }
   }
 
+  async function handleChangeDataDir() {
+    const picked = await window.electronAPI.chooseDataDir()
+    if (!picked) return
+    if (
+      !(await showConfirm(
+        '更改存储位置',
+        `数据将被迁移到：\n${picked}\n\n现有数据会复制到新位置，成功后旧位置将被清理。确定继续吗？`
+      ))
+    )
+      return
+    const result = await window.electronAPI.setDataDir(picked)
+    if (result.ok) {
+      setDataDir(result.path ?? picked)
+      useTaskStore.getState().selectTask(null)
+      useTaskStore.getState().loadTasks()
+      useCategoryStore.getState().loadCategories()
+      toast('存储位置已更改')
+    } else {
+      toast(`更改失败: ${result.error ?? '未知错误'}`)
+    }
+  }
+
+  async function handleResetDataDir() {
+    if (!(await showConfirm('恢复默认存储位置', '数据将被移回应用默认目录，旧位置将被清理。确定继续吗？'))) return
+    const result = await window.electronAPI.setDataDir('')
+    if (result.ok) {
+      setDataDir(result.path ?? '')
+      useTaskStore.getState().selectTask(null)
+      useTaskStore.getState().loadTasks()
+      useCategoryStore.getState().loadCategories()
+      toast('已恢复默认存储位置')
+    } else {
+      toast(`恢复失败: ${result.error ?? '未知错误'}`)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50">
       <div ref={overlayRef} className="absolute inset-0 bg-black/40" onClick={() => playClose()} />
@@ -228,6 +268,36 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
               </button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">备份包含数据库与图片，恢复将覆盖当前全部数据。</p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">数据存储位置</label>
+            <p
+              className="mb-2 break-all rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
+              title={dataDir}
+            >
+              {dataDir}
+            </p>
+            {dataDirWarning && (
+              <p className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                {dataDirWarning}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleChangeDataDir}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                更改位置
+              </button>
+              <button
+                onClick={handleResetDataDir}
+                className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
+              >
+                恢复默认
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">数据库与图片将存储在所选目录中，更改后需确认迁移。</p>
           </div>
 
           <div>

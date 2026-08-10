@@ -7,6 +7,7 @@ const { autoUpdater } = pkg
 import { initDB, closeDB } from './database'
 import { registerIpcHandlers } from './ipc'
 import { getAllSettings } from './database/settings-dao'
+import { getImagesDir } from './data-location'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'zdn-img', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -122,35 +123,48 @@ ipcMain.handle('update:install', () => {
   autoUpdater.quitAndInstall()
 })
 
-app.whenReady().then(async () => {
-  Menu.setApplicationMenu(null)
-  await initDB()
-  registerIpcHandlers()
-  registerWindowIpc()
+const gotTheLock = app.requestSingleInstanceLock()
 
-  const imagesDir = join(app.getPath('userData'), 'images')
-  fs.mkdirSync(imagesDir, { recursive: true })
-  protocol.handle('zdn-img', (request) => {
-    const url = new URL(request.url)
-    const filename = decodeURIComponent(url.pathname.replace(/^\//, ''))
-    if (!isSafeImageFilename(filename)) {
-      return new Response('Forbidden', { status: 403 })
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
     }
-    const fullPath = join(app.getPath('userData'), 'images', filename)
-    return net.fetch(pathToFileURL(fullPath).href)
   })
 
-  createWindow()
+  app.whenReady().then(async () => {
+    Menu.setApplicationMenu(null)
+    await initDB()
+    registerIpcHandlers()
+    registerWindowIpc()
 
-  const settings = getAllSettings()
-  if (app.isPackaged && settings.autoUpdate !== 'false') {
-    setTimeout(() => autoUpdater.checkForUpdates(), 3000)
-  }
+    const imagesDir = getImagesDir()
+    fs.mkdirSync(imagesDir, { recursive: true })
+    protocol.handle('zdn-img', (request) => {
+      const url = new URL(request.url)
+      const filename = decodeURIComponent(url.pathname.replace(/^\//, ''))
+      if (!isSafeImageFilename(filename)) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      const fullPath = join(getImagesDir(), filename)
+      return net.fetch(pathToFileURL(fullPath).href)
+    })
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    createWindow()
+
+    const settings = getAllSettings()
+    if (app.isPackaged && settings.autoUpdate !== 'false') {
+      setTimeout(() => autoUpdater.checkForUpdates(), 3000)
+    }
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
-})
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

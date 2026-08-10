@@ -33,6 +33,7 @@ src/                    → 渲染进程 (React)
 | `category:getTaskCounts` | 获取各分类任务数 |
 | `settings:getAll/set` | 读取/写入设置 |
 | `image:saveFromData/pickAndSave/delete` | 图片管理 |
+| `db:getDataDir/chooseDataDir/setDataDir/getDataDirFallback` | 自定义数据存储位置 |
 | `window:minimize/maximizeToggle/close/setThemeSource` | 窗口控制 |
 | `update:check/download/install` | 自动更新 |
 
@@ -42,7 +43,8 @@ src/                    → 渲染进程 (React)
 
 - **ORM**：无，直接使用 SQL.js（SQLite WASM）
 - **DAO 文件**：`electron/main/database/` 下按实体拆分（`task-dao.ts`, `category-dao.ts`, `settings-dao.ts`）
-- **持久化**：通过 `app.getPath('userData')/zdn-notes.db` 存储
+- **持久化**：默认通过 `app.getPath('userData')/zdn-notes.db` 存储，可用 `db:setDataDir` 迁移到自定义目录（见 `electron/main/data-location.ts`，位置配置存于 `userData/data-location.json`，迁移为"复制到新位置→重载→写配置→清理旧位置"）
+- **启动容错**：自定义目录不可用时 `initDB()` 回退默认目录并通过 `db:getDataDirFallback` 告知渲染层；应用启用单实例锁（`requestSingleInstanceLock`）防止多进程写同一数据目录
 - **迁移**：在主进程 `initDB()` 中用 try-catch 增量执行 ALTER TABLE（无正式迁移工具）
 
 ---

@@ -2,6 +2,7 @@ import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
 import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
+import { getDbPath, getDataDir } from '../data-location'
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -47,6 +48,15 @@ CREATE TABLE IF NOT EXISTS settings (
 
 let db: SqlJsDatabase | null = null
 let dbPath: string = ''
+let dataDirFallbackMessage: string | null = null
+
+export function getDataDirFallback(): string | null {
+  return dataDirFallbackMessage
+}
+
+export function getActiveDataDir(): string {
+  return dbPath ? path.dirname(dbPath) : getDataDir()
+}
 
 export function runMigrations(database: SqlJsDatabase): void {
   try { database.run("ALTER TABLE tasks RENAME COLUMN project TO owner") } catch (e) { /* already renamed */ }
@@ -73,12 +83,41 @@ export function assertIntegrity(database: SqlJsDatabase): void {
   }
 }
 
-export async function initDB(): Promise<void> {
-  const SQL = await initSqlJs()
-  dbPath = path.join(app.getPath('userData'), 'zdn-notes.db')
+let sqlPromise: ReturnType<typeof initSqlJs> | null = null
 
-  if (fs.existsSync(dbPath)) {
-    const buffer = fs.readFileSync(dbPath)
+function getSQL() {
+  if (!sqlPromise) sqlPromise = initSqlJs()
+  return sqlPromise
+}
+
+export async function initDB(): Promise<void> {
+  dbPath = getDbPath()
+  try {
+    await loadDBFrom(dbPath)
+  } catch (e) {
+    console.error('[db] failed to open data directory, falling back to default:', e)
+    dataDirFallbackMessage = `数据目录不可用（${getDataDir()}），本次已回退到默认位置，请检查目录是否可访问`
+    dbPath = path.join(app.getPath('userData'), 'zdn-notes.db')
+    await loadDBFrom(dbPath)
+  }
+}
+
+export async function reloadDB(targetPath?: string): Promise<void> {
+  if (db) {
+    save()
+    db.close()
+    db = null
+  }
+  const resolved = targetPath ?? getDbPath()
+  dbPath = resolved
+  await loadDBFrom(resolved)
+}
+
+async function loadDBFrom(targetPath: string): Promise<void> {
+  const SQL = await getSQL()
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+  if (fs.existsSync(targetPath)) {
+    const buffer = fs.readFileSync(targetPath)
     db = new SQL.Database(buffer)
     runMigrations(db)
   } else {
@@ -131,6 +170,10 @@ export function replaceDB(newDb: SqlJsDatabase): void {
 export function getDB(): SqlJsDatabase {
   if (!db) throw new Error('Database not initialized. Call initDB() first.')
   return db
+}
+
+export function isDBReady(): boolean {
+  return db !== null
 }
 
 export function save(): void {

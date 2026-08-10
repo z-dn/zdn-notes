@@ -1,9 +1,9 @@
 import fs from 'fs'
 import path from 'path'
-import { app } from 'electron'
 import AdmZip from 'adm-zip'
 import initSqlJs from 'sql.js'
 import { getDB, loadValidatedDB, replaceDB } from './database'
+import { getImagesDir } from './data-location'
 
 const DB_ENTRY = 'zdn-notes.db'
 const IMAGES_DIR_NAME = 'images'
@@ -17,7 +17,7 @@ function isSafeImageFilename(filename: string): boolean {
 }
 
 function imagesDir(): string {
-  return path.join(app.getPath('userData'), IMAGES_DIR_NAME)
+  return getImagesDir()
 }
 
 let sqlPromise: ReturnType<typeof initSqlJs> | null = null

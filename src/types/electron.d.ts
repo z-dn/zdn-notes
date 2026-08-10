@@ -33,6 +33,11 @@ declare global {
       exportBackup(): Promise<boolean>
       importBackup(): Promise<{ ok: boolean; error?: string }>
 
+      getDataDir(): Promise<string>
+      getDataDirFallback(): Promise<string | null>
+      chooseDataDir(): Promise<string | null>
+      setDataDir(path: string): Promise<{ ok: boolean; path?: string; error?: string }>
+
       saveImageFromData(dataUri: string): Promise<string>
       pickAndSaveImage(): Promise<string | null>
       deleteImage(url: string): Promise<void>
