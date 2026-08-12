@@ -38,6 +38,24 @@ declare global {
       chooseDataDir(): Promise<string | null>
       setDataDir(path: string): Promise<{ ok: boolean; path?: string; error?: string }>
 
+      getInboxDir(): Promise<string>
+      openInboxDir(): Promise<boolean>
+      onInboxProcessed(
+        cb: (result: {
+          ok: boolean
+          file: string
+          stats?: {
+            tasksAdded: number
+            tasksUpdated: number
+            categoriesAdded: number
+            categoriesUpdated: number
+            settingsAdded: number
+            imagesAdded: number
+          }
+          error?: string
+        }) => void
+      ): () => void
+
       saveImageFromData(dataUri: string): Promise<string>
       pickAndSaveImage(): Promise<string | null>
       deleteImage(url: string): Promise<void>

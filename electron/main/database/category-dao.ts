@@ -28,7 +28,7 @@ export function createCategory(dto: CreateCategoryDTO, _db?: Database): Category
 
   try {
     db.run('BEGIN')
-    db.run('INSERT INTO categories (id, name, color, sort_order, created_at) VALUES (?, ?, ?, ?, ?)', [id, dto.name, dto.color ?? '#6b7280', sortOrder, now])
+    db.run('INSERT INTO categories (id, name, color, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [id, dto.name, dto.color ?? '#6b7280', sortOrder, now, now])
     db.run('COMMIT')
   } catch (e) {
     db.run('ROLLBACK')
@@ -75,6 +75,8 @@ export function updateCategory(id: string, data: Partial<Pick<Category, 'name' |
   if (data.sortOrder !== undefined) { setClause.push('sort_order = ?'); vals.push(data.sortOrder) }
 
   if (!setClause.length) return getCategoryById(id, db)
+  setClause.push('updated_at = ?')
+  vals.push(Date.now())
 
   try {
     db.run('BEGIN')

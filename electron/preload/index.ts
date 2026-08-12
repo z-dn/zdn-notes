@@ -34,6 +34,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDataDirFallback: () => ipcRenderer.invoke('db:getDataDirFallback'),
   chooseDataDir: () => ipcRenderer.invoke('db:chooseDataDir'),
   setDataDir: (path: string) => ipcRenderer.invoke('db:setDataDir', path),
+  getInboxDir: () => ipcRenderer.invoke('inbox:getDir'),
+  openInboxDir: () => ipcRenderer.invoke('inbox:openDir'),
+  onInboxProcessed: (cb: (result: unknown) => void) => {
+    const handler = (_e: unknown, result: unknown) => cb(result)
+    ipcRenderer.on('inbox:processed', handler)
+    return () => ipcRenderer.removeAllListeners('inbox:processed')
+  },
   saveImageFromData: (dataUri: string) => ipcRenderer.invoke('image:saveFromData', dataUri),
   pickAndSaveImage: () => ipcRenderer.invoke('image:pickAndSave'),
   deleteImage: (url: string) => ipcRenderer.invoke('image:delete', url),

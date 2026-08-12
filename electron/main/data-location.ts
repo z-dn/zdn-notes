@@ -5,6 +5,7 @@ import { app } from 'electron'
 const CONFIG_FILE = 'data-location.json'
 const DB_ENTRY = 'zdn-notes.db'
 const IMAGES_DIR_NAME = 'images'
+const INBOX_DIR_NAME = 'inbox'
 
 const IMAGE_FILENAME_RE = /^[\w.-]+$/
 
@@ -46,6 +47,21 @@ export function getImagesDir(): string {
   return path.join(getDataDir(), IMAGES_DIR_NAME)
 }
 
+function copyDirContents(srcDir: string, destDir: string): void {
+  try {
+    if (!fs.existsSync(srcDir)) return
+    for (const name of fs.readdirSync(srcDir)) {
+      const srcPath = path.join(srcDir, name)
+      if (!fs.statSync(srcPath).isFile()) continue
+      const destPath = path.join(destDir, name)
+      fs.mkdirSync(path.dirname(destPath), { recursive: true })
+      fs.copyFileSync(srcPath, destPath)
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function copyDataTo(destDir: string, dbBuffer: Uint8Array, imagesDirPath: string): void {
   fs.mkdirSync(destDir, { recursive: true })
   fs.writeFileSync(path.join(destDir, DB_ENTRY), Buffer.from(dbBuffer))
@@ -59,6 +75,7 @@ export function copyDataTo(destDir: string, dbBuffer: Uint8Array, imagesDirPath:
       fs.copyFileSync(filePath, path.join(destImages, name))
     }
   }
+  copyDirContents(path.join(getDataDir(), INBOX_DIR_NAME), path.join(destDir, INBOX_DIR_NAME))
 }
 
 export function clearDataDir(dir: string): void {
@@ -81,6 +98,12 @@ export function clearDataDir(dir: string): void {
         }
       }
     }
+  } catch {
+    /* ignore */
+  }
+  const inbox = path.join(dir, INBOX_DIR_NAME)
+  try {
+    if (fs.existsSync(inbox)) fs.rmSync(inbox, { recursive: true, force: true })
   } catch {
     /* ignore */
   }

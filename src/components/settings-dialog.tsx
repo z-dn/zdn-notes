@@ -34,12 +34,14 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   const [appVersion, setAppVersion] = useState('')
   const [dataDir, setDataDir] = useState('')
   const [dataDirWarning, setDataDirWarning] = useState<string | null>(null)
+  const [inboxDir, setInboxDir] = useState('')
   const { contentRef, overlayRef, mounted, playClose } = useFlipDialog(open, onClose)
 
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
     window.electronAPI.getDataDir().then(setDataDir)
     window.electronAPI.getDataDirFallback().then(setDataDirWarning)
+    window.electronAPI.getInboxDir().then(setInboxDir)
   }, [])
 
   useEffect(() => {
@@ -298,6 +300,25 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
               </button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">数据库与图片将存储在所选目录中，更改后需确认迁移。</p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">增量导入（收件夹）</label>
+            <p
+              className="mb-2 break-all rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
+              title={inboxDir}
+            >
+              {inboxDir}
+            </p>
+            <button
+              onClick={async () => { await window.electronAPI.openInboxDir() }}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              打开收件夹
+            </button>
+            <p className="mt-2 text-xs text-muted-foreground">
+              将 zdn-notes.db 或备份 zip 放入收件夹会自动增量合入本地（按时间取新，只增不删）。
+            </p>
           </div>
 
           <div>

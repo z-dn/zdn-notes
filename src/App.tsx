@@ -53,6 +53,29 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const unsub = window.electronAPI.onInboxProcessed((result) => {
+      if (!result.ok) {
+        toast(`收件夹导入失败: ${result.error ?? result.file}`)
+        return
+      }
+      loadTasks()
+      loadCategories()
+      const s = result.stats
+      const parts: string[] = []
+      if (s) {
+        if (s.tasksAdded) parts.push(`新增任务 ${s.tasksAdded}`)
+        if (s.tasksUpdated) parts.push(`更新任务 ${s.tasksUpdated}`)
+        if (s.categoriesAdded) parts.push(`新增分类 ${s.categoriesAdded}`)
+        if (s.categoriesUpdated) parts.push(`更新分类 ${s.categoriesUpdated}`)
+        if (s.imagesAdded) parts.push(`新增图片 ${s.imagesAdded}`)
+        if (s.settingsAdded) parts.push(`新增设置 ${s.settingsAdded}`)
+      }
+      toast(parts.length ? `已导入 ${result.file}（${parts.join('、')}）` : `已导入 ${result.file}`)
+    })
+    return () => unsub()
+  }, [loadTasks, loadCategories])
+
+  useEffect(() => {
     selectTask(null)
   }, [activeCategoryId, selectTask])
 

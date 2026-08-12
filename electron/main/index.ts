@@ -8,6 +8,7 @@ import { initDB, closeDB } from './database'
 import { registerIpcHandlers } from './ipc'
 import { getAllSettings } from './database/settings-dao'
 import { getImagesDir } from './data-location'
+import { startInboxWatcher } from './import-inbox'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'zdn-img', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -154,6 +155,10 @@ if (!gotTheLock) {
     })
 
     createWindow()
+
+    startInboxWatcher((result) => {
+      mainWindow?.webContents.send('inbox:processed', result)
+    })
 
     const settings = getAllSettings()
     if (app.isPackaged && settings.autoUpdate !== 'false') {

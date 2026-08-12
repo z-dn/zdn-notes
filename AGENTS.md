@@ -34,6 +34,7 @@ src/                    → 渲染进程 (React)
 | `settings:getAll/set` | 读取/写入设置 |
 | `image:saveFromData/pickAndSave/delete` | 图片管理 |
 | `db:getDataDir/chooseDataDir/setDataDir/getDataDirFallback` | 自定义数据存储位置 |
+| `inbox:getDir/openDir` | 收件夹路径/打开 |
 | `window:minimize/maximizeToggle/close/setThemeSource` | 窗口控制 |
 | `update:check/download/install` | 自动更新 |
 
@@ -45,6 +46,7 @@ src/                    → 渲染进程 (React)
 - **DAO 文件**：`electron/main/database/` 下按实体拆分（`task-dao.ts`, `category-dao.ts`, `settings-dao.ts`）
 - **持久化**：默认通过 `app.getPath('userData')/zdn-notes.db` 存储，可用 `db:setDataDir` 迁移到自定义目录（见 `electron/main/data-location.ts`，位置配置存于 `userData/data-location.json`，迁移为"复制到新位置→重载→写配置→清理旧位置"）
 - **启动容错**：自定义目录不可用时 `initDB()` 回退默认目录并通过 `db:getDataDirFallback` 告知渲染层；应用启用单实例锁（`requestSingleInstanceLock`）防止多进程写同一数据目录
+- **增量导入**：`<数据目录>/inbox` 收件夹，放入 `zdn-notes.db` 或备份 zip 后自动增量合入（见 `electron/main/import-inbox.ts` + `database/import-merge.ts`；按 `updated_at` 取新、只增不删、settings 缺 key 才加、图片按文件名去重；成功移入 `_imported/`，失败移入 `_rejected/`，结果经 `inbox:processed` 事件通知渲染层）
 - **迁移**：在主进程 `initDB()` 中用 try-catch 增量执行 ALTER TABLE（无正式迁移工具）
 
 ---
@@ -139,6 +141,7 @@ src/                    → 渲染进程 (React)
 | color | TEXT | 颜色 HEX |
 | sort_order | REAL | 排序值 |
 | created_at | INTEGER | 创建时间戳 |
+| updated_at | INTEGER | 更新时间戳 |
 
 ### settings 表
 | 字段 | 类型 | 说明 |

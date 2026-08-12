@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog } from 'electron'
+import { app, ipcMain, dialog, shell } from 'electron'
 import { randomUUID } from 'crypto'
 import { writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs'
 import { join, isAbsolute } from 'path'
@@ -14,6 +14,7 @@ import {
   clearDataDir,
   writeDataDirConfig,
 } from './data-location'
+import { inboxDir } from './import-inbox'
 import type { Task, Status } from '@/types/task'
 
 const IMAGE_FILENAME_RE = /^[\w.-]+$/
@@ -98,6 +99,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('db:getDataDir', () => getActiveDataDir())
 
   ipcMain.handle('db:getDataDirFallback', () => getDataDirFallback())
+
+  ipcMain.handle('inbox:getDir', () => inboxDir())
+
+  ipcMain.handle('inbox:openDir', async () => {
+    const err = await shell.openPath(inboxDir())
+    return err || true
+  })
 
   ipcMain.handle('db:chooseDataDir', async () => {
     const result = await dialog.showOpenDialog({
