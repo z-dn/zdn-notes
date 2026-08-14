@@ -1,4 +1,11 @@
-import type { Task, TaskFilter, CreateTaskDTO, UpdateTaskDTO, Category, CreateCategoryDTO } from './task'
+import type {
+  Task,
+  TaskFilter,
+  CreateTaskDTO,
+  UpdateTaskDTO,
+  Category,
+  CreateCategoryDTO,
+} from './task'
 
 declare global {
   interface Window {
@@ -13,12 +20,18 @@ declare global {
 
       categoryCreate(dto: CreateCategoryDTO): Promise<Category>
       categoryGetAll(): Promise<Category[]>
-      categoryUpdate(id: string, data: Partial<Pick<Category, 'name' | 'color' | 'sortOrder'>>): Promise<Category | null>
+      categoryUpdate(
+        id: string,
+        data: Partial<Pick<Category, 'name' | 'color' | 'sortOrder'>>,
+      ): Promise<Category | null>
       categoryDelete(id: string): Promise<boolean>
       categoryGetTaskCounts(): Promise<Record<string, number>>
 
       settingsGetAll(): Promise<Record<string, string>>
       settingsSet(key: string, value: string): Promise<void>
+
+      toolGetAll(): Promise<Record<string, string>>
+      toolSet(key: string, value: string): Promise<void>
 
       windowMinimize(): Promise<void>
       windowMaximizeToggle(): Promise<void>
@@ -53,7 +66,7 @@ declare global {
             imagesAdded: number
           }
           error?: string
-        }) => void
+        }) => void,
       ): () => void
 
       saveImageFromData(dataUri: string): Promise<string>

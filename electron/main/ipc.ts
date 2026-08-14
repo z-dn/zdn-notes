@@ -2,9 +2,23 @@ import { app, ipcMain, dialog, shell } from 'electron'
 import { randomUUID } from 'crypto'
 import { writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs'
 import { join, isAbsolute } from 'path'
-import { createTask, getTaskById, getAllTasks, updateTask, deleteTask, updateTaskStatus } from './database/task-dao'
-import { createCategory, getAllCategories, updateCategory, deleteCategory, getCategoryTaskCounts } from './database/category-dao'
+import {
+  createTask,
+  getTaskById,
+  getAllTasks,
+  updateTask,
+  deleteTask,
+  updateTaskStatus,
+} from './database/task-dao'
+import {
+  createCategory,
+  getAllCategories,
+  updateCategory,
+  deleteCategory,
+  getCategoryTaskCounts,
+} from './database/category-dao'
 import { getAllSettings, setSetting } from './database/settings-dao'
+import { getAllToolState, setToolState } from './database/tool-state-dao'
 import { backupDatabase, restoreDatabase } from './backup'
 import { getDB, reloadDB, getActiveDataDir, getDataDirFallback, isDBReady } from './database'
 import {
@@ -48,7 +62,11 @@ export function registerIpcHandlers(): void {
         const stillUsed = allTasks.some((t) => t.description?.includes(filename))
         if (!stillUsed) {
           const filePath = join(imageDir, filename)
-          try { if (existsSync(filePath)) unlinkSync(filePath) } catch { /* ignore */ }
+          try {
+            if (existsSync(filePath)) unlinkSync(filePath)
+          } catch {
+            /* ignore */
+          }
         }
       }
     }
@@ -145,6 +163,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('settings:getAll', () => getAllSettings())
   ipcMain.handle('settings:set', (_e, key, value) => setSetting(key, value))
 
+  ipcMain.handle('tool:getAll', () => getAllToolState())
+  ipcMain.handle('tool:set', (_e, key, value) => setToolState(key, value))
+
   ipcMain.handle('image:saveFromData', (_e, dataUri: string) => {
     const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/)
     if (!matches) throw new Error('Invalid image data URI')
@@ -160,7 +181,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('image:pickAndSave', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
-      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] }]
+      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] }],
     })
     if (result.canceled || result.filePaths.length === 0) return null
     const srcPath = result.filePaths[0]
@@ -209,7 +230,9 @@ export function registerIpcHandlers(): void {
       const proj = t.owner ? ` @${t.owner}` : ''
       const start = t.startDate ? ` 🚀${new Date(t.startDate).toLocaleDateString('zh-CN')}` : ''
       const due = t.dueDate ? ` 📅${new Date(t.dueDate).toLocaleDateString('zh-CN')}` : ''
-      lines.push(`${indent}- ${statusCheckbox(t.status)} **${t.title}**${badge}${tagStr}${proj}${start}${due}`)
+      lines.push(
+        `${indent}- ${statusCheckbox(t.status)} **${t.title}**${badge}${tagStr}${proj}${start}${due}`,
+      )
       if (t.description) {
         const firstLine = t.description.split('\n')[0].trim()
         if (firstLine) lines.push(`${indent}  > ${firstLine}`)

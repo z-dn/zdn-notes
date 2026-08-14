@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tool_state (
+  key   TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+);
+
 `
 
 let db: SqlJsDatabase | null = null
@@ -60,22 +65,80 @@ export function getActiveDataDir(): string {
 }
 
 export function runMigrations(database: SqlJsDatabase): void {
-  try { database.run("ALTER TABLE tasks RENAME COLUMN project TO owner") } catch (e) { /* already renamed */ }
-  try { database.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''") } catch (e) { /* column may already exist */ }
-  try { database.run("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)") } catch (e) { /* table may already exist */ }
-  try { database.run("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'") } catch (e) { /* column may already exist */ }
-  try { database.run("ALTER TABLE categories ADD COLUMN parent_id TEXT") } catch (e) { /* column may already exist */ }
-  try { database.run("UPDATE categories SET parent_id = NULL") } catch (e) { /* ignore */ }
-  try { database.run("ALTER TABLE categories ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0") } catch (e) { /* column may already exist */ }
-  try { database.run("UPDATE categories SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = 0") } catch (e) { /* ignore */ }
-  try { database.run("ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL") } catch (e) { /* column may already exist */ }
-  try { database.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)") } catch (e) { /* table may already exist */ }
+  try {
+    database.run('ALTER TABLE tasks RENAME COLUMN project TO owner')
+  } catch (e) {
+    /* already renamed */
+  }
+  try {
+    database.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''")
+  } catch (e) {
+    /* column may already exist */
+  }
+  try {
+    database.run(
+      "CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
+    )
+  } catch (e) {
+    /* table may already exist */
+  }
+  try {
+    database.run("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'")
+  } catch (e) {
+    /* column may already exist */
+  }
+  try {
+    database.run('ALTER TABLE categories ADD COLUMN parent_id TEXT')
+  } catch (e) {
+    /* column may already exist */
+  }
+  try {
+    database.run('UPDATE categories SET parent_id = NULL')
+  } catch (e) {
+    /* ignore */
+  }
+  try {
+    database.run('ALTER TABLE categories ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0')
+  } catch (e) {
+    /* column may already exist */
+  }
+  try {
+    database.run(
+      'UPDATE categories SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = 0',
+    )
+  } catch (e) {
+    /* ignore */
+  }
+  try {
+    database.run(
+      'ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL',
+    )
+  } catch (e) {
+    /* column may already exist */
+  }
+  try {
+    database.run(
+      'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)',
+    )
+  } catch (e) {
+    /* table may already exist */
+  }
+  try {
+    database.run(
+      'CREATE TABLE IF NOT EXISTS tool_state (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)',
+    )
+  } catch (e) {
+    /* table may already exist */
+  }
 }
 
 export function ensureDefaultCategory(database: SqlJsDatabase): void {
   const existingDefault = database.exec("SELECT id FROM categories WHERE name = '未分类'")
   if (!existingDefault[0]?.values.length) {
-    database.run("INSERT INTO categories (id, name, color, sort_order, created_at, updated_at) VALUES ('__uncategorized', '未分类', '#9ca3af', 0, ?, ?)", [Date.now(), Date.now()])
+    database.run(
+      "INSERT INTO categories (id, name, color, sort_order, created_at, updated_at) VALUES ('__uncategorized', '未分类', '#9ca3af', 0, ?, ?)",
+      [Date.now(), Date.now()],
+    )
   }
 }
 
@@ -138,7 +201,7 @@ async function loadDBFrom(targetPath: string): Promise<void> {
 
 export function loadValidatedDB(
   buffer: Uint8Array,
-  SQL: Awaited<ReturnType<typeof initSqlJs>>
+  SQL: Awaited<ReturnType<typeof initSqlJs>>,
 ): SqlJsDatabase {
   let database: SqlJsDatabase
   try {
@@ -148,7 +211,9 @@ export function loadValidatedDB(
   }
   try {
     runMigrations(database)
-    const tables = database.exec("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tasks','categories','settings')")
+    const tables = database.exec(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tasks','categories','settings')",
+    )
     const present = new Set<string>()
     for (const row of tables[0]?.values ?? []) present.add(String(row[0]))
     for (const t of ['tasks', 'categories', 'settings']) {

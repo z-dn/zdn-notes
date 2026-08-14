@@ -3,10 +3,27 @@ import { useCategoryStore } from '@/stores/category-store'
 import type { Category } from '@/types/task'
 import { ColorPicker } from '@/components/color-picker'
 
-const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899']
+const COLORS = [
+  '#ef4444',
+  '#f97316',
+  '#eab308',
+  '#22c55e',
+  '#06b6d4',
+  '#3b82f6',
+  '#8b5cf6',
+  '#ec4899',
+]
 
 export function CategorySidebar() {
-  const { categories, taskCounts, activeCategoryId, selectCategory, createCategory, deleteCategory, updateCategory } = useCategoryStore()
+  const {
+    categories,
+    taskCounts,
+    activeCategoryId,
+    selectCategory,
+    createCategory,
+    deleteCategory,
+    updateCategory,
+  } = useCategoryStore()
   const [showCreator, setShowCreator] = useState(false)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#6b7280')
@@ -70,18 +87,20 @@ export function CategorySidebar() {
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
     e.stopPropagation()
-    if (e.key === 'Enter') { e.preventDefault(); saveEdit() }
-    if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      saveEdit()
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelEdit()
+    }
   }
 
   const totalCount = Object.values(taskCounts).reduce((a, b) => a + b, 0)
 
   return (
-    <div className="group relative flex h-full w-48 flex-col border-r bg-muted/20">
-      <div className="flex h-11 items-center border-b px-3">
-        <span className="text-xs font-semibold uppercase text-muted-foreground">分类</span>
-      </div>
-
+    <div className="group relative flex min-h-0 flex-1 flex-col">
       <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
         <button
           onClick={() => selectCategory(null)}
@@ -94,14 +113,19 @@ export function CategorySidebar() {
           <span
             className="block h-2.5 w-2.5 shrink-0 rounded-full"
             style={{
-              background:
-                'conic-gradient(red, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, red)',
+              background: 'conic-gradient(red, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, red)',
             }}
           />
           <span className="flex-1 truncate">全部</span>
           <span className="text-xs tabular-nums text-muted-foreground">{totalCount}</span>
-          <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
-          <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
+          <span
+            className="invisible flex h-4 w-4 shrink-0 items-center justify-center"
+            aria-hidden
+          />
+          <span
+            className="invisible flex h-4 w-4 shrink-0 items-center justify-center"
+            aria-hidden
+          />
         </button>
 
         {categories.map((cat) => {
@@ -148,14 +172,20 @@ export function CategorySidebar() {
                       className="min-w-0 flex-1 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
                     />
                     <button
-                      onClick={(e) => { e.stopPropagation(); saveEdit() }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        saveEdit()
+                      }}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-600 hover:bg-green-100"
                       title="保存"
                     >
                       ✓
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); cancelEdit() }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        cancelEdit()
+                      }}
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
                       title="取消"
                     >
@@ -166,7 +196,10 @@ export function CategorySidebar() {
                     {COLORS.map((c) => (
                       <button
                         key={c}
-                        onClick={(e) => { e.stopPropagation(); updateCategory(cat.id, { color: c }) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateCategory(cat.id, { color: c })
+                        }}
                         className={`h-3.5 w-3.5 rounded-full border transition-transform ${
                           cat.color === c ? 'scale-125 ring-1 ring-ring ring-offset-1' : ''
                         }`}
@@ -199,7 +232,10 @@ export function CategorySidebar() {
                         ✎
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteCategory(cat.id)
+                        }}
                         className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-destructive group-hover/item:visible"
                         title="删除"
                       >
@@ -208,8 +244,14 @@ export function CategorySidebar() {
                     </>
                   ) : (
                     <>
-                      <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
-                      <span className="invisible flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden />
+                      <span
+                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center"
+                        aria-hidden
+                      />
+                      <span
+                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center"
+                        aria-hidden
+                      />
                     </>
                   )}
                 </>
