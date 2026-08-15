@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWindowMaximizedChange: (cb: (maximized: boolean) => void) => {
     const handler = (_e: unknown, v: boolean) => cb(v)
     ipcRenderer.on('window:maximizedChange', handler)
-    return () => ipcRenderer.removeAllListeners('window:maximizedChange')
+    return () => ipcRenderer.removeListener('window:maximizedChange', handler)
   },
 
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
@@ -40,7 +40,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onInboxProcessed: (cb: (result: unknown) => void) => {
     const handler = (_e: unknown, result: unknown) => cb(result)
     ipcRenderer.on('inbox:processed', handler)
-    return () => ipcRenderer.removeAllListeners('inbox:processed')
+    return () => ipcRenderer.removeListener('inbox:processed', handler)
   },
   saveImageFromData: (dataUri: string) => ipcRenderer.invoke('image:saveFromData', dataUri),
   pickAndSaveImage: () => ipcRenderer.invoke('image:pickAndSave'),
@@ -56,27 +56,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateDownload: () => ipcRenderer.invoke('update:download'),
   updateInstall: () => ipcRenderer.invoke('update:install'),
   onUpdateChecking: (cb: () => void) => {
-    ipcRenderer.on('update:checking', () => cb())
-    return () => ipcRenderer.removeAllListeners('update:checking')
+    const handler = () => cb()
+    ipcRenderer.on('update:checking', handler)
+    return () => ipcRenderer.removeListener('update:checking', handler)
   },
   onUpdateAvailable: (cb: (info: unknown) => void) => {
-    ipcRenderer.on('update:available', (_e, info) => cb(info))
-    return () => ipcRenderer.removeAllListeners('update:available')
+    const handler = (_e: unknown, info: unknown) => cb(info)
+    ipcRenderer.on('update:available', handler)
+    return () => ipcRenderer.removeListener('update:available', handler)
   },
   onUpdateNotAvailable: (cb: (info: unknown) => void) => {
-    ipcRenderer.on('update:not-available', (_e, info) => cb(info))
-    return () => ipcRenderer.removeAllListeners('update:not-available')
+    const handler = (_e: unknown, info: unknown) => cb(info)
+    ipcRenderer.on('update:not-available', handler)
+    return () => ipcRenderer.removeListener('update:not-available', handler)
   },
   onUpdateError: (cb: (msg: string) => void) => {
-    ipcRenderer.on('update:error', (_e, msg) => cb(msg))
-    return () => ipcRenderer.removeAllListeners('update:error')
+    const handler = (_e: unknown, msg: string) => cb(msg)
+    ipcRenderer.on('update:error', handler)
+    return () => ipcRenderer.removeListener('update:error', handler)
   },
   onUpdateProgress: (cb: (progress: unknown) => void) => {
-    ipcRenderer.on('update:progress', (_e, progress) => cb(progress))
-    return () => ipcRenderer.removeAllListeners('update:progress')
+    const handler = (_e: unknown, progress: unknown) => cb(progress)
+    ipcRenderer.on('update:progress', handler)
+    return () => ipcRenderer.removeListener('update:progress', handler)
   },
   onUpdateDownloaded: (cb: (info: unknown) => void) => {
-    ipcRenderer.on('update:downloaded', (_e, info) => cb(info))
-    return () => ipcRenderer.removeAllListeners('update:downloaded')
+    const handler = (_e: unknown, info: unknown) => cb(info)
+    ipcRenderer.on('update:downloaded', handler)
+    return () => ipcRenderer.removeListener('update:downloaded', handler)
   },
 })

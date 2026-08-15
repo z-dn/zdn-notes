@@ -4,17 +4,10 @@ import AdmZip from 'adm-zip'
 import initSqlJs from 'sql.js'
 import { getDB, loadValidatedDB, replaceDB } from './database'
 import { getImagesDir } from './data-location'
+import { isSafeImageFilename } from './image-utils'
 
 const DB_ENTRY = 'zdn-notes.db'
 const IMAGES_DIR_NAME = 'images'
-
-const IMAGE_FILENAME_RE = /^[\w.-]+$/
-
-function isSafeImageFilename(filename: string): boolean {
-  if (!filename) return false
-  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false
-  return IMAGE_FILENAME_RE.test(filename)
-}
 
 function imagesDir(): string {
   return getImagesDir()
@@ -75,23 +68,40 @@ export async function restoreDatabase(zipPath: string): Promise<void> {
   const validated = loadValidatedDB(dbBuffer, SQL)
 
   const imgDir = imagesDir()
-  if (fs.existsSync(imgDir)) {
-    for (const name of fs.readdirSync(imgDir)) {
-      if (!isSafeImageFilename(name)) continue
-      const filePath = path.join(imgDir, name)
+  const parentDir = path.dirname(imgDir)
+  const stagingDir = path.join(parentDir, `.images-restore-${Date.now()}`)
+
+  try {
+    if (images.length) {
+      fs.mkdirSync(stagingDir, { recursive: true })
+      for (const img of images) {
+        fs.writeFileSync(path.join(stagingDir, img.name), img.data)
+      }
+    }
+
+    replaceDB(validated)
+
+    const backupOld = path.join(parentDir, `.images-old-${Date.now()}`)
+    if (fs.existsSync(imgDir)) {
+      fs.renameSync(imgDir, backupOld)
+    }
+    fs.mkdirSync(parentDir, { recursive: true })
+    if (fs.existsSync(stagingDir)) {
+      fs.renameSync(stagingDir, imgDir)
+    } else {
+      fs.mkdirSync(imgDir, { recursive: true })
+    }
+    if (fs.existsSync(backupOld)) {
+      fs.rmSync(backupOld, { recursive: true, force: true })
+    }
+  } catch (e) {
+    if (fs.existsSync(stagingDir)) {
       try {
-        if (fs.statSync(filePath).isFile()) fs.unlinkSync(filePath)
+        fs.rmSync(stagingDir, { recursive: true, force: true })
       } catch {
         /* ignore */
       }
     }
-  } else {
-    fs.mkdirSync(imgDir, { recursive: true })
+    throw e
   }
-
-  for (const img of images) {
-    fs.writeFileSync(path.join(imgDir, img.name), img.data)
-  }
-
-  replaceDB(validated)
 }

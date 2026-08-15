@@ -47,25 +47,31 @@ function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
-  const handlePasteImage = useCallback(async (view: EditorView, item: DataTransferItem) => {
-    const file = item.getAsFile()
-    if (!file) return
-    try {
-      const dataUri = await fileToDataUrl(file)
-      const url = await window.electronAPI.saveImageFromData(dataUri)
-      insertImageNode(view, url, file.name.replace(/\.[^.]+$/, ''))
-    } catch (err) {
-      console.error('Failed to paste image:', err)
+  const handlePasteImages = useCallback(async (view: EditorView, items: DataTransferItemList) => {
+    const imageItems = Array.from(items).filter((item) => item.type.startsWith('image/'))
+    for (const item of imageItems) {
+      const file = item.getAsFile()
+      if (!file) continue
+      try {
+        const dataUri = await fileToDataUrl(file)
+        const url = await window.electronAPI.saveImageFromData(dataUri)
+        insertImageNode(view, url, file.name.replace(/\.[^.]+$/, ''))
+      } catch (err) {
+        console.error('Failed to paste image:', err)
+      }
     }
   }, [])
 
-  const handleDropImage = useCallback(async (view: EditorView, file: File) => {
-    try {
-      const dataUri = await fileToDataUrl(file)
-      const url = await window.electronAPI.saveImageFromData(dataUri)
-      insertImageNode(view, url, file.name.replace(/\.[^.]+$/, ''))
-    } catch (err) {
-      console.error('Failed to drop image:', err)
+  const handleDropImages = useCallback(async (view: EditorView, files: FileList) => {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'))
+    for (const file of imageFiles) {
+      try {
+        const dataUri = await fileToDataUrl(file)
+        const url = await window.electronAPI.saveImageFromData(dataUri)
+        insertImageNode(view, url, file.name.replace(/\.[^.]+$/, ''))
+      } catch (err) {
+        console.error('Failed to drop image:', err)
+      }
     }
   }, [])
 
@@ -81,24 +87,20 @@ function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
             handlePaste: (view, event) => {
               const items = event.clipboardData?.items
               if (!items) return false
-              for (const item of items) {
-                if (item.type.startsWith('image/')) {
-                  event.preventDefault()
-                  handlePasteImage(view, item)
-                  return true
-                }
+              if (Array.from(items).some((item) => item.type.startsWith('image/'))) {
+                event.preventDefault()
+                void handlePasteImages(view, items)
+                return true
               }
               return false
             },
             handleDrop: (view, event) => {
               const files = event.dataTransfer?.files
               if (!files) return false
-              for (const file of files) {
-                if (file.type.startsWith('image/')) {
-                  event.preventDefault()
-                  handleDropImage(view, file)
-                  return true
-                }
+              if (Array.from(files).some((file) => file.type.startsWith('image/'))) {
+                event.preventDefault()
+                void handleDropImages(view, files)
+                return true
               }
               return false
             },
@@ -120,7 +122,7 @@ function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
         .use(commonmark)
         .use(listener)
     },
-    [handlePasteImage, handleDropImage],
+    [handlePasteImages, handleDropImages],
   )
 
   return <Milkdown />

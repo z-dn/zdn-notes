@@ -1,19 +1,12 @@
 import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
+import { isSafeImageFilename } from './image-utils'
 
 const CONFIG_FILE = 'data-location.json'
 const DB_ENTRY = 'zdn-notes.db'
 const IMAGES_DIR_NAME = 'images'
 const INBOX_DIR_NAME = 'inbox'
-
-const IMAGE_FILENAME_RE = /^[\w.-]+$/
-
-function isSafeImageFilename(filename: string): boolean {
-  if (!filename) return false
-  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false
-  return IMAGE_FILENAME_RE.test(filename)
-}
 
 function configPath(): string {
   return path.join(app.getPath('userData'), CONFIG_FILE)

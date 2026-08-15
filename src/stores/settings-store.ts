@@ -8,6 +8,7 @@ const DEFAULTS: Settings = {
   descriptionMode: 'toggle',
   reminderEnabled: true,
   autoUpdate: true,
+  allowLocalRequests: false,
 }
 
 function api() {
@@ -42,6 +43,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (raw.descriptionMode && ['edit', 'toggle'].includes(raw.descriptionMode)) saved.descriptionMode = raw.descriptionMode as Settings['descriptionMode']
       if (raw.reminderEnabled !== undefined) saved.reminderEnabled = raw.reminderEnabled === 'true'
       if (raw.autoUpdate !== undefined) saved.autoUpdate = raw.autoUpdate === 'true'
+      if (raw.allowLocalRequests !== undefined)
+        saved.allowLocalRequests = raw.allowLocalRequests === 'true'
       set({ saved, editing: { ...saved }, loading: false, dirty: false })
     } catch {
       toast('加载设置失败')

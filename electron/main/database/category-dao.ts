@@ -12,6 +12,7 @@ function rowToCategory(row: Row): Category {
     color: row['color'] as string,
     sortOrder: row['sort_order'] as number,
     createdAt: row['created_at'] as number,
+    updatedAt: row['updated_at'] as number,
   }
 }
 

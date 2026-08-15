@@ -9,20 +9,13 @@ import { registerIpcHandlers } from './ipc'
 import { getAllSettings } from './database/settings-dao'
 import { getImagesDir } from './data-location'
 import { startInboxWatcher } from './import-inbox'
+import { isSafeImageFilename } from './image-utils'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'zdn-img', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
 ])
 
 let mainWindow: BrowserWindow | null = null
-
-const IMAGE_FILENAME_RE = /^[\w.-]+$/
-
-function isSafeImageFilename(filename: string): boolean {
-  if (!filename) return false
-  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false
-  return IMAGE_FILENAME_RE.test(filename)
-}
 
 function registerWindowIpc(): void {
   ipcMain.handle('window:minimize', () => mainWindow?.minimize())
@@ -85,7 +78,9 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
 
+function registerUpdateHandlers(): void {
   autoUpdater.on('checking-for-update', () => {
     mainWindow?.webContents.send('update:checking')
   })
@@ -138,6 +133,7 @@ if (!gotTheLock) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null)
+    registerUpdateHandlers()
     await initDB()
     registerIpcHandlers()
     registerWindowIpc()

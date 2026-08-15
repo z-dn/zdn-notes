@@ -254,6 +254,20 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           </div>
 
           <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editing.allowLocalRequests}
+                onChange={(e) => updateEditing('allowLocalRequests', e.target.checked)}
+                className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+              />
+              <span className="text-xs font-medium text-muted-foreground">
+                允许接口调试访问内网/本机地址
+              </span>
+            </label>
+          </div>
+
+          <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">数据备份</label>
             <div className="flex items-center gap-2">
               <button

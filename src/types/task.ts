@@ -13,6 +13,7 @@ export interface Category {
   color: string
   sortOrder: number
   createdAt: number
+  updatedAt: number
 }
 
 export interface Task {
@@ -64,4 +65,5 @@ export interface Settings {
   descriptionMode: 'edit' | 'toggle'
   reminderEnabled: boolean
   autoUpdate: boolean
+  allowLocalRequests: boolean
 }

@@ -131,8 +131,9 @@ export function getAllTasks(filter?: TaskFilter, _db?: Database): Task[] {
     params.push(filter.status)
   }
   if (filter?.search) {
-    where.push('title LIKE ?')
-    params.push(`%${filter.search}%`)
+    const escaped = filter.search.replace(/[\\%_]/g, '\\$&')
+    where.push("title LIKE ? ESCAPE '\\'")
+    params.push(`%${escaped}%`)
   }
 
   const whereClause = where.length > 0 ? where.join(' AND ') : undefined

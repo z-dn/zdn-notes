@@ -53,7 +53,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const { filters } = get()
       const tasks = await api().taskGetAll(cleanFilter(filters))
       set({ tasks, loading: false })
-    } catch (e) {
+    } catch {
       toast('加载任务失败')
       set({ loading: false })
     }
@@ -75,7 +75,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       reloadCategories()
       get().loadTasks()
       return task
-    } catch (e) {
+    } catch {
       toast('创建任务失败')
       return null
     }
@@ -85,16 +85,18 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     try {
       const { tasks, selectedTask } = get()
       const idx = tasks.findIndex((t) => t.id === dto.id)
-      if (idx === -1) return
-      const old = tasks[idx]
-      const patched = { ...old, ...dto, updatedAt: Date.now() } as Task
-      const nextTasks = [...tasks]
-      nextTasks[idx] = patched
+      const old = idx !== -1 ? tasks[idx] : undefined
+      if (!old && selectedTask?.id !== dto.id) return
+      const base = old ?? selectedTask
+      if (!base) return
+      const patched = { ...base, ...dto, updatedAt: Date.now() } as Task
+      const nextTasks =
+        idx !== -1 ? tasks.map((t) => (t.id === dto.id ? patched : t)) : tasks
       const nextSelected = selectedTask?.id === dto.id ? patched : selectedTask
       set({ tasks: nextTasks, selectedTask: nextSelected })
       await api().taskUpdate(dto)
       reloadCategories()
-    } catch (e) {
+    } catch {
       toast('更新任务失败')
       get().loadTasks()
     }
@@ -109,7 +111,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       await api().taskDelete(id)
       reloadCategories()
       get().loadTasks()
-    } catch (e) {
+    } catch {
       toast('删除任务失败')
     }
   },
@@ -120,7 +122,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       await api().taskUpdateStatus(id, newStatus)
       reloadCategories()
       get().loadTasks(true)
-    } catch (e) {
+    } catch {
       toast('切换状态失败')
     }
   },

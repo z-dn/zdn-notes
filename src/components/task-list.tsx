@@ -226,7 +226,26 @@ export function TaskList() {
         const ranks = siblingTasks.map((t) => t.orderIndex)
         const newRanks = rebalance(ranks)
         siblingIds.forEach((id, i) => updateTask({ id, orderIndex: newRanks[i] }))
-        newOrderIndex = generateBetween(siblingAbove?.orderIndex ?? null, siblingBelow?.orderIndex ?? null)
+
+        const freshTasks = useTaskStore.getState().tasks
+        const idToTask = new Map(freshTasks.map((t) => [t.id, t]))
+        let freshAbove: Task | null = null
+        let freshBelow: Task | null = null
+        for (let i = dropIdx - 1; i >= 0; i--) {
+          const f = flatList[i]
+          if (f.task.parentId === newParentId && f.task.id !== dragId) {
+            freshAbove = idToTask.get(f.task.id) ?? f.task
+            break
+          }
+        }
+        for (let i = dropIdx; i < flatList.length; i++) {
+          const f = flatList[i]
+          if (f.task.parentId === newParentId && f.task.id !== dragId) {
+            freshBelow = idToTask.get(f.task.id) ?? f.task
+            break
+          }
+        }
+        newOrderIndex = generateBetween(freshAbove?.orderIndex ?? null, freshBelow?.orderIndex ?? null)
       }
 
       updateTask({ id: dragId, orderIndex: newOrderIndex, parentId: newParentId })

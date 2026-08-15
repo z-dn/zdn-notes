@@ -30,7 +30,7 @@ export const useCategoryStore = create<CategoryStore>((set, get) => ({
         api().categoryGetTaskCounts(),
       ])
       set({ categories, taskCounts })
-    } catch (e) {
+    } catch {
       toast('加载分类失败')
     }
   },
@@ -41,7 +41,7 @@ export const useCategoryStore = create<CategoryStore>((set, get) => ({
       const { categories } = get()
       set({ categories: [...categories, category] })
       return category
-    } catch (e) {
+    } catch {
       toast('创建分类失败')
       return null
     }
@@ -54,7 +54,7 @@ export const useCategoryStore = create<CategoryStore>((set, get) => ({
       set({
         categories: categories.map((c) => (c.id === id ? { ...c, ...data } : c)),
       })
-    } catch (e) {
+    } catch {
       toast('更新分类失败')
     }
   },
@@ -69,7 +69,7 @@ export const useCategoryStore = create<CategoryStore>((set, get) => ({
         activeCategoryId: activeCategoryId === id ? null : activeCategoryId,
       })
       get().loadCategories()
-    } catch (e) {
+    } catch {
       toast('删除分类失败')
     }
   },

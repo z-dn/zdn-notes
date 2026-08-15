@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import initSqlJs from 'sql.js'
 import type { Database } from 'sql.js'
 import { createTask, getTaskById, getAllTasks, updateTask, deleteTask, updateTaskStatus } from '../electron/main/database/task-dao'
@@ -118,9 +118,9 @@ describe('getAllTasks', () => {
 
   it('returns all tasks ordered by order_index', () => {
     const db = createDB()
-    const t1 = createTask({ title: 'C' }, db)
-    const t2 = createTask({ title: 'A' }, db)
-    const t3 = createTask({ title: 'B' }, db)
+    createTask({ title: 'C' }, db)
+    createTask({ title: 'A' }, db)
+    createTask({ title: 'B' }, db)
     const all = getAllTasks(undefined, db)
     expect(all).toHaveLength(3)
     expect(all[0].title).toBe('C')
@@ -229,7 +229,7 @@ describe('deleteTask', () => {
     const db = createDB()
     const parent = createTask({ title: 'Parent' }, db)
     const child = createTask({ title: 'Child', parentId: parent.id }, db)
-    const grandchild = createTask({ title: 'Grandchild', parentId: child.id }, db)
+    createTask({ title: 'Grandchild', parentId: child.id }, db)
     deleteTask(parent.id, db)
     expect(getAllTasks(undefined, db)).toHaveLength(0)
   })

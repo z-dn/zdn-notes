@@ -1,7 +1,7 @@
 import { app, ipcMain, dialog, shell, net } from 'electron'
 import { randomUUID } from 'crypto'
 import { writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs'
-import { join, isAbsolute } from 'path'
+import { join, isAbsolute, relative } from 'path'
 import {
   createTask,
   getTaskById,
@@ -29,15 +29,9 @@ import {
   writeDataDirConfig,
 } from './data-location'
 import { inboxDir } from './import-inbox'
+import { isSafeImageFilename } from './image-utils'
+import { isPrivateHost } from './net-utils'
 import type { Task, Status } from '@/types/task'
-
-const IMAGE_FILENAME_RE = /^[\w.-]+$/
-
-function isSafeImageFilename(filename: string): boolean {
-  if (!filename) return false
-  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false
-  return IMAGE_FILENAME_RE.test(filename)
-}
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('task:create', (_e, dto) => createTask(dto))
@@ -139,6 +133,10 @@ export function registerIpcHandlers(): void {
     const targetDir = target && target.trim() ? target.trim() : app.getPath('userData')
     if (targetDir === currentDir) return { ok: true, path: currentDir }
     if (!isAbsolute(targetDir)) return { ok: false, error: '存储位置必须是绝对路径' }
+    const rel = relative(currentDir, targetDir)
+    if (rel && !rel.startsWith('..') && !isAbsolute(rel)) {
+      return { ok: false, error: '新位置不能是当前数据目录或其子目录' }
+    }
     try {
       const oldImagesDir = getImagesDir()
       const dbBuffer = getDB().export()
@@ -176,6 +174,15 @@ export function registerIpcHandlers(): void {
     }
     if (!/^https?:\/\//i.test(url)) {
       return { ok: false, error: 'URL 必须以 http:// 或 https:// 开头' }
+    }
+
+    try {
+      const settings = getAllSettings()
+      if (settings.allowLocalRequests !== 'true' && (await isPrivateHost(new URL(url).hostname))) {
+        return { ok: false, error: '禁止访问内网/本机地址（可在设置中开启）' }
+      }
+    } catch {
+      // invalid URL: let the request below produce its own error
     }
 
     const headers: Record<string, string> = {}
@@ -223,10 +230,12 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('image:saveFromData', (_e, dataUri: string) => {
-    const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/)
+    const matches = dataUri.match(/^data:image\/([a-z0-9.+-]+);base64,(.+)$/i)
     if (!matches) throw new Error('Invalid image data URI')
-    let ext = matches[1]
+    let ext = matches[1].toLowerCase()
     if (ext === 'jpeg') ext = 'jpg'
+    if (ext === 'svg+xml') ext = 'svg'
+    if (ext === 'x-icon' || ext === 'vnd.microsoft.icon') ext = 'ico'
     const buffer = Buffer.from(matches[2], 'base64')
     const imageDir = getImagesDir()
     const filename = `${randomUUID()}.${ext}`

@@ -42,6 +42,13 @@ export function DetailPanel() {
   const [showTagDropdown, setShowTagDropdown] = useState(false)
 
   useEffect(() => {
+    return () => {
+      clearTimeout(titleTimer.current)
+      clearTimeout(descTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
     if (selectedTask) {
       setTitle(selectedTask.title)
       setDescription(selectedTask.description || '')

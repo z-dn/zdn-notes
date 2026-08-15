@@ -67,67 +67,67 @@ export function getActiveDataDir(): string {
 export function runMigrations(database: SqlJsDatabase): void {
   try {
     database.run('ALTER TABLE tasks RENAME COLUMN project TO owner')
-  } catch (e) {
+  } catch {
     /* already renamed */
   }
   try {
     database.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''")
-  } catch (e) {
+  } catch {
     /* column may already exist */
   }
   try {
     database.run(
       "CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)",
     )
-  } catch (e) {
+  } catch {
     /* table may already exist */
   }
   try {
     database.run("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'")
-  } catch (e) {
+  } catch {
     /* column may already exist */
   }
   try {
     database.run('ALTER TABLE categories ADD COLUMN parent_id TEXT')
-  } catch (e) {
+  } catch {
     /* column may already exist */
   }
   try {
     database.run('UPDATE categories SET parent_id = NULL')
-  } catch (e) {
+  } catch {
     /* ignore */
   }
   try {
     database.run('ALTER TABLE categories ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0')
-  } catch (e) {
+  } catch {
     /* column may already exist */
   }
   try {
     database.run(
       'UPDATE categories SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = 0',
     )
-  } catch (e) {
+  } catch {
     /* ignore */
   }
   try {
     database.run(
       'ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL',
     )
-  } catch (e) {
+  } catch {
     /* column may already exist */
   }
   try {
     database.run(
       'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)',
     )
-  } catch (e) {
+  } catch {
     /* table may already exist */
   }
   try {
     database.run(
       'CREATE TABLE IF NOT EXISTS tool_state (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)',
     )
-  } catch (e) {
+  } catch {
     /* table may already exist */
   }
 }
@@ -261,14 +261,34 @@ export function save(): void {
   }
 }
 
-let saveQueued = false
+let saveTimer: NodeJS.Timeout | null = null
+let maxSaveTimer: NodeJS.Timeout | null = null
+let pendingSave = false
+
+const SAVE_IDLE_MS = 500
+const SAVE_MAX_INTERVAL_MS = 2000
+
+function flushSave(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  if (maxSaveTimer) {
+    clearTimeout(maxSaveTimer)
+    maxSaveTimer = null
+  }
+  if (!pendingSave) return
+  pendingSave = false
+  save()
+}
+
 export function saveAsync(): void {
-  if (saveQueued) return
-  saveQueued = true
-  setImmediate(() => {
-    save()
-    saveQueued = false
-  })
+  pendingSave = true
+  if (saveTimer) return
+  saveTimer = setTimeout(flushSave, SAVE_IDLE_MS)
+  if (!maxSaveTimer) {
+    maxSaveTimer = setTimeout(flushSave, SAVE_MAX_INTERVAL_MS)
+  }
 }
 
 export function closeDB(): void {
