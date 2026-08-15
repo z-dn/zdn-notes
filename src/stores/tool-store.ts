@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import { toast } from '@/lib/toast'
+import { stripEmptyMindmapBlocks } from '@/lib/mindmap'
 import {
   TOOL_KEYS,
   TOOL_DEFAULTS,
   parseToolState,
+  type ScratchToolState,
   type ToolKey,
   type ToolStateMap,
 } from '@/types/tool'
@@ -34,6 +36,20 @@ export const useToolStore = create<ToolStore>((set, get) => ({
       const keys = Object.values(TOOL_KEYS) as ToolKey[]
       for (const key of keys) {
         states[key] = parseToolState(key, raw[key], TOOL_DEFAULTS[key])
+      }
+      const scratch = states[TOOL_KEYS.scratch] as ScratchToolState
+      if (scratch) {
+        let changed = false
+        const pages = scratch.pages.map((p) => {
+          const cleaned = stripEmptyMindmapBlocks(p.markdown)
+          if (cleaned === p.markdown) return p
+          changed = true
+          return { ...p, markdown: cleaned }
+        })
+        if (changed) {
+          states[TOOL_KEYS.scratch] = { ...scratch, pages }
+          void window.electronAPI.toolSet(TOOL_KEYS.scratch, JSON.stringify(states[TOOL_KEYS.scratch]))
+        }
       }
       set({ states, loaded: true })
     } catch {

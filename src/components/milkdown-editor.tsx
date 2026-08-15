@@ -1,5 +1,6 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx } from '@milkdown/core'
+import type { MilkdownPlugin } from '@milkdown/ctx'
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
@@ -9,6 +10,9 @@ import './milkdown-theme.css'
 interface MilkdownEditorProps {
   content: string
   onChange: (markdown: string) => void
+  extraPlugins?: MilkdownPlugin[]
+  commonmarkPlugins?: MilkdownPlugin[]
+  onEditorReady?: (editor: Editor | undefined) => void
 }
 
 function milkdownTheme(ctx: any) {
@@ -43,9 +47,28 @@ function insertImageNode(view: EditorView, src: string, alt: string) {
   view.focus()
 }
 
-function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
+function MilkdownEditorInner({
+  content,
+  onChange,
+  extraPlugins,
+  commonmarkPlugins,
+  onEditorReady,
+}: MilkdownEditorProps) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const extraPluginsRef = useRef(extraPlugins)
+  extraPluginsRef.current = extraPlugins
+  const commonmarkPluginsRef = useRef(commonmarkPlugins)
+  commonmarkPluginsRef.current = commonmarkPlugins
+  const onEditorReadyRef = useRef(onEditorReady)
+  onEditorReadyRef.current = onEditorReady
+
+  useEffect(
+    () => () => {
+      onEditorReadyRef.current?.(undefined)
+    },
+    [],
+  )
 
   const handlePasteImages = useCallback(async (view: EditorView, items: DataTransferItemList) => {
     const imageItems = Array.from(items).filter((item) => item.type.startsWith('image/'))
@@ -77,7 +100,7 @@ function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
 
   useEditor(
     (root) => {
-      return Editor.make()
+      const editor = Editor.make()
         .config(milkdownTheme)
         .config((ctx) => {
           ctx.set(rootCtx, root)
@@ -119,8 +142,12 @@ function MilkdownEditorInner({ content, onChange }: MilkdownEditorProps) {
             onChangeRef.current(markdown)
           })
         })
-        .use(commonmark)
-        .use(listener)
+      const cmPlugins = commonmarkPluginsRef.current ?? commonmark
+      for (const p of cmPlugins) editor.use(p)
+      for (const p of extraPluginsRef.current ?? []) editor.use(p)
+      editor.use(listener)
+      onEditorReadyRef.current?.(editor)
+      return editor
     },
     [handlePasteImages, handleDropImages],
   )

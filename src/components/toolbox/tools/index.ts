@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
-import { Braces, FileDiff, Send, type LucideIcon } from 'lucide-react'
+import { Braces, FileDiff, NotebookPen, Send, type LucideIcon } from 'lucide-react'
 import { TOOL_KEYS, type ToolKey } from '@/types/tool'
+import { ScratchpadTool } from './scratchpad-tool'
 import { JsonTool } from './json-tool'
 import { TextDiffTool } from './text-diff-tool'
 import { ApiTool } from './api-tool'
@@ -14,6 +15,13 @@ export interface ToolEntry {
 }
 
 export const TOOLS: ToolEntry[] = [
+  {
+    id: TOOL_KEYS.scratch,
+    name: '草稿纸',
+    description: '富文本 / 思维导图',
+    icon: NotebookPen,
+    component: ScratchpadTool,
+  },
   {
     id: TOOL_KEYS.json,
     name: 'JSON 美化',

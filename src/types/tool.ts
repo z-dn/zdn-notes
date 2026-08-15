@@ -1,10 +1,30 @@
 export const TOOL_KEYS = {
+  scratch: 'tool:scratch',
   json: 'tool:json',
   textDiff: 'tool:textdiff',
   api: 'tool:api',
 } as const
 
 export type ToolKey = (typeof TOOL_KEYS)[keyof typeof TOOL_KEYS]
+
+export interface MindNode {
+  id: string
+  text: string
+  children: MindNode[]
+}
+
+export interface ScratchPage {
+  id: string
+  title: string
+  markdown: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ScratchToolState {
+  pages: ScratchPage[]
+  activePageId: string
+}
 
 export interface JsonToolState {
   input: string
@@ -51,12 +71,14 @@ export interface ApiToolState {
 }
 
 export type ToolStateMap = {
+  [TOOL_KEYS.scratch]: ScratchToolState
   [TOOL_KEYS.json]: JsonToolState
   [TOOL_KEYS.textDiff]: TextDiffToolState
   [TOOL_KEYS.api]: ApiToolState
 }
 
 export const TOOL_DEFAULTS: ToolStateMap = {
+  [TOOL_KEYS.scratch]: { pages: [], activePageId: '' },
   [TOOL_KEYS.json]: { input: '', mode: 'beautify', inputCollapsed: false },
   [TOOL_KEYS.textDiff]: { original: '', modified: '', inputCollapsed: false },
   [TOOL_KEYS.api]: {
