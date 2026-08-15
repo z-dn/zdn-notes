@@ -107,7 +107,7 @@ export function CategorySidebar() {
           className={`flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
             activeCategoryId === null
               ? 'bg-primary/10 text-primary font-medium'
-              : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+              : 'hover:bg-accent text-muted-foreground hover:text-foreground'
           }`}
         >
           <span
@@ -139,7 +139,7 @@ export function CategorySidebar() {
                   ? 'bg-blue-50/80 text-foreground'
                   : activeCategoryId === cat.id
                     ? 'bg-primary/10 text-primary font-medium'
-                    : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                    : 'hover:bg-accent text-muted-foreground hover:text-foreground'
               }`}
               onClick={editing ? undefined : () => selectCategory(cat.id)}
             >
@@ -169,14 +169,14 @@ export function CategorySidebar() {
                       onKeyDown={handleEditKeyDown}
                       onClick={(e) => e.stopPropagation()}
                       placeholder="请输入分类名称"
-                      className="min-w-0 flex-1 rounded border border-blue-300 bg-white px-1 py-0.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-blue-400"
+                      className="min-w-0 flex-1 rounded border border-input bg-background px-1 py-0.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         saveEdit()
                       }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-600 hover:bg-green-100"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-950"
                       title="保存"
                     >
                       ✓
@@ -186,7 +186,7 @@ export function CategorySidebar() {
                         e.stopPropagation()
                         cancelEdit()
                       }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent"
                       title="取消"
                     >
                       ✕
@@ -226,7 +226,7 @@ export function CategorySidebar() {
                     <>
                       <button
                         onClick={(e) => startEdit(cat, e)}
-                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground group-hover/item:visible"
+                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground group-hover/item:visible"
                         title="重命名"
                       >
                         ✎
@@ -236,7 +236,7 @@ export function CategorySidebar() {
                           e.stopPropagation()
                           deleteCategory(cat.id)
                         }}
-                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-destructive group-hover/item:visible"
+                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-destructive group-hover/item:visible"
                         title="删除"
                       >
                         ✕
@@ -261,7 +261,7 @@ export function CategorySidebar() {
         })}
       </div>
 
-      <div className="invisible group-hover:visible border-t p-2 transition-opacity">
+      <div className="invisible group-hover:visible border-t border-divider p-2">
         {showCreator ? (
           <div className="space-y-2">
             <input
@@ -302,7 +302,7 @@ export function CategorySidebar() {
               </button>
               <button
                 onClick={() => setShowCreator(false)}
-                className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
               >
                 取消
               </button>
@@ -315,7 +315,7 @@ export function CategorySidebar() {
               setNewColor(active?.color ?? '#6b7280')
               setShowCreator(true)
             }}
-            className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <span className="text-base leading-none">+</span>
             <span>新建分类</span>

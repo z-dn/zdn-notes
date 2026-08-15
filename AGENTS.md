@@ -111,6 +111,40 @@ src/                    → 渲染进程 (React)
 - Store 调用 `window.electronAPI` 通过 IPC 操作数据
 - 数据变更后自动刷新关联数据（如任务创建后重新加载分类计数）
 
+### 样式与动画统一（强制）
+
+所有样式与动画**必须**通过集中配置和统一原语实现，禁止各组件自行写死时长、缓动或色值。
+
+**动画 token（`src/styles/globals.css` `@theme`）**
+- 时长：`--duration-fast`(150ms) / `--duration-base`(200ms) / `--duration-medium`(300ms)
+- 缓动：`--ease-in` / `--ease-out` / `--ease-in-out` / `--ease-spring`
+- 进场/退场：`--animate-fade-slide-up` / `--animate-fade-out`
+- Tailwind 的 `duration-150/200/300`、`ease-*`、`transition-*` 默认时长均已覆盖到上述 token。**调整动画节奏只改 `@theme`，不要改组件里的类名**
+
+**动画原语（`src/components/fade.tsx`）**
+- `FadeBlock`：条件块进出场（`show` 切换）
+- `FadeSwitch`：容器切换进出场（`current`/`render`）
+- `Collapse`：高度折叠收缩（`open`/`openClass`）
+- 全部 200ms、统一缓动、受 reduced-motion 兜底
+
+**面板分隔 token（`src/styles/globals.css`）**
+- 区块底色：`--color-panel`（内容）/ `--color-panel-header`（顶栏）/ `--color-panel-sidebar`（侧栏）/ `--color-panel-detail`（详情面板）
+- 分隔线：`--color-divider`（布局/小节分隔线专用，控件边框仍用 `border-input`）
+- 组件统一用 `bg-panel-sidebar`、`border-divider` 等语义工具类，不写死 `bg-muted/20`、裸 `border-r`
+- 分隔样式可通过 `<html data-panel-style="divider|tint">` 切换（`divider`=细线+轻底色，`tint`=无分隔线+强底色分层）；模式值集中定义在 globals.css，**组件不要写死模式判断**；设置项 `panelStyle` 持久化于 settings 表
+
+**单一所有权 + 抑制模型**
+- 每个过渡只有"拥有者"（顶层容器）播动画，内层元素不重复播
+- `MotionContext` / `useMotionSuppress()`：容器过渡期间向内层传播抑制信号；内层元素挂载时若被抑制则不播进场动画
+
+**样式约定**
+- 颜色只用语义 token（`bg-accent`、`border-input`、`text-muted-foreground` 等），不写死色值
+- hover 反馈统一 `hover:bg-accent`（删除类 `hover:text-destructive`）
+- 焦点态统一 `focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring`
+- 阴影两级：控件 `shadow-sm`、浮层 `shadow-lg`
+- 小字号统一 `text-[11px]`，正文 `text-sm`
+- 新增交互/区块时：进场用 `animate-fade-slide-up` 或 `FadeBlock`/`FadeSwitch`，退场用 `animate-fade-out`，折叠用 `Collapse`
+
 ---
 
 ## 数据库 Schema

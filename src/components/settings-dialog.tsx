@@ -186,8 +186,12 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   return (
     <div className="fixed inset-0 z-50">
       <div ref={overlayRef} className="absolute inset-0 bg-black/40" onClick={() => playClose()} />
-      <div ref={contentRef} className="fixed left-1/2 top-1/2 w-[420px] rounded-lg border bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b px-5 py-3">
+      <div
+        ref={contentRef}
+        className="fixed left-1/2 top-1/2 flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col rounded-lg border bg-background shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-divider px-6 py-3">
           <h2 className="flex items-center gap-1.5 text-base font-semibold"><Settings className="size-4" /> 设置</h2>
           <button
             onClick={handleCancel}
@@ -197,10 +201,10 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           </button>
         </div>
 
-        <div className="space-y-5 px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">主题</label>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               {THEME_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -217,11 +221,31 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
             </div>
           </div>
 
-
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">面板分隔</label>
+            <div className="flex gap-3">
+              {[
+                { value: 'divider' as const, label: '分割线' },
+                { value: 'tint' as const, label: '底色分层' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => updateEditing('panelStyle', opt.value)}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                    editing.panelStyle === opt.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">描述编辑方式</label>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               {[
                 { value: 'edit' as const, label: '编辑即显示' },
                 { value: 'toggle' as const, label: '手动切换' },
@@ -242,24 +266,24 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           </div>
 
           <div>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={editing.reminderEnabled}
                 onChange={(e) => updateEditing('reminderEnabled', e.target.checked)}
-                className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <span className="text-xs font-medium text-muted-foreground">启用到期提醒</span>
             </label>
           </div>
 
           <div>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={editing.allowLocalRequests}
                 onChange={(e) => updateEditing('allowLocalRequests', e.target.checked)}
-                className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <span className="text-xs font-medium text-muted-foreground">
                 允许接口调试访问内网/本机地址
@@ -269,7 +293,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
 
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">数据备份</label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleBackup}
                 className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -289,17 +313,17 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">数据存储位置</label>
             <p
-              className="mb-2 break-all rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
+              className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
               title={dataDir}
             >
               {dataDir}
             </p>
             {dataDirWarning && (
-              <p className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <p className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
                 {dataDirWarning}
               </p>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleChangeDataDir}
                 className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -319,7 +343,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">增量导入（收件夹）</label>
             <p
-              className="mb-2 break-all rounded-md border border-input bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
+              className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
               title={inboxDir}
             >
               {inboxDir}
@@ -337,16 +361,16 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
 
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">更新</label>
-            <label className="flex items-center gap-2 cursor-pointer mb-3">
+            <label className="flex items-center gap-3 cursor-pointer mb-3">
               <input
                 type="checkbox"
                 checked={editing.autoUpdate}
                 onChange={(e) => updateEditing('autoUpdate', e.target.checked)}
-                className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <span className="text-xs font-medium text-muted-foreground">启动时检查更新</span>
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleCheckUpdate}
                 disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
@@ -377,9 +401,9 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t px-5 py-3">
+        <div className="flex items-center justify-between border-t border-divider px-6 py-3">
           <p className="text-xs text-muted-foreground">v{appVersion}</p>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               onClick={handleCancel}
               className="rounded-md border border-input bg-background px-4 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"

@@ -26,6 +26,23 @@
   --color-ring: hsl(222.2 84% 4.9%);
   --radius: 0.5rem;
 
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-medium: 300ms;
+
+  --duration-150: var(--duration-fast);
+  --duration-200: var(--duration-base);
+  --duration-300: var(--duration-medium);
+  --transition-duration-150: var(--duration-fast);
+  --transition-duration-200: var(--duration-base);
+  --transition-duration-300: var(--duration-medium);
+  --default-transition-duration: var(--duration-fast);
+
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
   --color-sidebar-background: hsl(0 0% 98%);
   --color-sidebar-foreground: hsl(240 5.3% 26.1%);
   --color-sidebar-primary: hsl(240 5.9% 10%);
@@ -35,12 +52,35 @@
   --color-sidebar-border: hsl(220 13% 91%);
   --color-sidebar-ring: hsl(217.2 91.2% 59.8%);
 
-  --animate-fade-slide-up: fade-slide-up 0.25s ease-out both;
+  --color-panel: var(--color-background);
+  --color-panel-header: var(--color-background);
+  --color-panel-sidebar: color-mix(in srgb, var(--color-muted) 20%, var(--color-background));
+  --color-panel-detail: var(--color-background);
+  --color-divider: var(--color-border);
+
+  --animate-fade-slide-up: fade-slide-up var(--duration-base) var(--ease-out) both;
+  --animate-fade-out: fade-out var(--duration-base) var(--ease-in) both;
 }
 
 @keyframes fade-slide-up {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .dark {
@@ -74,6 +114,13 @@
   --color-sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
+html[data-panel-style='tint'] {
+  --color-divider: transparent;
+  --color-panel-header: color-mix(in srgb, var(--color-muted) 40%, var(--color-background));
+  --color-panel-sidebar: color-mix(in srgb, var(--color-muted) 30%, var(--color-background));
+  --color-panel-detail: color-mix(in srgb, var(--color-muted) 15%, var(--color-background));
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -95,7 +142,7 @@
   ::-webkit-scrollbar-thumb {
     background: transparent;
     border-radius: 3px;
-    transition: background 0.2s;
+    transition: background var(--duration-base);
   }
   ::-webkit-scrollbar-thumb:hover {
     background: color-mix(in srgb, var(--color-muted-foreground) 25%, transparent);
@@ -134,7 +181,7 @@
     color: var(--color-foreground);
     cursor: pointer;
     border-radius: 4px;
-    transition: background 0.12s;
+    transition: background var(--duration-fast);
     outline: none;
     flex-shrink: 0;
   }

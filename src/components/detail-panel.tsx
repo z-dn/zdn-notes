@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
+import { FadeBlock } from '@/components/fade'
 import { PRIORITY_COLORS } from './task-item'
 import { renderMarkdown } from '@/lib/markdown'
 import type { Priority } from '@/types/task'
@@ -176,7 +177,7 @@ export function DetailPanel() {
       <div className="space-y-1">
         <div className="flex flex-wrap gap-1">
           {selectedTask.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-[10px]">
+            <Badge key={tag} variant="secondary" className="text-[11px]">
               #{tag}
               <button
                 onClick={() => updateTask({
@@ -214,12 +215,12 @@ export function DetailPanel() {
               }
             }}
             placeholder="添加标签..."
-            className="h-6 flex-1 rounded border border-input bg-transparent px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
+            className="h-6 flex-1 rounded border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           {showTagDropdown && filteredTags.length > 0 && (
             <div
               onMouseDown={(e) => e.preventDefault()}
-              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-40 overflow-y-auto rounded-md border border-input bg-popover shadow-md"
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-40 origin-top overflow-y-auto rounded-md border border-input bg-popover shadow-lg animate-in fade-in-0 zoom-in-95"
             >
               {filteredTags.map((tag) => (
                 <button
@@ -246,7 +247,7 @@ export function DetailPanel() {
       <div className="space-y-1 relative">
         <div className="flex flex-wrap gap-1">
           {selectedTask.owner && (
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="text-[11px]">
               @{selectedTask.owner}
               <button
                 onClick={() => updateTask({ id: selectedTask.id, owner: '' })}
@@ -278,12 +279,12 @@ export function DetailPanel() {
               }
             }}
             placeholder="添加负责人..."
-            className="h-6 w-full rounded border border-input bg-transparent px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
+            className="h-6 w-full rounded border border-input bg-transparent px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           {showOwnerDropdown && filteredOwners.length > 0 && (
             <div
               onMouseDown={(e) => e.preventDefault()}
-              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-40 overflow-y-auto rounded-md border border-input bg-popover shadow-md"
+              className="absolute left-0 right-0 top-full z-50 mt-1 max-h-40 origin-top overflow-y-auto rounded-md border border-input bg-popover shadow-lg animate-in fade-in-0 zoom-in-95"
             >
               {filteredOwners.map((owner) => (
                 <button
@@ -410,7 +411,7 @@ export function DetailPanel() {
                 if (rect) setExpandedDesc(selectedTask.id, { x: rect.left, y: rect.top, width: rect.width, height: rect.height })
                 else setExpandedDesc(selectedTask.id)
               }}
-              className="text-[10px] text-muted-foreground/50 hover:text-foreground"
+              className="text-[11px] text-muted-foreground/50 hover:text-foreground"
               title="展开描述"
             >
               ↗
@@ -418,7 +419,7 @@ export function DetailPanel() {
             {descriptionMode === 'toggle' && (
               <button
                 onClick={() => setPreviewMode((p) => !p)}
-                className="text-[10px] text-muted-foreground/50 hover:text-foreground"
+                className="text-[11px] text-muted-foreground/50 hover:text-foreground"
               >
                 {previewMode ? '编辑' : '预览'}
               </button>
@@ -426,29 +427,40 @@ export function DetailPanel() {
           </div>
           )}
         </div>
-        {expandedDescId ? (
-          <div className="flex-1 min-h-0 rounded-md border border-input overflow-hidden">
-            <DescriptionMinimap content={description} />
-          </div>
-        ) : descriptionMode === 'edit' ? (
-          <div className="flex-1 min-h-0 rounded-md border border-input overflow-y-auto p-2">
-            <MilkdownEditor key={selectedTask.id}
-              content={selectedTask.description || ''}
-              onChange={(markdown) => {
-                setDescription(markdown)
-                clearTimeout(descTimer.current)
-                descTimer.current = setTimeout(() => {
-                  updateTask({ id: selectedTask.id, description: markdown })
-                }, 500)
-              }}
-            />
-          </div>
-        ) : descriptionMode === 'toggle' && previewMode ? (
+        <FadeBlock
+          show={!!expandedDescId}
+          className="flex-1 min-h-0 rounded-md border border-input overflow-hidden"
+        >
+          <DescriptionMinimap content={description} />
+        </FadeBlock>
+        <FadeBlock
+          show={!expandedDescId && descriptionMode === 'edit'}
+          className="flex-1 min-h-0 rounded-md border border-input overflow-y-auto p-2"
+        >
+          <MilkdownEditor key={selectedTask.id}
+            content={selectedTask.description || ''}
+            onChange={(markdown) => {
+              setDescription(markdown)
+              clearTimeout(descTimer.current)
+              descTimer.current = setTimeout(() => {
+                updateTask({ id: selectedTask.id, description: markdown })
+              }, 500)
+            }}
+          />
+        </FadeBlock>
+        <FadeBlock
+          show={!expandedDescId && descriptionMode === 'toggle' && previewMode}
+          className="flex-1 min-h-[80px] overflow-auto break-words rounded-md border border-input bg-transparent p-2 text-sm"
+        >
           <div
-            className="flex-1 min-h-[80px] overflow-auto break-words rounded-md border border-input bg-transparent p-2 text-sm [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-2 [&_blockquote]:text-muted-foreground [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-medium"
+            className="[&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:text-xs [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-2 [&_blockquote]:text-muted-foreground [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-medium"
             dangerouslySetInnerHTML={{ __html: renderedDesc }}
           />
-        ) : (
+        </FadeBlock>
+        <FadeBlock
+          show={!expandedDescId && descriptionMode === 'toggle' && !previewMode}
+          className="flex-1 min-h-[80px]"
+        >
           <textarea
             value={description}
             onChange={(e) => {
@@ -482,9 +494,9 @@ export function DetailPanel() {
               }
             }}
             placeholder="支持 Markdown 格式..."
-            className="flex-1 min-h-[80px] resize-none overflow-x-auto rounded-md border border-input bg-transparent p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-full w-full resize-none overflow-x-auto rounded-md border border-input bg-transparent p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-        )}
+        </FadeBlock>
       </div>
 
       <div className="pt-2 text-xs text-muted-foreground/70">

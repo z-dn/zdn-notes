@@ -12,6 +12,36 @@ export interface JsonLine {
   startDepth: number
 }
 
+export const BRACKET_COLORS = [
+  'text-red-500 dark:text-red-400',
+  'text-orange-500 dark:text-orange-400',
+  'text-amber-500 dark:text-amber-400',
+  'text-emerald-600 dark:text-emerald-400',
+  'text-sky-500 dark:text-sky-400',
+  'text-violet-500 dark:text-violet-400',
+]
+
+export function tokenClass(t: JsonToken): string {
+  switch (t.type) {
+    case 'bracket':
+      return BRACKET_COLORS[(t.depth ?? 0) % BRACKET_COLORS.length]
+    case 'key':
+      return 'text-blue-600 dark:text-blue-300'
+    case 'string':
+      return 'text-green-700 dark:text-green-400'
+    case 'number':
+      return 'text-orange-600 dark:text-orange-300'
+    case 'boolean':
+      return 'text-violet-600 dark:text-violet-300'
+    case 'null':
+      return 'text-red-600 dark:text-red-400'
+    case 'punct':
+      return 'text-muted-foreground'
+    default:
+      return ''
+  }
+}
+
 const BOOLEANS = new Set(['true', 'false'])
 
 export function tokenizeJson(json: string, startDepth = 0): JsonToken[] {

@@ -34,7 +34,7 @@ export function ContextMenu({ x, y, task, onClose, onAddSibling, onAddChild, onA
   return (
     <div
       ref={ref}
-      className="absolute z-50 min-w-[140px] rounded-md border bg-popover p-1 shadow-md"
+      className="absolute z-50 min-w-[140px] origin-top-left animate-in fade-in-0 zoom-in-95 rounded-md border bg-popover p-1 shadow-lg"
       style={{ left: x, top: y }}
     >
       {task ? (

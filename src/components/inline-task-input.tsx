@@ -11,6 +11,7 @@ interface InlineTaskInputProps {
 
 export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: InlineTaskInputProps) {
   const [value, setValue] = useState('')
+  const [leaving, setLeaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const createTask = useTaskStore((s) => s.createTask)
   const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
@@ -18,6 +19,11 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  const close = () => {
+    setLeaving(true)
+    setTimeout(onClose, 200)
+  }
 
   async function handleSubmit() {
     const text = value.trim()
@@ -28,7 +34,7 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
       orderIndex,
       categoryId: activeCategoryId ?? null,
     })
-    onClose()
+    close()
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -37,13 +43,15 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
       handleSubmit()
     }
     if (e.key === 'Escape') {
-      onClose()
+      close()
     }
   }
 
   return (
     <div
-      className="group flex items-center gap-3 rounded-md px-3 py-2"
+      className={`group flex items-center gap-3 rounded-md px-3 py-2 ${
+        leaving ? 'animate-fade-out' : 'animate-fade-slide-up'
+      }`}
       style={{ paddingLeft: `${12 + depth * 20}px` }}
     >
       <div className="h-4 w-4 shrink-0" />
@@ -53,7 +61,7 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        onBlur={() => { if (!value.trim()) onClose() }}
+        onBlur={() => { if (!value.trim()) close() }}
         placeholder="输入任务名称，按回车添加"
         className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
       />

@@ -4,40 +4,11 @@ import { useToolStore } from '@/stores/tool-store'
 import { TOOL_KEYS, TOOL_DEFAULTS, type JsonToolState } from '@/types/tool'
 import { copyText } from '@/lib/copy'
 import { toast } from '@/lib/toast'
-import { splitJsonLines, tokenizeJson, type JsonToken } from '@/lib/json-highlight'
+import { splitJsonLines, tokenizeJson, tokenClass } from '@/lib/json-highlight'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
-
-const BRACKET_COLORS = [
-  'text-red-500 dark:text-red-400',
-  'text-orange-500 dark:text-orange-400',
-  'text-amber-500 dark:text-amber-400',
-  'text-emerald-600 dark:text-emerald-400',
-  'text-sky-500 dark:text-sky-400',
-  'text-violet-500 dark:text-violet-400',
-]
+import { FadeBlock, Collapse } from '@/components/fade'
 
 const ROW_HEIGHT = 20
-
-function tokenClass(t: JsonToken): string {
-  switch (t.type) {
-    case 'bracket':
-      return BRACKET_COLORS[(t.depth ?? 0) % BRACKET_COLORS.length]
-    case 'key':
-      return 'text-blue-600 dark:text-blue-300'
-    case 'string':
-      return 'text-green-700 dark:text-green-400'
-    case 'number':
-      return 'text-orange-600 dark:text-orange-300'
-    case 'boolean':
-      return 'text-violet-600 dark:text-violet-300'
-    case 'null':
-      return 'text-red-600 dark:text-red-400'
-    case 'punct':
-      return 'text-muted-foreground'
-    default:
-      return ''
-  }
-}
 
 function formatJson(input: string, mode: 'beautify' | 'minify'): { text: string; error?: string } {
   const trimmed = input.trim()
@@ -93,10 +64,10 @@ export function JsonTool() {
   }, [output])
 
   return (
-    <div className="animate-fade-slide-up flex h-full flex-col gap-3">
-      <div className="mb-2 flex items-center gap-2 border-b pb-1.5">
+    <div className="flex h-full flex-col gap-3">
+      <div className="mb-2 flex items-center gap-2 border-b border-divider pb-1.5">
         <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-          <Braces className="size-3.5" /> JSON 输入
+          <Braces className="size-3.5" /> JSON美化
         </span>
         <div className="ml-auto flex items-center gap-2">
           <div className="flex gap-0.5 rounded-md bg-muted/50 p-0.5">
@@ -135,27 +106,24 @@ export function JsonTool() {
         </div>
       </div>
 
-      {state.inputCollapsed ? (
-        <div className="rounded-md border border-dashed border-input px-3 py-1.5 text-xs text-muted-foreground">
-          输入区已收起，点击上方「展开输入」恢复
-        </div>
-      ) : (
+      <Collapse open={!state.inputCollapsed} className="min-h-0">
         <textarea
           value={state.input}
           onChange={(e) => updateState(TOOL_KEYS.json, { input: e.target.value })}
           placeholder="粘贴 JSON 内容..."
           spellCheck={false}
-          className="min-h-0 flex-1 resize-none rounded-md border border-input bg-transparent p-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="h-full w-full resize-none rounded-md border border-input bg-transparent p-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-      )}
+      </Collapse>
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-          {error}
-        </div>
-      )}
+      <FadeBlock
+        show={!!error}
+        className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+      >
+        {error}
+      </FadeBlock>
 
-      <div className="flex items-center gap-2 border-t pt-1.5">
+      <div className="flex items-center gap-2 pt-1.5">
         <span className="text-xs font-medium text-muted-foreground">输出</span>
         {pending && (
           <span className="animate-pulse text-[11px] text-muted-foreground/60">格式化中…</span>
@@ -166,56 +134,56 @@ export function JsonTool() {
             toast(ok ? '已复制' : '复制失败')
           }}
           disabled={!output}
-          className="ml-auto rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          className="ml-auto rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50"
         >
           复制
         </button>
       </div>
 
-      {output ? (
-        state.mode === 'beautify' ? (
-          <div
-            ref={containerRef}
-            onScroll={computeVisible}
-            className="min-h-0 flex-1 overflow-auto rounded-md border border-input bg-muted/30 font-mono text-xs"
-          >
-            <div style={{ height: lines.length * ROW_HEIGHT, position: 'relative' }}>
-              {lines.slice(visible.start, visible.end).map((line, k) => {
-                const i = visible.start + k
-                const tokens = tokenizeJson(line.text, line.startDepth)
-                return (
-                  <div
-                    key={i}
-                    className="absolute left-0 w-full whitespace-pre px-2"
-                    style={{
-                      top: i * ROW_HEIGHT,
-                      height: ROW_HEIGHT,
-                      lineHeight: `${ROW_HEIGHT}px`,
-                    }}
-                  >
-                    {tokens.map((t, j) => (
-                      <span key={j} className={tokenClass(t)}>
-                        {t.text}
-                      </span>
-                    ))}
-                  </div>
-                )
-              })}
-            </div>
+      <FadeBlock show={!!output && state.mode === 'beautify'} className="min-h-0 flex-1">
+        <div
+          ref={containerRef}
+          onScroll={computeVisible}
+          className="h-full overflow-auto rounded-md border border-input bg-muted/30 font-mono text-xs"
+        >
+          <div style={{ height: lines.length * ROW_HEIGHT, position: 'relative' }}>
+            {lines.slice(visible.start, visible.end).map((line, k) => {
+              const i = visible.start + k
+              const tokens = tokenizeJson(line.text, line.startDepth)
+              return (
+                <div
+                  key={i}
+                  className="absolute left-0 w-full whitespace-pre px-2"
+                  style={{
+                    top: i * ROW_HEIGHT,
+                    height: ROW_HEIGHT,
+                    lineHeight: `${ROW_HEIGHT}px`,
+                  }}
+                >
+                  {tokens.map((t, j) => (
+                    <span key={j} className={tokenClass(t)}>
+                      {t.text}
+                    </span>
+                  ))}
+                </div>
+              )
+            })}
           </div>
-        ) : (
-          <textarea
-            value={output}
-            readOnly
-            spellCheck={false}
-            className="min-h-0 flex-1 resize-none rounded-md border border-input bg-muted/30 p-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
-        )
-      ) : (
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-input bg-muted/30 text-xs text-muted-foreground">
+        </div>
+      </FadeBlock>
+      <FadeBlock show={!!output && state.mode === 'minify'} className="min-h-0 flex-1">
+        <textarea
+          value={output}
+          readOnly
+          spellCheck={false}
+          className="h-full w-full resize-none rounded-md border border-input bg-muted/30 p-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </FadeBlock>
+      <FadeBlock show={!output} className="min-h-0 flex-1">
+        <div className="flex h-full items-center justify-center rounded-md border border-input bg-muted/30 text-xs text-muted-foreground">
           格式化结果将显示在这里
         </div>
-      )}
+      </FadeBlock>
     </div>
   )
 }

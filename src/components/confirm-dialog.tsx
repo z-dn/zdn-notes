@@ -63,13 +63,13 @@ export function ConfirmDialog() {
         <div className="mt-4 flex flex-col-reverse justify-end gap-2 sm:flex-row">
           <button
             onClick={() => handleClose(false)}
-            className="mt-2 inline-flex items-center justify-center rounded-md border bg-background px-4 py-2 text-sm font-medium hover:bg-accent sm:mt-0"
+            className="mt-2 inline-flex items-center justify-center rounded-md border bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent sm:mt-0"
           >
             取消
           </button>
           <button
             onClick={() => handleClose(true)}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             确定
           </button>

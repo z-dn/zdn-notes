@@ -24,8 +24,9 @@ import {
 import { Select } from '@/components/ui/select'
 import { copyText } from '@/lib/copy'
 import { toast } from '@/lib/toast'
-import { splitJsonLines, tokenizeJson } from '@/lib/json-highlight'
+import { splitJsonLines, tokenizeJson, tokenClass } from '@/lib/json-highlight'
 import { JsonEditor } from './json-editor'
+import { FadeBlock, Collapse } from '@/components/fade'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
@@ -33,25 +34,16 @@ const HISTORY_LIMIT = 30
 const BODY_TRUNCATE_BYTES = 100 * 1024
 
 const METHOD_COLORS: Record<string, string> = {
-  GET: 'text-green-700 dark:text-green-400',
-  POST: 'text-amber-700 dark:text-amber-400',
-  PUT: 'text-blue-700 dark:text-blue-400',
-  PATCH: 'text-violet-700 dark:text-violet-400',
-  DELETE: 'text-red-700 dark:text-red-400',
+  GET: 'text-green-700 dark:text-green-300',
+  POST: 'text-amber-700 dark:text-amber-300',
+  PUT: 'text-blue-700 dark:text-blue-300',
+  PATCH: 'text-violet-700 dark:text-violet-300',
+  DELETE: 'text-red-700 dark:text-red-300',
   HEAD: 'text-slate-500 dark:text-slate-400',
   OPTIONS: 'text-slate-500 dark:text-slate-400',
 }
 
 const ROW_HEIGHT = 20
-
-const BRACKET_COLORS = [
-  'text-red-500 dark:text-red-400',
-  'text-orange-500 dark:text-orange-400',
-  'text-amber-500 dark:text-amber-400',
-  'text-emerald-600 dark:text-emerald-400',
-  'text-sky-500 dark:text-sky-400',
-  'text-violet-500 dark:text-violet-400',
-]
 
 function formatHistoryTime(ts: number): string {
   const d = new Date(ts)
@@ -63,10 +55,10 @@ function formatHistoryTime(ts: number): string {
 
 function statusBadgeClass(status: number): string {
   if (status >= 200 && status < 300)
-    return 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-300'
+    return 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300'
   if (status >= 300 && status < 400)
-    return 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-  return 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+  return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
 }
 
 function formatSize(bytes: number): string {
@@ -235,22 +227,22 @@ export function ApiTool() {
   }
 
   return (
-    <div className="animate-fade-slide-up flex h-full">
+    <div className="flex h-full">
       <aside
         aria-hidden={!showHistory}
         className={`flex shrink-0 flex-col overflow-hidden border-r transition-[width] duration-300 ease-in-out ${
-          showHistory ? 'w-44 border-border' : 'w-0 border-transparent'
+          showHistory ? 'w-44 border-divider' : 'w-0 border-transparent'
         }`}
       >
         <div className="flex w-44 min-h-0 flex-1 flex-col pr-3">
-          <div className="mb-1 flex items-center gap-1 border-b pb-1.5">
+          <div className="mb-1 flex items-center gap-1 border-b border-divider pb-1.5">
             <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               <History className="size-3.5" /> 历史记录
             </span>
             <button
               onClick={handleClearHistory}
               disabled={state.history.length === 0}
-              className="ml-auto rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
+              className="ml-auto rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
               title="清空历史"
             >
               清空
@@ -264,21 +256,21 @@ export function ApiTool() {
                 <div key={h.id} className="group relative">
                   <button
                     onClick={() => handleLoadHistory(h)}
-                    className="flex w-full flex-col gap-0.5 rounded-md border border-transparent px-1.5 py-1 text-left transition-colors hover:border-input hover:bg-muted"
+                    className="flex w-full flex-col gap-0.5 rounded-md border border-transparent px-1.5 py-1 text-left transition-colors hover:border-input hover:bg-accent"
                   >
                     <span className="flex min-w-0 items-center gap-1">
-                      <span className={`w-9 shrink-0 text-[10px] font-semibold ${METHOD_COLORS[h.method] ?? ''}`}>
+                      <span className={`w-9 shrink-0 text-[11px] font-semibold ${METHOD_COLORS[h.method] ?? ''}`}>
                         {h.method}
                       </span>
                       <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{h.url}</span>
                     </span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                    <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60">
                       {h.response?.status ? (
                         <span className={`rounded px-1 ${statusBadgeClass(h.response.status)}`}>
                           {h.response.status}
                         </span>
                       ) : (
-                        <span className="rounded bg-orange-100 px-1 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300">
+                        <span className="rounded bg-orange-100 px-1 text-orange-700 dark:bg-orange-950 dark:text-orange-300">
                           ERR
                         </span>
                       )}
@@ -287,7 +279,7 @@ export function ApiTool() {
                   </button>
                   <button
                     onClick={() => handleDeleteHistory(h.id)}
-                    className="absolute right-1 top-1 hidden rounded p-0.5 text-muted-foreground/50 hover:text-red-500 group-hover:block"
+                    className="absolute right-1 top-1 hidden rounded p-0.5 text-muted-foreground/50 hover:text-destructive group-hover:block"
                     title="删除该条"
                   >
                     <Trash2 className="size-3" />
@@ -300,7 +292,7 @@ export function ApiTool() {
       </aside>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="mb-1 flex items-center gap-2 border-b pb-1.5">
+      <div className="mb-1 flex items-center gap-2 border-b border-divider pb-1.5">
         <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
           <Send className="size-3.5" /> 接口调试
         </span>
@@ -380,8 +372,8 @@ export function ApiTool() {
               <Plus className="size-3" /> 添加
             </button>
           </button>
-          {showHeaders && (
-            <div className="max-h-28 overflow-y-auto border-t px-2 py-1.5">
+          <Collapse open={showHeaders} openClass="h-28" className="border-t border-divider">
+            <div className="h-full overflow-y-auto px-2 py-1.5">
               {state.headers.length === 0 && (
                 <div className="py-1 text-[11px] text-muted-foreground/60">暂无请求头</div>
               )}
@@ -404,7 +396,7 @@ export function ApiTool() {
                   <button
                     onClick={() => setHeaders(state.headers.filter((_, k) => k !== i))}
                     disabled={state.headers.length <= 1}
-                    className="shrink-0 rounded p-1 text-muted-foreground/50 hover:text-red-500 disabled:opacity-30"
+                    className="shrink-0 rounded p-1 text-muted-foreground/50 hover:text-destructive disabled:opacity-30"
                     title="删除"
                   >
                     <Trash2 className="size-3.5" />
@@ -412,7 +404,7 @@ export function ApiTool() {
                 </div>
               ))}
             </div>
-          )}
+          </Collapse>
         </div>
 
         <div className="rounded-md border border-input">
@@ -433,25 +425,26 @@ export function ApiTool() {
               <Wand2 className="size-3" /> 美化
             </button>
           </button>
-          {showBody && (
+          <Collapse open={showBody} openClass="h-24" className="rounded-b-md border-t border-divider">
             <JsonEditor
               value={state.body}
               onChange={(body) => updateState(TOOL_KEYS.api, { body })}
               placeholder='JSON 或原始文本，如 {"name":"test"}'
-              className="h-24 rounded-b-md border-t"
+              className="h-full"
             />
-          )}
+          </Collapse>
         </div>
       </div>
 
-      {error && (
-        <div className="shrink-0 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-300">
-          {error}
-        </div>
-      )}
+      <FadeBlock
+        show={!!error}
+        className="shrink-0 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-300"
+      >
+        {error}
+      </FadeBlock>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-1 flex shrink-0 items-center gap-2 border-t pt-1.5">
+        <div className="mb-1 flex shrink-0 items-center gap-2 border-t border-divider pt-1.5">
           <span className="text-xs font-medium text-muted-foreground">响应</span>
           {response && (
             <>
@@ -484,32 +477,35 @@ export function ApiTool() {
                 toast(ok ? '已复制' : '复制失败')
               }}
               disabled={!bodyText}
-              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
+              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50"
             >
               复制
             </button>
           </div>
         </div>
 
-        {showResponseHeaders && response?.headers && Object.keys(response.headers).length > 0 && (
-          <div className="mb-2 h-28 shrink-0 resize-y overflow-hidden rounded-md border border-input bg-muted/30 font-mono text-[11px]">
-            <div className="h-full overflow-y-auto p-2">
-              {Object.entries(response.headers).map(([k, v]) => (
-                <div key={k} className="flex gap-2 whitespace-pre-wrap break-all leading-5">
-                  <span className="shrink-0 font-medium text-muted-foreground">{k}:</span>
-                  <span>{v}</span>
-                </div>
-              ))}
-            </div>
+        <Collapse
+          open={showResponseHeaders && !!response?.headers && Object.keys(response.headers).length > 0}
+          openClass="h-28"
+          className="mb-2 shrink-0 rounded-md border border-input bg-muted/30 font-mono text-[11px]"
+        >
+          <div className="h-full resize-y overflow-y-auto p-2">
+            {Object.entries(response?.headers ?? {}).map(([k, v]) => (
+              <div key={k} className="flex gap-2 whitespace-pre-wrap break-all leading-5">
+                <span className="shrink-0 font-medium text-muted-foreground">{k}:</span>
+                <span>{v}</span>
+              </div>
+            ))}
           </div>
-        )}
+        </Collapse>
 
         <div className="min-h-0 flex-1">
-          {!response && !error ? (
+          <FadeBlock show={!response && !error} className="h-full">
             <div className="flex h-full items-center justify-center rounded-md border border-input bg-muted/30 text-xs text-muted-foreground">
               发送请求后，响应将显示在这里
             </div>
-          ) : prettyJson ? (
+          </FadeBlock>
+          <FadeBlock show={!!prettyJson} className="h-full">
             <div
               ref={containerRef}
               onScroll={computeVisible}
@@ -530,24 +526,7 @@ export function ApiTool() {
                       }}
                     >
                       {tokens.map((t, j) => (
-                        <span
-                          key={j}
-                          className={
-                            t.type === 'bracket'
-                              ? BRACKET_COLORS[(t.depth ?? 0) % BRACKET_COLORS.length]
-                              : t.type === 'key'
-                                ? 'text-blue-600 dark:text-blue-300'
-                                : t.type === 'string'
-                                  ? 'text-green-700 dark:text-green-400'
-                                  : t.type === 'number'
-                                    ? 'text-orange-600 dark:text-orange-300'
-                                    : t.type === 'boolean'
-                                      ? 'text-violet-600 dark:text-violet-300'
-                                      : t.type === 'null'
-                                        ? 'text-red-600 dark:text-red-400'
-                                        : 'text-muted-foreground'
-                          }
-                        >
+                        <span key={j} className={tokenClass(t)}>
                           {t.text}
                         </span>
                       ))}
@@ -556,18 +535,20 @@ export function ApiTool() {
                 })}
               </div>
             </div>
-          ) : bodyText ? (
+          </FadeBlock>
+          <FadeBlock show={!!bodyText && !prettyJson} className="h-full">
             <textarea
               value={bodyText}
               readOnly
               spellCheck={false}
               className={`${TEXTAREA_CLS} h-full`}
             />
-          ) : (
+          </FadeBlock>
+          <FadeBlock show={!!response && !prettyJson && !bodyText} className="h-full">
             <div className="flex h-full items-center justify-center rounded-md border border-input bg-muted/30 text-xs text-muted-foreground">
               无响应内容
             </div>
-          )}
+          </FadeBlock>
         </div>
       </div>
       </div>

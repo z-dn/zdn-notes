@@ -33,6 +33,7 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
   const updateTask = useTaskStore((s) => s.updateTask)
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
+  const [leaving, setLeaving] = useState(false)
   const editRef = useRef<HTMLInputElement>(null)
   const isExpanded = expandedIds.has(task.id)
   const isSelected = selectedTask?.id === task.id
@@ -81,11 +82,20 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
     e.dataTransfer.setData('text/plain', task.id)
   }
 
+  function handleDelete() {
+    setLeaving(true)
+    setTimeout(() => deleteTask(task.id), 200)
+  }
+
   return (
     <div
       data-task-id={task.id}
       className={`group flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 transition-colors ${
-        isDragging ? 'opacity-30' : 'hover:bg-accent/50'
+        leaving
+          ? 'animate-fade-out'
+          : isDragging
+            ? 'opacity-30'
+            : 'hover:bg-accent/50'
       } ${isSelected ? 'bg-accent' : ''} ${isDone ? 'opacity-60' : ''}`}
       style={{ paddingLeft: `${12 + depth * 20}px` }}
       onClick={(e) => { if (!editing) { e.stopPropagation(); selectTask(task) } }}
@@ -122,7 +132,7 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleEditKeyDown}
           onBlur={saveEdit}
-          className="flex-1 rounded border border-input bg-background px-1 text-sm outline-none focus:ring-1 focus:ring-ring"
+          className="animate-fade-slide-up flex-1 rounded border border-input bg-background px-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       ) : (
         <Tooltip>
@@ -141,23 +151,23 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
         </Tooltip>
       )}
 
-      <Badge className={`${PRIORITY_COLORS[task.priority] || ''} text-[10px]`}>
+      <Badge className={`${PRIORITY_COLORS[task.priority] || ''} text-[11px]`}>
         {task.priority}
       </Badge>
 
       {task.owner && (
-        <Badge variant="outline" className="shrink-0 text-[10px]">
+        <Badge variant="outline" className="shrink-0 text-[11px]">
           @{task.owner}
         </Badge>
       )}
 
       {task.tags.slice(0, 2).map((tag) => (
-        <Badge key={tag} variant="outline" className="shrink-0 text-[10px]">
+        <Badge key={tag} variant="outline" className="shrink-0 text-[11px]">
           #{tag}
         </Badge>
       ))}
       {task.tags.length > 2 && (
-        <Badge variant="outline" className="shrink-0 text-[10px]">
+        <Badge variant="outline" className="shrink-0 text-[11px]">
           +{task.tags.length - 2}
         </Badge>
       )}
@@ -175,7 +185,7 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
       )}
 
       <button
-        onClick={(e) => { e.stopPropagation(); deleteTask(task.id) }}
+        onClick={(e) => { e.stopPropagation(); handleDelete() }}
         className="invisible ml-auto text-muted-foreground hover:text-destructive group-hover:visible"
         title="删除任务"
       >

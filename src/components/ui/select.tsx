@@ -38,7 +38,7 @@ export function Select({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex h-7 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-xs text-foreground hover:bg-accent transition-colors"
+        className="flex h-7 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <span className="flex min-w-0 items-center gap-1.5">
           {selected?.color && (
@@ -52,7 +52,7 @@ export function Select({
           </span>
         </span>
         <svg
-          className={cn('h-3 w-3 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+          className={cn('size-3 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -61,7 +61,7 @@ export function Select({
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border border-input bg-popover shadow-md">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 origin-top overflow-y-auto rounded-md border border-input bg-popover shadow-lg animate-in fade-in-0 zoom-in-95">
           {options.map((opt) => (
             <button
               key={opt.value}

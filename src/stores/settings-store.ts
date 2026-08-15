@@ -4,6 +4,7 @@ import { toast } from '@/lib/toast'
 
 const DEFAULTS: Settings = {
   theme: 'system',
+  panelStyle: 'divider',
   defaultView: 'list',
   descriptionMode: 'toggle',
   reminderEnabled: true,
@@ -39,6 +40,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const raw = await api().settingsGetAll()
       const saved = { ...DEFAULTS } as Settings
       if (raw.theme && ['system', 'light', 'dark'].includes(raw.theme)) saved.theme = raw.theme as Settings['theme']
+      if (raw.panelStyle && ['divider', 'tint'].includes(raw.panelStyle))
+        saved.panelStyle = raw.panelStyle as Settings['panelStyle']
       if (raw.defaultView && ['list'].includes(raw.defaultView)) saved.defaultView = raw.defaultView as Settings['defaultView']
       if (raw.descriptionMode && ['edit', 'toggle'].includes(raw.descriptionMode)) saved.descriptionMode = raw.descriptionMode as Settings['descriptionMode']
       if (raw.reminderEnabled !== undefined) saved.reminderEnabled = raw.reminderEnabled === 'true'

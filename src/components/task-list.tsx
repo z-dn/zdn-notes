@@ -1,6 +1,5 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { useMemo, useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import { useTaskStore } from '@/stores/task-store'
-import { useCategoryStore } from '@/stores/category-store'
 import { TaskItem } from './task-item'
 import { ContextMenu } from './context-menu'
 import { InlineTaskInput } from './inline-task-input'
@@ -86,14 +85,13 @@ const SORT_LABELS: Record<string, string> = {
   createdAt: '创建时间',
 }
 
-export function TaskList() {
+export function TaskList({ categoryId }: { categoryId: string | null }) {
   const tasks = useTaskStore((s) => s.tasks)
   const loading = useTaskStore((s) => s.loading)
   const expandedIds = useTaskStore((s) => s.expandedIds)
   const selectTask = useTaskStore((s) => s.selectTask)
   const toggleExpand = useTaskStore((s) => s.toggleExpand)
   const updateTask = useTaskStore((s) => s.updateTask)
-  const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
   const [sortField, setSortField] = useState<SortField>('order')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; task: Task } | null>(null)
@@ -113,13 +111,53 @@ export function TaskList() {
   const dropDepthRef = useRef(0)
 
   const flatList = useMemo(() => {
-    const filtered = activeCategoryId ? tasks.filter((t) => t.categoryId === activeCategoryId) : tasks
+    const filtered = categoryId ? tasks.filter((t) => t.categoryId === categoryId) : tasks
     const sorted = sortField === 'order' ? [...filtered].sort((a, b) => a.orderIndex - b.orderIndex) : sortTasks(filtered, sortField, sortDir)
     const roots = buildTree(sorted)
     const result: { task: Task; depth: number; hasChildren: boolean }[] = []
     flattenTree(roots, 0, expandedIds, result)
     return result
-  }, [tasks, expandedIds, sortField, sortDir, activeCategoryId])
+  }, [tasks, expandedIds, sortField, sortDir, categoryId])
+
+  const [leavingRows, setLeavingRows] = useState<
+    { task: Task; depth: number; hasChildren: boolean; uid: string }[]
+  >([])
+  const prevIdsRef = useRef<Set<string> | null>(null)
+  const prevFlatRef = useRef(flatList)
+  const prevExpandedSizeRef = useRef(expandedIds.size)
+
+  useLayoutEffect(() => {
+    const cur = new Set(flatList.map((f) => f.task.id))
+    const prev = prevIdsRef.current
+    prevIdsRef.current = cur
+    if (expandedIds.size !== prevExpandedSizeRef.current) {
+      prevExpandedSizeRef.current = expandedIds.size
+      prevFlatRef.current = flatList
+      return
+    }
+    const prevFlat = prevFlatRef.current
+    prevFlatRef.current = flatList
+    if (!prev) return
+    const gone = prevFlat.filter(
+      (f) => !cur.has(f.task.id) && tasks.some((t) => t.id === f.task.id),
+    )
+    if (gone.length === 0) return
+    const batch = crypto.randomUUID()
+    setLeavingRows((rows) => [
+      ...rows,
+      ...gone.map((f) => ({
+        task: f.task,
+        depth: f.depth,
+        hasChildren: f.hasChildren,
+        uid: `${batch}:${f.task.id}`,
+      })),
+    ])
+    const t = setTimeout(
+      () => setLeavingRows((rows) => rows.filter((r) => !r.uid.startsWith(`${batch}:`))),
+      200,
+    )
+    return () => clearTimeout(t)
+  }, [flatList, tasks, expandedIds])
 
   useEffect(() => {
     const el = listRef.current
@@ -337,7 +375,7 @@ export function TaskList() {
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="mb-2 flex gap-1 border-b pb-1.5 text-[11px] text-muted-foreground/60">
+      <div className="mb-2 flex gap-1 border-b border-divider pb-1.5 text-[11px] text-muted-foreground/60">
         {(['order', 'priority', 'dueDate', 'createdAt'] as SortField[]).map((f) => (
           <button
             key={f}
@@ -359,7 +397,10 @@ export function TaskList() {
         </div>
       ) : (
 
-      <div ref={listRef} className="relative flex-1 space-y-0.5" onClick={() => { if (!dragIdRef.current) selectTask(null) }}
+      <div
+        ref={listRef}
+        className="relative flex-1 space-y-0.5"
+        onClick={() => { if (!dragIdRef.current) selectTask(null) }}
         onContextMenu={(e) => {
           if ((e.target as HTMLElement).closest('[data-task-id]')) return
           e.preventDefault()
@@ -376,7 +417,7 @@ export function TaskList() {
           dropTargetIndex === flatIndex && dragIdRef.current && (
             <div key={`drop-${flatIndex}`} className="h-0.5 rounded bg-foreground/60" style={{ marginLeft: `${12 + dropDepth * 20}px`, width: dropTargetLevelChange ? '24px' : `calc(100% - ${12 + dropDepth * 20}px)` }} />
           ),
-          <div key={task.id} data-task-wrap className="animate-fade-slide-up" style={{ animationDelay: `${flatIndex * 25}ms` }}>
+          <div key={task.id} data-task-wrap>
             <TaskItem
               task={task}
               depth={depth}
@@ -400,6 +441,11 @@ export function TaskList() {
             />
           ),
         ]        )}
+        {leavingRows.map((l) => (
+          <div key={`leaving-${l.uid}`} data-task-wrap className="animate-fade-out">
+            <TaskItem task={l.task} depth={l.depth} hasChildren={l.hasChildren} />
+          </div>
+        ))}
         {dropTargetIndex === flatList.length && dragIdRef.current && (
           <div key="drop-end" className="h-0.5 rounded bg-foreground/60" style={{ marginLeft: `${12 + dropDepth * 20}px`, width: dropTargetLevelChange ? '24px' : `calc(100% - ${12 + dropDepth * 20}px)` }} />
         )}

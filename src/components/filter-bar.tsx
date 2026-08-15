@@ -55,7 +55,7 @@ export function FilterBar() {
   }
 
   return (
-    <div className="mb-2 flex items-center gap-2 border-b pb-1.5">
+    <div className="mb-2 flex items-center gap-2 border-b border-divider pb-1.5">
       <button
         onClick={() => setExpanded((v) => !v)}
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors ${
@@ -81,7 +81,7 @@ export function FilterBar() {
           onChange={(e) => setLocalSearch(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="搜索任务..."
-          className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs outline-none placeholder:text-muted-foreground"
+          className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div className="flex shrink-0 gap-0.5 rounded-md bg-muted/50 p-0.5">
           {STATUS_OPTIONS.map((opt) => (

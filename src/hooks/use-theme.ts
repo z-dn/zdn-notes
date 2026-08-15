@@ -3,6 +3,7 @@ import { useSettingsStore } from '@/stores/settings-store'
 
 export function useTheme() {
   const savedTheme = useSettingsStore((s) => s.saved.theme)
+  const panelStyle = useSettingsStore((s) => s.saved.panelStyle)
 
   useEffect(() => {
     function apply(theme: 'light' | 'dark') {
@@ -21,4 +22,8 @@ export function useTheme() {
       apply(savedTheme)
     }
   }, [savedTheme])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-panel-style', panelStyle)
+  }, [panelStyle])
 }

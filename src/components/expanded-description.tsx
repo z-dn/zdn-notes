@@ -5,6 +5,7 @@ import { MilkdownEditor } from '@/components/milkdown-editor'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { renderMarkdown } from '@/lib/markdown'
 import { setMinimapSource, publishMinimapContent } from '@/lib/minimap-bus'
+import { FadeBlock } from '@/components/fade'
 
 export function ExpandedDescription() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
@@ -70,7 +71,8 @@ export function ExpandedDescription() {
 
       void el.offsetHeight
 
-      el.style.transition = 'transform 300ms ease-out, opacity 300ms ease-out'
+      el.style.transition =
+        'transform var(--duration-medium) var(--ease-out), opacity var(--duration-base) var(--ease-out)'
       el.style.transform = 'translate(0, 0) scale(1, 1)'
       el.style.opacity = '1'
     } else if (exiting) {
@@ -84,7 +86,8 @@ export function ExpandedDescription() {
       const sx = o.width / cr.width
       const sy = o.height / cr.height
 
-      el.style.transition = 'transform 300ms ease-in, opacity 300ms ease-in'
+      el.style.transition =
+        'transform var(--duration-medium) var(--ease-in), opacity var(--duration-base) var(--ease-in)'
       el.style.transform = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`
       el.style.opacity = '0'
     } else if (!expandedDescId) {
@@ -103,7 +106,7 @@ export function ExpandedDescription() {
 
   return (
     <div ref={elRef} className="flex h-full flex-col" style={{ opacity: expandedDescId ? undefined : 0 }}>
-      <div className="flex h-11 items-center justify-between border-b px-4">
+      <div className="flex h-11 items-center justify-between border-b border-divider px-4">
         <div className="flex items-center gap-2 min-w-0">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -113,7 +116,7 @@ export function ExpandedDescription() {
               <p className="max-w-xs break-words">{selectedTask.title}</p>
             </TooltipContent>
           </Tooltip>
-          <span className="shrink-0 text-[10px] text-muted-foreground/50">描述</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground/50">描述</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {descriptionMode === 'toggle' && (
@@ -134,8 +137,8 @@ export function ExpandedDescription() {
       </div>
 
       <div className="flex-1 min-h-0 p-4">
-        {descriptionMode === 'edit' ? (
-          <div ref={registerScroll} className="h-full rounded-md border border-input overflow-y-auto p-4">
+        <FadeBlock show={descriptionMode === 'edit'} className="h-full">
+          <div ref={registerScroll} className="h-full overflow-y-auto rounded-md border border-input p-4">
             <MilkdownEditor key={selectedTask.id} content={selectedTask.description || ''} onChange={(markdown) => {
                 updateDescription(markdown)
                 clearTimeout(descTimer.current)
@@ -145,7 +148,8 @@ export function ExpandedDescription() {
               }}
             />
           </div>
-        ) : descriptionMode === 'toggle' && previewMode ? (
+        </FadeBlock>
+        <FadeBlock show={descriptionMode === 'toggle' && previewMode} className="h-full w-full">
           <div
             ref={registerScroll}
             className="h-full w-full overflow-auto break-words rounded-md border border-input bg-transparent p-4 text-sm
@@ -159,7 +163,8 @@ export function ExpandedDescription() {
               [&_h3]:text-sm [&_h3]:font-medium"
             dangerouslySetInnerHTML={{ __html: renderedDesc }}
           />
-        ) : (
+        </FadeBlock>
+        <FadeBlock show={descriptionMode === 'toggle' && !previewMode} className="h-full w-full">
           <textarea
             ref={registerScroll}
             value={description}
@@ -196,7 +201,7 @@ export function ExpandedDescription() {
             placeholder="支持 Markdown 格式..."
             className="h-full w-full resize-none rounded-md border border-input bg-transparent p-4 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-        )}
+        </FadeBlock>
       </div>
     </div>
   )

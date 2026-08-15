@@ -51,9 +51,10 @@ export function useFlipDialog(open: boolean, onClose: () => void) {
 
     el.style.visibility = 'visible'
     el.style.opacity = '1'
-    el.style.transition = 'transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 400ms ease-out'
+    el.style.transition =
+      'transform var(--duration-medium) var(--ease-spring), opacity var(--duration-base) var(--ease-out)'
     el.style.transform = 'translate(-50%, -50%) scale(1)'
-    ol.style.transition = 'opacity 300ms ease-out'
+    ol.style.transition = 'opacity var(--duration-base) var(--ease-out)'
     ol.style.opacity = '1'
 
     const onEnd = (e: TransitionEvent) => {
@@ -84,10 +85,11 @@ export function useFlipDialog(open: boolean, onClose: () => void) {
     const deltaX = originRef.current.x - cx
     const deltaY = originRef.current.y - cy
 
-    el.style.transition = 'transform 300ms ease-in, opacity 250ms ease-in'
+    el.style.transition =
+      'transform var(--duration-base) var(--ease-in), opacity var(--duration-base) var(--ease-in)'
     el.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px)) scale(0.01)`
     el.style.opacity = '0'
-    ol.style.transition = 'opacity 250ms ease-in'
+    ol.style.transition = 'opacity var(--duration-base) var(--ease-in)'
     ol.style.opacity = '0'
 
     const onEnd = (e: TransitionEvent) => {

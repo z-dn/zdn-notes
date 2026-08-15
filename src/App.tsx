@@ -15,6 +15,7 @@ import { ToolboxWorkspace } from '@/components/toolbox/toolbox-workspace'
 import { useTheme } from '@/hooks/use-theme'
 import { ToastContainer } from '@/components/toast'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { FadeSwitch } from '@/components/fade'
 
 import { toast } from '@/lib/toast'
 
@@ -100,8 +101,30 @@ export default function App() {
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background text-foreground">
-        <header className="flex items-center justify-between border-b px-3" style={DRAG}>
-          <h1 className="text-sm font-bold tracking-wide select-none">ZDNotes</h1>
+        <header className="flex h-12 items-center justify-between border-b border-divider bg-panel-header px-3" style={DRAG}>
+          <div className="flex items-center gap-3">
+            <h1 className="text-sm font-bold tracking-wide select-none">ZDNotes</h1>
+            <div className="flex items-center gap-1" style={NO_DRAG}>
+              {(
+                [
+                  { id: 'categories', label: '待办项' },
+                  { id: 'toolbox', label: '工具箱' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSidebarTab(tab.id)}
+                  className={`min-w-16 max-w-36 truncate rounded-md px-4 py-1.5 text-xs transition-colors ${
+                    sidebarTab === tab.id
+                      ? 'bg-accent font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center">
             <div className="flex items-center gap-1" style={NO_DRAG}>
               <button
@@ -198,57 +221,51 @@ export default function App() {
         </header>
 
         <div className="flex flex-1 overflow-hidden">
-          <aside className="hidden h-full w-48 flex-col border-r bg-muted/20 md:flex">
-            <div className="flex h-11 shrink-0 items-center gap-0.5 border-b px-2">
-              {(
-                [
-                  { id: 'categories', label: '待办项' },
-                  { id: 'toolbox', label: '工具箱' },
-                ] as const
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setSidebarTab(tab.id)}
-                  className={`flex-1 rounded-md px-2 py-1 text-xs transition-colors ${
-                    sidebarTab === tab.id
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            {sidebarTab === 'categories' ? <CategorySidebar /> : <ToolboxSidebar />}
+          <aside className="hidden h-full w-48 flex-col border-r border-divider bg-panel-sidebar md:flex">
+            <FadeSwitch
+              current={sidebarTab}
+              className="flex min-h-0 flex-1 flex-col"
+              render={(k) => (k === 'categories' ? <CategorySidebar /> : <ToolboxSidebar />)}
+            />
           </aside>
 
-          <div className="relative flex-1 overflow-hidden">
-            {sidebarTab === 'categories' ? (
-              <>
-                <div
-                  className={`absolute inset-0 transition-all duration-300 ease-in-out ${
-                    expandedDescId
-                      ? 'opacity-0 -translate-y-1 pointer-events-none'
-                      : 'opacity-100 translate-y-0'
-                  }`}
-                >
+          <div className="animate-fade-slide-up relative flex-1 overflow-hidden bg-panel">
+            <FadeSwitch
+              current={sidebarTab}
+              className="relative h-full overflow-hidden"
+              render={(k) =>
+                k === 'categories' ? (
+                  <>
+                    <FadeSwitch
+                      current={activeCategoryId ?? 'all'}
+                      className="absolute inset-0"
+                      render={(catId) => (
+                        <div
+                          className={`h-full overflow-y-auto p-3 transition-all duration-300 ease-in-out ${
+                            expandedDescId
+                              ? 'opacity-0 -translate-y-1 pointer-events-none'
+                              : 'opacity-100 translate-y-0'
+                          }`}
+                        >
+                          <TaskList key={catId} categoryId={catId === 'all' ? null : catId} />
+                        </div>
+                      )}
+                    />
+                    <div className={`absolute inset-0 ${!expandedDescId ? 'pointer-events-none' : ''}`}>
+                      <ExpandedDescription />
+                    </div>
+                  </>
+                ) : (
                   <div className="h-full overflow-y-auto p-3">
-                    <TaskList />
+                    <ToolboxWorkspace />
                   </div>
-                </div>
-                <div className={`absolute inset-0 ${!expandedDescId ? 'pointer-events-none' : ''}`}>
-                  <ExpandedDescription />
-                </div>
-              </>
-            ) : (
-              <div className="h-full overflow-y-auto p-3">
-                <ToolboxWorkspace />
-              </div>
-            )}
+                )
+              }
+            />
           </div>
 
           {sidebarTab === 'categories' && (
-            <aside className="hidden w-80 border-l md:block">
+            <aside className="hidden w-80 border-l border-divider bg-panel-detail md:block">
               <DetailPanel />
             </aside>
           )}
