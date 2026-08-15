@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog, shell } from 'electron'
+import { app, ipcMain, dialog, shell, net } from 'electron'
 import { randomUUID } from 'crypto'
 import { writeFileSync, existsSync, copyFileSync, unlinkSync } from 'fs'
 import { join, isAbsolute } from 'path'
@@ -165,6 +165,62 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('tool:getAll', () => getAllToolState())
   ipcMain.handle('tool:set', (_e, key, value) => setToolState(key, value))
+
+  ipcMain.handle('http:request', async (_e, config) => {
+    const method = String(config?.method ?? 'GET').toUpperCase()
+    const url = String(config?.url ?? '').trim()
+    const validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+
+    if (!validMethods.includes(method)) {
+      return { ok: false, error: `不支持的请求方法: ${method}` }
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      return { ok: false, error: 'URL 必须以 http:// 或 https:// 开头' }
+    }
+
+    const headers: Record<string, string> = {}
+    if (Array.isArray(config?.headers)) {
+      for (const h of config.headers) {
+        const key = String(h?.key ?? '').trim()
+        if (!key) continue
+        const value = h?.value == null ? '' : String(h.value)
+        headers[key] = headers[key] === undefined ? value : `${headers[key]}, ${value}`
+      }
+    }
+
+    const rawBody = config?.body == null ? '' : String(config.body)
+    const body = method === 'HEAD' || rawBody === '' ? undefined : rawBody
+
+    const startedAt = Date.now()
+    try {
+      const res = await net.fetch(url, {
+        method,
+        headers,
+        body,
+        signal: AbortSignal.timeout(15000),
+      })
+      const resHeaders: Record<string, string> = {}
+      res.headers.forEach((value, key) => {
+        resHeaders[key] = resHeaders[key] === undefined ? value : `${resHeaders[key]}, ${value}`
+      })
+      const raw = method === 'HEAD' ? '' : await res.text()
+      return {
+        ok: true,
+        status: res.status,
+        statusText: res.statusText,
+        headers: resHeaders,
+        body: raw,
+        timeMs: Date.now() - startedAt,
+        size: Buffer.byteLength(raw, 'utf-8'),
+      }
+    } catch (e) {
+      const name = e instanceof Error ? e.name : ''
+      let message = e instanceof Error ? e.message : String(e)
+      if (name === 'TimeoutError' || name === 'AbortError') message = '请求超时（15s）'
+      if (name === 'ERR_FAILED') message = '网络错误，无法连接到服务器'
+      return { ok: false, error: message }
+    }
+  })
 
   ipcMain.handle('image:saveFromData', (_e, dataUri: string) => {
     const matches = dataUri.match(/^data:image\/(\w+);base64,(.+)$/)

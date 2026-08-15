@@ -8,6 +8,13 @@ import type {
 } from './task'
 
 declare global {
+  interface HttpRequestConfig {
+    method: string
+    url: string
+    headers: { key: string; value: string }[]
+    body: string
+  }
+
   interface Window {
     electronAPI: {
       platform: string
@@ -32,6 +39,18 @@ declare global {
 
       toolGetAll(): Promise<Record<string, string>>
       toolSet(key: string, value: string): Promise<void>
+      httpRequest(
+        config: HttpRequestConfig,
+      ): Promise<{
+        ok: boolean
+        status?: number
+        statusText?: string
+        headers?: Record<string, string>
+        body?: string
+        timeMs?: number
+        size?: number
+        error?: string
+      }>
 
       windowMinimize(): Promise<void>
       windowMaximizeToggle(): Promise<void>

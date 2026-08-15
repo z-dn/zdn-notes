@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   toolGetAll: () => ipcRenderer.invoke('tool:getAll'),
   toolSet: (key: string, value: string) => ipcRenderer.invoke('tool:set', key, value),
+  httpRequest: (config: unknown) => ipcRenderer.invoke('http:request', config),
 
   updateCheck: () => ipcRenderer.invoke('update:check'),
   updateDownload: () => ipcRenderer.invoke('update:download'),
