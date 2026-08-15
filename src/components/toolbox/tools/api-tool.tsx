@@ -1,5 +1,16 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, History, Plus, RotateCcw, Send, Trash2, Wand2 } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  History,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  RotateCcw,
+  Send,
+  Trash2,
+  Wand2,
+} from 'lucide-react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { useToolStore } from '@/stores/tool-store'
@@ -74,6 +85,7 @@ export function ApiTool() {
   const updateState = useToolStore((s) => s.updateState)
 
   const [loading, setLoading] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)
   const [showHeaders, setShowHeaders] = useState(false)
   const [showBody, setShowBody] = useState(true)
   const [showResponseHeaders, setShowResponseHeaders] = useState(true)
@@ -223,60 +235,67 @@ export function ApiTool() {
   }
 
   return (
-    <div className="animate-fade-slide-up flex h-full gap-3">
-      <aside className="flex w-44 shrink-0 flex-col border-r pr-2">
-        <div className="mb-1 flex items-center gap-1 border-b pb-1.5">
-          <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            <History className="size-3.5" /> 历史记录
-          </span>
-          <button
-            onClick={handleClearHistory}
-            disabled={state.history.length === 0}
-            className="ml-auto rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
-            title="清空历史"
-          >
-            清空
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-          {state.history.length === 0 ? (
-            <div className="py-4 text-center text-[11px] text-muted-foreground/60">暂无历史记录</div>
-          ) : (
-            state.history.map((h) => (
-              <div key={h.id} className="group relative">
-                <button
-                  onClick={() => handleLoadHistory(h)}
-                  className="flex w-full flex-col gap-0.5 rounded-md border border-transparent px-1.5 py-1 text-left transition-colors hover:border-input hover:bg-muted"
-                >
-                  <span className="flex min-w-0 items-center gap-1">
-                    <span className={`w-9 shrink-0 text-[10px] font-semibold ${METHOD_COLORS[h.method] ?? ''}`}>
-                      {h.method}
+    <div className="animate-fade-slide-up flex h-full">
+      <aside
+        aria-hidden={!showHistory}
+        className={`flex shrink-0 flex-col overflow-hidden border-r transition-[width] duration-300 ease-in-out ${
+          showHistory ? 'w-44 border-border' : 'w-0 border-transparent'
+        }`}
+      >
+        <div className="flex w-44 min-h-0 flex-1 flex-col pr-3">
+          <div className="mb-1 flex items-center gap-1 border-b pb-1.5">
+            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <History className="size-3.5" /> 历史记录
+            </span>
+            <button
+              onClick={handleClearHistory}
+              disabled={state.history.length === 0}
+              className="ml-auto rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
+              title="清空历史"
+            >
+              清空
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+            {state.history.length === 0 ? (
+              <div className="py-4 text-center text-[11px] text-muted-foreground/60">暂无历史记录</div>
+            ) : (
+              state.history.map((h) => (
+                <div key={h.id} className="group relative">
+                  <button
+                    onClick={() => handleLoadHistory(h)}
+                    className="flex w-full flex-col gap-0.5 rounded-md border border-transparent px-1.5 py-1 text-left transition-colors hover:border-input hover:bg-muted"
+                  >
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className={`w-9 shrink-0 text-[10px] font-semibold ${METHOD_COLORS[h.method] ?? ''}`}>
+                        {h.method}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{h.url}</span>
                     </span>
-                    <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{h.url}</span>
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
-                    {h.response?.status ? (
-                      <span className={`rounded px-1 ${statusBadgeClass(h.response.status)}`}>
-                        {h.response.status}
-                      </span>
-                    ) : (
-                      <span className="rounded bg-orange-100 px-1 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300">
-                        ERR
-                      </span>
-                    )}
-                    <span className="truncate">{formatHistoryTime(h.createdAt)}</span>
-                  </span>
-                </button>
-                <button
-                  onClick={() => handleDeleteHistory(h.id)}
-                  className="absolute right-1 top-1 hidden rounded p-0.5 text-muted-foreground/50 hover:text-red-500 group-hover:block"
-                  title="删除该条"
-                >
-                  <Trash2 className="size-3" />
-                </button>
-              </div>
-            ))
-          )}
+                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                      {h.response?.status ? (
+                        <span className={`rounded px-1 ${statusBadgeClass(h.response.status)}`}>
+                          {h.response.status}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-orange-100 px-1 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300">
+                          ERR
+                        </span>
+                      )}
+                      <span className="truncate">{formatHistoryTime(h.createdAt)}</span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteHistory(h.id)}
+                    className="absolute right-1 top-1 hidden rounded p-0.5 text-muted-foreground/50 hover:text-red-500 group-hover:block"
+                    title="删除该条"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </aside>
 
@@ -285,6 +304,20 @@ export function ApiTool() {
         <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
           <Send className="size-3.5" /> 接口调试
         </span>
+        <button
+          onClick={() => setShowHistory((v) => !v)}
+          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors hover:bg-accent ${
+            showHistory ? 'text-muted-foreground hover:text-foreground' : 'text-primary'
+          }`}
+          title={showHistory ? '收起历史记录' : '展开历史记录'}
+        >
+          {showHistory ? (
+            <PanelLeftClose className="size-3" />
+          ) : (
+            <PanelLeftOpen className="size-3" />
+          )}
+          {showHistory ? '收起历史' : '历史'}
+        </button>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={handleClear}

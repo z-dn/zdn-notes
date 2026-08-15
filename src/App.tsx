@@ -202,7 +202,7 @@ export default function App() {
             <div className="flex h-11 shrink-0 items-center gap-0.5 border-b px-2">
               {(
                 [
-                  { id: 'categories', label: '分类' },
+                  { id: 'categories', label: '待办项' },
                   { id: 'toolbox', label: '工具箱' },
                 ] as const
               ).map((tab) => (

@@ -136,14 +136,8 @@ export function JsonTool() {
       </div>
 
       {state.inputCollapsed ? (
-        <div className="flex items-center gap-2 rounded-md border border-dashed border-input px-3 py-1.5 text-xs text-muted-foreground">
-          输入区已收起
-          <button
-            onClick={() => updateState(TOOL_KEYS.json, { inputCollapsed: false })}
-            className="rounded px-1.5 py-0.5 text-[11px] text-foreground hover:bg-accent"
-          >
-            点击展开
-          </button>
+        <div className="rounded-md border border-dashed border-input px-3 py-1.5 text-xs text-muted-foreground">
+          输入区已收起，点击上方「展开输入」恢复
         </div>
       ) : (
         <textarea

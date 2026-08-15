@@ -23,7 +23,7 @@ export const TOOLS: ToolEntry[] = [
   },
   {
     id: TOOL_KEYS.textDiff,
-    name: '大文本比较',
+    name: '文本比较',
     description: '双栏行级 diff',
     icon: FileDiff,
     component: TextDiffTool,

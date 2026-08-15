@@ -56,7 +56,7 @@ export function TextDiffTool() {
     <div className="animate-fade-slide-up flex h-full flex-col gap-3">
       <div className="mb-2 flex items-center gap-2 border-b pb-1.5">
         <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-          <FileDiff className="size-3.5" /> 大文本比较
+          <FileDiff className="size-3.5" /> 文本比较
         </span>
         <div className="ml-auto flex items-center gap-3 text-xs">
           <span className="text-green-700 dark:text-green-300">新增 {stats.added}</span>
@@ -83,14 +83,8 @@ export function TextDiffTool() {
       </div>
 
       {state.inputCollapsed ? (
-        <div className="flex items-center gap-2 rounded-md border border-dashed border-input px-3 py-1.5 text-xs text-muted-foreground">
-          输入区已收起
-          <button
-            onClick={() => updateState(TOOL_KEYS.textDiff, { inputCollapsed: false })}
-            className="rounded px-1.5 py-0.5 text-[11px] text-foreground hover:bg-accent"
-          >
-            点击展开
-          </button>
+        <div className="rounded-md border border-dashed border-input px-3 py-1.5 text-xs text-muted-foreground">
+          输入区已收起，点击上方「展开输入」恢复
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-2">
