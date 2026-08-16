@@ -211,7 +211,9 @@ export class McpServer {
                 pluginId,
                 storage: createPluginStorage(this.dataDir ?? '', pluginId),
                 log: (level, msg) => {
-                  const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log
+                  // 一律写 stderr：stdio 传输的 stdout 只能承载 JSON-RPC
+                  const fn =
+                    level === 'error' ? console.error : level === 'warn' ? console.warn : console.error
                   fn(`[plugin:${pluginId}]`, msg)
                 },
               }

@@ -110,7 +110,8 @@ function loadPluginEntry(pluginDir: string, entry: string): PluginModuleExports 
     exports: moduleObj.exports,
     require: makeRequire(pluginDir, path.dirname(entryPath)),
     console: {
-      log: (...a: unknown[]) => console.log(`[plugin:${path.basename(pluginDir)}]`, ...a),
+      // 一律写 stderr：插件日志不得污染 MCP stdio 的 stdout（JSON-RPC 通道）
+      log: (...a: unknown[]) => console.error(`[plugin:${path.basename(pluginDir)}]`, ...a),
       error: (...a: unknown[]) => console.error(`[plugin:${path.basename(pluginDir)}]`, ...a),
       warn: (...a: unknown[]) => console.warn(`[plugin:${path.basename(pluginDir)}]`, ...a),
     },
@@ -198,7 +199,8 @@ export function loadPluginsIntoRegistry(
         })
       }
       loaded.push(plugin)
-      console.log(`[agent-tools] loaded ${plugin.manifest.name} (${plugin.manifest.id})`)
+      // stderr：避免污染 MCP stdio 的 stdout（JSON-RPC 通道）
+      console.error(`[agent-tools] loaded ${plugin.manifest.name} (${plugin.manifest.id})`)
     } catch (e) {
       console.error(`[agent-tools] 加载插件失败 ${path.basename(dir)}:`, e)
     }

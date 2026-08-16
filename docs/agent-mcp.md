@@ -106,6 +106,8 @@ codex mcp add zdn-notes -- npx tsx <仓库路径>/electron/mcp/index.ts --stdio
 - `--zdn-mcp-stdio`：以 MCP server (stdio) 运行，供协议智能体拉起；靠 stdin 生命周期常驻，GUI 在跑时自动委托给它。
 - `--zdn-mcp-cli <子命令>`：CLI 兜底，例如 `ZDNotes.exe --zdn-mcp-cli task add "标题"`。应用开着时同样委托 GUI，关着时走文件模式。
 - 数据目录自动跟随应用（默认或 `data-location.json` 自定义），无需额外传参。
+- **实现说明**：Electron 主进程的 `process.stdin` 在 Windows 上启动即 EOF（readline 立即 close，无法承载 stdio 传输），因此 `--zdn-mcp-stdio` 会以 `ELECTRON_RUN_AS_NODE=1` 自举一个**纯 Node 子进程**（`out/mcp/index.cjs`，由 `scripts/build-mcp.mjs` 打包，源为 `electron/mcp/index.ts`）直接继承当前 stdin/stdout 跑 MCP server；主进程保持存活并镜像子进程退出码。插件加载/插件日志一律写 stderr，不污染 stdout（JSON-RPC 通道）。
+- **已知残留**：Windows 上 Electron 启动时会向 stdout 写入一个 `\r\n`（一个空行，位于任何 JSON-RPC 之前）。官方 MCP SDK 会跳过空行，属良性；要求绝对纯净 stdout 时可改用纯 Node 入口（`npx tsx <仓库>/electron/mcp/index.ts --stdio`）或远程 HTTP 模式。
 
 ## 能力配置（`agent-mcp-config.json`）
 
@@ -185,6 +187,8 @@ electron/mcp/
   cli.ts           CLI 兜底命令（子命令映射 tools/call，GUI 运行时同样委托）
 
 electron/main/mcp-ipc.ts   GUI 侧 loopback 端点：接收委托、在权威库执行、落盘 + data:changed
+
+scripts/build-mcp.mjs      打包纯 Node MCP 入口 → out/mcp/index.cjs（ELECTRON_RUN_AS_NODE 子进程用）
 ```
 
 主进程 `electron/main/index.ts` 启动 `startMcpIpc()` 并把 endpoint 写进 GUI 锁；退出时停端点、释放锁。
