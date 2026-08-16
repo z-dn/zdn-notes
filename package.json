@@ -22,7 +22,8 @@
     "mcp:stdio": "tsx electron/mcp/index.ts --stdio",
     "mcp:http": "tsx electron/mcp/index.ts --http",
     "mcp:test": "node scripts/test-mcp.mjs",
-    "mcp:e2e": "tsx scripts/e2e-ipc-check.mts"
+    "mcp:e2e": "tsx scripts/e2e-ipc-check.mts",
+    "ztool": "node scripts/ztool.mjs"
   },
   "build": {
     "appId": "com.zdn.notes",
@@ -32,6 +33,12 @@
     },
     "files": [
       "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/agent-tools",
+        "to": "agent-tools"
+      }
     ],
     "win": {
       "target": [

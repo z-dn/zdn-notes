@@ -11,33 +11,60 @@ ZDNotes 是一款基于 Electron 的本地笔记与任务管理桌面应用，�
 ### 三进程架构
 
 ```
-electron/main/          → 主进程 (Node.js)
+electron/main/          → 主进程 (Node.js) + app-shell 装配器
 electron/preload/       → 预加载脚本 (contextBridge)
 src/                    → 渲染进程 (React)
+electron/core/          → 平台核心（schema/注册表/插件运行时，主进程与独立 MCP 共享）
+electron/modules/       → 内置平台模块（FeatureModule，按域拆分 IPC/Agent 工具/渲染层声明）
+electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + GUI-IPC 委托客户端
 ```
 
-- **主进程**：窗口管理、IPC handler 注册、SQLite 数据库（SQL.js）、自动更新
+- **主进程**：窗口管理、`app-shell.ts` 装配（模块注册 → feature-flags → 工具注册表 → onStart → registerIpc）、SQLite 数据库（SQL.js）、自动更新
 - **预加载**：通过 `contextBridge.exposeInMainWorld('electronAPI', ...)` 暴露安全 API
 - **渲染进程**：React + Tailwind CSS + Zustand
+- **平台核心（core/）**：`schema.ts`（SQL 单一来源）、`tool-registry.ts`（统一 MCP 工具注册表）、`module-registry.ts`（模块装配器）、`feature-flags.ts`、`plugin-loader.ts`（第三方插件沙箱运行时）
+- **内置模块（modules/）**：每域一个 `FeatureModule`（app/window/tasks/categories/settings/images/backup/data-location/inbox/toolbox/updater/mcp），声明 `registerIpc`/`onStart`/`agentTools`/`renderer.view`
+- **IPC 注册**：`electron/main/ipc.ts` 已拆散到各模块；主进程只保留 `app-shell` 装配，不再有巨型 handler 文件
+
+### 平台模块与功能开关
+
+- 所有内置功能以 `FeatureModule` 形式注册（`electron/core/contracts.ts`），主进程 `app-shell` 统一装配
+- 功能开关存于 settings 表（key `module.<id>`），core 模块不可关闭；`useFeature(id)`（`src/hooks/use-feature.ts`）供渲染层查询
+- 渲染层视图（侧边栏 tab：待办项/工具箱/AGENT 工具）与设置小节来自 `src/modules/` 声明（`collectViews()`），App.tsx 不再硬编码
+- 「AGENT 工具」tab（`src/components/agent/agent-tools-page.tsx`）= 插件卡片总览 + MCP 配置入口：每个插件一张卡片网格排列（内置插件区 / 第三方插件区），卡片内列出该插件的全部工具与授权开关（写 agent-mcp-config.json）；页头有「启用 MCP」总开关；「待办任务」把 6 个任务方法聚合为一张内置插件卡；内置插件不可卸载，第三方插件卡带卸载入口；IPC 见 `electron/modules/mcp/plugins.ts`
+
+### Agent 工具与第三方插件（agent-tools/）
+
+- **统一工具注册表** `ToolRegistry`（`electron/core/tool-registry.ts`）：内置模块贡献的工具（如 `modules/tasks/tools.ts` 的 6 个任务工具）+ 第三方插件工具，一并进入 MCP
+- **白名单派生**：`agent-mcp-config.json` 的权限 key 由 `registry.toCatalog()` 派生（内置+插件动态合并，不再硬编码）；`loadConfig`/`writeConfig` 接受 `catalog` 参数，插件 key 不再被过滤
+- **插件运行时**：`<数据目录>/agent-tools/<pluginId>/`（`ztool.json` 清单 + 入口 JS），由 `plugin-loader.ts` 在受限 VM 沙箱中加载（`require` 白名单、入口超时保护、无 db/Electron）
+- **内置插件 seed**：`resources/agent-tools/http/` 随包分发（extraResources → `process.resourcesPath/agent-tools`），首次启动由 `electron/main/seed-plugins.ts` 复制到数据目录并写 settings 标记（幂等）；ztool.json 标 `builtin:true` 的插件不可卸载
+- **内置工具聚合**：`mcp:listPlugins` 把 registry 中 `kind:'builtin'` 的工具聚合为一条「待办任务」内置插件（不可卸载）展示在管理页
+- **插件能力 ctx**：插件工具的 `run(ctx, args)` 只拿到 `{ storage, log, pluginId, dataDir }` 及声明权限对应的能力（`http:request`→HTTP 客户端、`desktop`→桌面桥 `electron/main/desktop-bridge.ts` 白名单通道）；无 db 访问
+- **热重载**：`electron/main/plugin-watcher.ts` 监听 agent-tools 目录变化，重建注册表并推给 GUI MCP 端点（`mcp:catalogChanged` 通知渲染层）
+- **打包 CLI**：`scripts/ztool.mjs`（`npm run ztool`）— `init`/`build`/`install`/`list`；示例插件见 `examples/agent-tools/http/`
+- 设置页「AI 智能体」小节动态渲染内置+插件工具开关，插件工具按权限显示能力徽标
 
 ### IPC 通信
 
-所有数据操作通过 `ipcMain.handle` / `ipcRenderer.invoke` 完成。API 通道及对应功能：
+所有数据操作通过 `ipcMain.handle` / `ipcRenderer.invoke` 完成。API 通道及对应功能（handler 在对应模块文件）：
 
-| 通道 | 功能 |
-|------|------|
-| `task:create/update/delete/getAll/getById` | 任务 CRUD |
-| `task:updateStatus` | 切换 todo/done |
-| `task:exportMarkdown` | 导出为 Markdown |
-| `category:create/update/delete/getAll` | 分类 CRUD |
-| `category:getTaskCounts` | 获取各分类任务数 |
-| `settings:getAll/set` | 读取/写入设置 |
-| `image:saveFromData/pickAndSave/delete` | 图片管理 |
-| `db:getDataDir/chooseDataDir/setDataDir/getDataDirFallback` | 自定义数据存储位置 |
-| `inbox:getDir/openDir` | 收件夹路径/打开 |
-| `window:minimize/maximizeToggle/close/setThemeSource` | 窗口控制 |
-| `update:check/download/install` | 自动更新 |
-| `data:changed`（事件） | 数据被外部写者（MCP 智能体经 GUI-IPC 委托）修改，主进程通知渲染层刷新 |
+| 通道 | 功能 | 所属模块 |
+|------|------|---------|
+| `task:create/update/delete/getAll/getById/updateStatus/exportMarkdown` | 任务 CRUD/导出 | `modules/tasks` |
+| `category:create/update/delete/getAll/getTaskCounts` | 分类 CRUD/计数 | `modules/categories` |
+| `settings:getAll/set` | 读取/写入设置 | `modules/settings` |
+| `image:saveFromData/pickAndSave/delete` | 图片管理 | `modules/images` |
+| `db:export/import` | 备份/恢复 | `modules/backup` |
+| `db:getDataDir/chooseDataDir/setDataDir/getDataDirFallback` | 自定义数据存储位置 | `modules/data-location` |
+| `inbox:getDir/openDir` | 收件夹路径/打开 | `modules/inbox` |
+| `tool:getAll/set`、`http:request` | 工具箱状态/HTTP 请求 | `modules/toolbox` |
+| `window:minimize/maximizeToggle/close/setThemeSource` | 窗口控制 | `modules/window` |
+| `update:check/download/install` | 自动更新 | `modules/updater` |
+| `mcp:getConfig/setConfig/getCatalog` | MCP 配置/目录 | `modules/mcp` |
+| `mcp:listPlugins/installPlugin/uninstallPlugin/getPluginsDir` | 插件管理 | `modules/mcp` |
+| `app:getVersion/getFeatures` | 版本/功能开关 | `modules/app` |
+| `data:changed`（事件） | 数据被外部写者（MCP 智能体经 GUI-IPC 委托）修改，主进程通知渲染层刷新 | — |
 
 > 渲染进程通过 `window.electronAPI` 调用，类型定义在 `src/types/electron.d.ts`。
 >
@@ -46,11 +73,12 @@ src/                    → 渲染进程 (React)
 ### 数据库层
 
 - **ORM**：无，直接使用 SQL.js（SQLite WASM）
+- **Schema 单一来源**：`electron/core/schema.ts`（`SCHEMA_SQL` + `runMigrations` + `ensureDefaultCategory` + `assertIntegrity`），主进程 `main/database/index.ts` 与独立 MCP `mcp/db.ts` 共用，消除双份漂移
 - **DAO 文件**：`electron/main/database/` 下按实体拆分（`task-dao.ts`, `category-dao.ts`, `settings-dao.ts`）
 - **持久化**：默认通过 `app.getPath('userData')/zdn-notes.db` 存储，可用 `db:setDataDir` 迁移到自定义目录（见 `electron/main/data-location.ts`，位置配置存于 `userData/data-location.json`，迁移为"复制到新位置→重载→写配置→清理旧位置"）
 - **启动容错**：自定义目录不可用时 `initDB()` 回退默认目录并通过 `db:getDataDirFallback` 告知渲染层；应用启用单实例锁（`requestSingleInstanceLock`）防止多进程写同一数据目录
 - **增量导入**：`<数据目录>/inbox` 收件夹，放入 `zdn-notes.db` 或备份 zip 后自动增量合入（见 `electron/main/import-inbox.ts` + `database/import-merge.ts`；按 `updated_at` 取新、只增不删、settings 缺 key 才加、图片按文件名去重；成功移入 `_imported/`，失败移入 `_rejected/`，结果经 `inbox:processed` 事件通知渲染层）
-- **迁移**：在主进程 `initDB()` 中用 try-catch 增量执行 ALTER TABLE（无正式迁移工具）
+- **迁移**：在 `core/schema.ts` 的 `runMigrations()` 中用 try-catch 增量执行 ALTER TABLE（无正式迁移工具）
 
 ---
 
@@ -85,6 +113,7 @@ src/                    → 渲染进程 (React)
 | `npm run dist` | 打包 Windows 安装包 |
 | `npm run dist:ci` | CI 打包（`--publish=never`） |
 | `npm run pack` | 打包为 unpacked 目录 |
+| `npm run ztool` | 插件打包/安装 CLI（`init`/`build`/`install`/`list`） |
 
 ---
 
@@ -101,6 +130,8 @@ src/                    → 渲染进程 (React)
 - `src/lib/` — 工具函数（lexorank.ts, utils.ts, markdown.ts）
 - `src/types/` — TypeScript 类型定义（task.ts, electron.d.ts）
 - `tests/` — 测试文件
+- `electron/core/` — 平台核心（纯 TS，主进程/MCP/渲染层共享）
+- `electron/modules/` — 内置 FeatureModule（每域一目录，含 index.ts / ipc / tools）
 - `electron/main/database/` — DAO 层
 
 ### 命名约定
@@ -196,7 +227,7 @@ src/                    → 渲染进程 (React)
 - **运行**：`npm run test`
 - **目录**：`tests/`，文件命名 `*.test.ts`
 
-当前包含测试：`lexorank.test.ts`, `task-dao.test.ts`, `example.test.ts`
+当前包含测试：`lexorank.test.ts`, `task-dao.test.ts`, `mcp-db.test.ts`, `mcp-tools.test.ts`, `mcp-config.test.ts`, `tool-registry.test.ts`, `plugin-loader.test.ts`, `example.test.ts` 等
 
 ---
 

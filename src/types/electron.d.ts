@@ -15,19 +15,34 @@ declare global {
     body: string
   }
 
-  type McpOperationKey =
-    | 'task:create'
-    | 'task:read_list'
-    | 'task:read_detail'
-    | 'task:update_status'
-    | 'task:update'
-    | 'task:delete'
-
   interface McpConfig {
     enabled: boolean
     graph: string
     maxWaitLockMs: number
-    permissions: Record<McpOperationKey, boolean>
+    permissions: Record<string, boolean>
+  }
+
+  interface McpCatalogTool {
+    key: string
+    name: string
+    label: string
+    description: string
+    kind: 'builtin' | 'plugin'
+    danger: boolean
+    defaultEnabled: boolean
+    capabilities: string[]
+  }
+
+  interface McpPluginInfo {
+    id: string
+    name: string
+    version: string
+    author?: string
+    description?: string
+    permissions: string[]
+    tools: { key: string; name: string; label: string }[]
+    dir: string
+    builtin: boolean
   }
 
   interface Window {
@@ -54,6 +69,23 @@ declare global {
 
       mcpGetConfig(): Promise<McpConfig>
       mcpSetConfig(cfg: Partial<McpConfig>): Promise<McpConfig>
+      mcpGetCatalog(): Promise<{
+        tools: {
+          key: string
+          name: string
+          label: string
+          description: string
+          kind: 'builtin' | 'plugin'
+          danger: boolean
+          defaultEnabled: boolean
+          capabilities: string[]
+        }[]
+      }>
+      onMcpCatalogChanged(cb: () => void): () => void
+      mcpListPlugins(): Promise<McpPluginInfo[]>
+      mcpInstallPlugin(): Promise<{ ok: boolean; canceled?: boolean; id?: string; name?: string; error?: string }>
+      mcpUninstallPlugin(id: string): Promise<{ ok: boolean; removed?: boolean; error?: string }>
+      mcpGetPluginsDir(): Promise<string>
 
       toolGetAll(): Promise<Record<string, string>>
       toolSet(key: string, value: string): Promise<void>
@@ -77,6 +109,7 @@ declare global {
       onWindowMaximizedChange(cb: (maximized: boolean) => void): () => void
 
       getAppVersion(): Promise<string>
+      getFeatures(): Promise<Record<string, boolean>>
 
       exportMarkdown(): Promise<boolean>
 

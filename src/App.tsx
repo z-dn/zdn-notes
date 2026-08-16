@@ -12,10 +12,13 @@ import { ExpandedDescription } from '@/components/expanded-description'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { ToolboxSidebar } from '@/components/toolbox/toolbox-sidebar'
 import { ToolboxWorkspace } from '@/components/toolbox/toolbox-workspace'
+import { AgentToolsPage } from '@/components/agent/agent-tools-page'
 import { useTheme } from '@/hooks/use-theme'
+import { useFeature } from '@/hooks/use-feature'
 import { ToastContainer } from '@/components/toast'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { FadeSwitch } from '@/components/fade'
+import { collectViews } from '@/modules'
 
 import { toast } from '@/lib/toast'
 
@@ -31,7 +34,15 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [maximized, setMaximized] = useState(false)
   const [pendingUpdate, setPendingUpdate] = useState('')
-  const [sidebarTab, setSidebarTab] = useState<'categories' | 'toolbox'>('categories')
+  const tasksEnabled = useFeature('tasks')
+  const toolboxEnabled = useFeature('toolbox')
+  const mcpEnabled = useFeature('mcp')
+  const views = collectViews().filter((v) => {
+    if (v.id === 'toolbox') return toolboxEnabled
+    if (v.id === 'agent') return mcpEnabled
+    return tasksEnabled
+  })
+  const [sidebarTab, setSidebarTab] = useState<string>(views[0]?.id ?? 'categories')
 
   useEffect(() => {
     loadTasks()
@@ -99,6 +110,12 @@ export default function App() {
     selectTask(null)
   }, [activeCategoryId, selectTask])
 
+  useEffect(() => {
+    if (!views.some((v) => v.id === sidebarTab) && views.length > 0) {
+      setSidebarTab(views[0].id)
+    }
+  }, [views, sidebarTab])
+
   async function handleExport() {
     const ok = await window.electronAPI.exportMarkdown()
     toast(ok ? '导出成功' : '取消导出')
@@ -114,12 +131,7 @@ export default function App() {
           <div className="flex items-center gap-3">
             <h1 className="text-sm font-bold tracking-wide select-none">ZDNotes</h1>
             <div className="flex items-center gap-1" style={NO_DRAG}>
-              {(
-                [
-                  { id: 'categories', label: '待办项' },
-                  { id: 'toolbox', label: '工具箱' },
-                ] as const
-              ).map((tab) => (
+              {views.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setSidebarTab(tab.id)}
@@ -234,7 +246,11 @@ export default function App() {
             <FadeSwitch
               current={sidebarTab}
               className="flex min-h-0 flex-1 flex-col"
-              render={(k) => (k === 'categories' ? <CategorySidebar /> : <ToolboxSidebar />)}
+              render={(k) => {
+                if (k === 'toolbox') return <ToolboxSidebar />
+                if (k === 'agent') return null
+                return <CategorySidebar />
+              }}
             />
           </aside>
 
@@ -242,8 +258,18 @@ export default function App() {
             <FadeSwitch
               current={sidebarTab}
               className="relative h-full overflow-hidden"
-              render={(k) =>
-                k === 'categories' ? (
+              render={(k) => {
+                if (k === 'toolbox') {
+                  return (
+                    <div className="h-full overflow-y-auto p-3">
+                      <ToolboxWorkspace />
+                    </div>
+                  )
+                }
+                if (k === 'agent') {
+                  return <AgentToolsPage />
+                }
+                return (
                   <>
                     <FadeSwitch
                       current={activeCategoryId ?? 'all'}
@@ -264,16 +290,12 @@ export default function App() {
                       <ExpandedDescription />
                     </div>
                   </>
-                ) : (
-                  <div className="h-full overflow-y-auto p-3">
-                    <ToolboxWorkspace />
-                  </div>
                 )
-              }
+              }}
             />
           </div>
 
-          {sidebarTab === 'categories' && (
+          {sidebarTab !== 'toolbox' && sidebarTab !== 'agent' && (
             <aside className="hidden w-80 border-l border-divider bg-panel-detail md:block">
               <DetailPanel />
             </aside>

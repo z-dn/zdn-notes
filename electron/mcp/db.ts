@@ -3,6 +3,9 @@ import fs from 'fs'
 import { randomUUID } from 'crypto'
 import { resolveDbPath, resolveDataDir } from './data-location'
 import { acquireLock, releaseLock } from './lock'
+import { SCHEMA_SQL, runMigrations, ensureDefaultCategory } from '../core/schema'
+
+export { runMigrations }
 
 // ===================================================================
 // 独立的 SQL.js 封装，供 zdn-mcp 进程直接读写 zdn-notes.db。
@@ -10,78 +13,13 @@ import { acquireLock, releaseLock } from './lock'
 //  - 每个写操作都是 BEGIN/COMMIT 包裹的短事务（原子性），GUI 抢占时可在
 //    事务间隙安全让位。
 //  - 锁在单个操作的外层获取/释放，操作之间不持锁 => 不会长时间阻塞 GUI。
-//  - schema 与迁移逻辑与主进程 electron/main/database/index.ts 保持一致。
+//  - schema 与迁移逻辑统一来自 electron/core/schema.ts（单一来源）。
 //  - 读写都是同步的（sql.js 是同步 API），配合锁单写，性能在低配机上足够低。
 // ===================================================================
 
-export const SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS tasks (
-  id            TEXT PRIMARY KEY NOT NULL,
-  title         TEXT NOT NULL,
-  description   TEXT DEFAULT '',
-  status        TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo','done')),
-  priority      TEXT NOT NULL DEFAULT 'P2' CHECK(priority IN ('P0','P1','P2','P3')),
-  due_date      INTEGER,
-  start_date    INTEGER,
-  reminder_time INTEGER,
-  parent_id     TEXT REFERENCES tasks(id) ON DELETE CASCADE,
-  order_index   REAL NOT NULL,
-  tags          TEXT DEFAULT '[]',
-  owner         TEXT DEFAULT '',
-  category_id   TEXT REFERENCES categories(id) ON DELETE SET NULL,
-  meta          TEXT DEFAULT '{}',
-  created_at    INTEGER NOT NULL,
-  updated_at    INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS categories (
-  id         TEXT PRIMARY KEY NOT NULL,
-  name       TEXT NOT NULL,
-  color      TEXT NOT NULL DEFAULT '#6b7280',
-  sort_order REAL NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS idx_tasks_status      ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_due_date    ON tasks(due_date);
-CREATE INDEX IF NOT EXISTS idx_tasks_parent_id   ON tasks(parent_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_order_index ON tasks(order_index);
-CREATE TABLE IF NOT EXISTS settings (
-  key   TEXT PRIMARY KEY NOT NULL,
-  value TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS tool_state (
-  key   TEXT PRIMARY KEY NOT NULL,
-  value TEXT NOT NULL
-);
-`
-
-export function runMigrations(db: Database): void {
-  try { db.run('ALTER TABLE tasks RENAME COLUMN project TO owner') } catch { /* done */ }
-  try { db.run("ALTER TABLE tasks ADD COLUMN owner TEXT DEFAULT ''") } catch { /* exists */ }
-  try {
-    db.run("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6b7280', sort_order REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)")
-  } catch { /* exists */ }
-  try { db.run("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6b7280'") } catch { /* exists */ }
-  try { db.run('ALTER TABLE categories ADD COLUMN parent_id TEXT') } catch { /* exists */ }
-  try { db.run('UPDATE categories SET parent_id = NULL') } catch { /* ignore */ }
-  try { db.run('ALTER TABLE categories ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0') } catch { /* exists */ }
-  try { db.run('UPDATE categories SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = 0') } catch { /* ignore */ }
-  try { db.run("ALTER TABLE tasks ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL DEFAULT NULL") } catch { /* exists */ }
-  try { db.run("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)") } catch { /* exists */ }
-  try { db.run("CREATE TABLE IF NOT EXISTS tool_state (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)") } catch { /* exists */ }
-}
-
-function ensureDefaultCategory(db: Database): void {
-  const r = db.exec("SELECT id FROM categories WHERE name = '未分类'")
-  if (!r[0]?.values.length) {
-    db.run(
-      "INSERT INTO categories (id, name, color, sort_order, created_at, updated_at) VALUES ('__uncategorized', '未分类', '#9ca3af', 0, ?, ?)",
-      [Date.now(), Date.now()],
-    )
-  }
-}
-
+// ===== 行/实体转换 =====
 let sqlPromise: ReturnType<typeof initSqlJs> | null = null
+
 function getSQL() {
   if (!sqlPromise) sqlPromise = initSqlJs()
   return sqlPromise

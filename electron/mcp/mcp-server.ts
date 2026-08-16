@@ -1,10 +1,13 @@
 import readline from 'readline'
 import { Database } from 'sql.js'
-import { loadConfig, allowedOperations, OperationKey, MpcConfig } from './config'
-import {
-  taskCreate, taskList, taskGetById, taskUpdateStatus, taskUpdate, taskDelete,
-  withDb, closeCachedDb,
-} from './db'
+import { loadConfig, MpcConfig } from './config'
+import { withDb, closeCachedDb } from './db'
+import { ToolRegistry, McpToolSpec } from '../core/tool-registry'
+import { TASK_TOOLS } from '../modules/tasks/tools'
+import { createPluginStorage } from '../core/plugin-storage'
+import { loadPluginsIntoRegistry } from '../core/plugin-loader'
+import { buildHttpCapability } from './http-capability'
+import type { PluginToolContext } from '../core/contracts'
 
 // ===================================================================
 // stdio MCP server（Model Context Protocol）
@@ -17,6 +20,9 @@ import {
 //
 // 传输层设计：本文件的 STDIO 传输只是 MCP 的一种载体。远程(HTTP/SSE)模式未来
 // 只需新增一个 HttpTransport，复用 handleMessage / 工具注册 / 数据层，无需改动业务。
+//
+// 工具来源：统一由 core/tool-registry 构建。内置任务工具在 modules/tasks/tools.ts，
+// 插件工具由 ToolRegistry.loadPlugins() 加载后合并（P3 目标）。
 // ===================================================================
 
 export interface JsonRpcRequest {
@@ -47,129 +53,36 @@ export interface McpServerOpts {
   afterWrite?: () => void
   // 已受信实例（GUI 侧端点），跳过 initialize 握手要求
   trusted?: boolean
+  // 自定义工具注册表（默认构建：内置任务工具；GUI 侧传入含插件的 registry）
+  registry?: ToolRegistry
+  // 插件 desktop 能力桥（GUI 侧注入；独立进程无桌面能力）
+  desktopBridge?: (channel: string, args: unknown[]) => Promise<unknown>
 }
 
 // ---- 工具定义 + 执行 ----
 interface ToolSpec {
+  key: string
   name: string
   description: string
   inputSchema: Record<string, unknown>
+  kind: 'builtin' | 'plugin'
+  readonly: boolean
+  danger: boolean
+  pluginId?: string
+  pluginPermissions?: string[]
   // 通过 withDb 执行；write 操作会被权限白名单过滤
-  run: (db: Database, args: Record<string, unknown>) => Promise<unknown> | unknown
+  run: McpToolSpec['run']
 }
 
-function buildTools(cfg: MpcConfig): ToolSpec[] {
-  const tools: ToolSpec[] = []
-  const push = (perm: OperationKey, spec: Omit<ToolSpec, 'name'> & { name?: string }) => {
-    if (!allowedOperations(cfg).includes(perm)) return
-    tools.push({
-      name: spec.name!,
-      description: spec.description,
-      inputSchema: spec.inputSchema,
-      run: spec.run,
-    })
-  }
-
-  push('task:create', {
-    name: 'task_create',
-    description: '创建一条待办任务',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        title: { type: 'string', description: '任务标题（必填）' },
-        description: { type: 'string', description: '任务详情（Markdown）' },
-        status: { type: 'string', enum: ['todo', 'done'], description: 'todo/done' },
-        priority: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3'], description: '优先级' },
-        dueDate: { type: 'number', description: '截止时间戳(ms)' },
-        startDate: { type: 'number', description: '开始时间戳(ms)' },
-        reminderTime: { type: 'number', description: '提醒时间戳(ms)' },
-        tags: { type: 'array', items: { type: 'string' }, description: '标签' },
-        owner: { type: 'string', description: '负责人' },
-        categoryId: { type: 'string', description: '分类 id；缺省归入未分类' },
-      },
-      required: ['title'],
-    },
-    run: (db, a) => taskCreate(db, a as any),
-  })
-
-  push('task:read_list', {
-    name: 'task_list',
-    description: '列出待办任务，可按状态/标题关键词过滤',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        status: { type: 'string', enum: ['todo', 'done'], description: '按状态过滤' },
-        search: { type: 'string', description: '按标题模糊搜索' },
-      },
-    },
-    run: (db, a) => taskList(db, { status: a.status as string, search: a.search as string }),
-  })
-
-  push('task:read_detail', {
-    name: 'task_get',
-    description: '按 id 查询单个任务详情',
-    inputSchema: {
-      type: 'object',
-      properties: { id: { type: 'string', description: '任务 id（必填）' } },
-      required: ['id'],
-    },
-    run: (db, a) => taskGetById(db, a.id as string),
-  })
-
-  push('task:update_status', {
-    name: 'task_update_status',
-    description: '切换任务状态（todo/done）；标记 done 会级联完成其子任务',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: '任务 id（必填）' },
-        status: { type: 'string', enum: ['todo', 'done'], description: '目标状态（必填）' },
-      },
-      required: ['id', 'status'],
-    },
-    run: (db, a) => taskUpdateStatus(db, a.id as string, a.status as string),
-  })
-
-  push('task:update', {
-    name: 'task_update',
-    description: '更新任务内容（标题/详情/优先级/时间/标签/负责人/分类等）',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: '任务 id（必填）' },
-        title: { type: 'string' },
-        description: { type: 'string' },
-        priority: { type: 'string', enum: ['P0', 'P1', 'P2', 'P3'] },
-        dueDate: { type: ['number', 'null'] },
-        startDate: { type: ['number', 'null'] },
-        reminderTime: { type: ['number', 'null'] },
-        tags: { type: 'array', items: { type: 'string' } },
-        owner: { type: 'string' },
-        categoryId: { type: ['string', 'null'] },
-      },
-      required: ['id'],
-    },
-    run: (db, a) => taskUpdate(db, a.id as string, a as Record<string, unknown>),
-  })
-
-  push('task:delete', {
-    name: 'task_delete',
-    description: '删除任务（连同其子任务）',
-    inputSchema: {
-      type: 'object',
-      properties: { id: { type: 'string', description: '任务 id（必填）' } },
-      required: ['id'],
-    },
-    run: (db, a) => taskDelete(db, a.id as string),
-  })
-
-  return tools
+function buildTools(cfg: MpcConfig, registry: ToolRegistry): ToolSpec[] {
+  return registry.buildMcpTools(cfg)
 }
 
 // ---- 请求处理（对传输层中立） ----
 export class McpServer {
   private cfg: MpcConfig
   private tools: ToolSpec[]
+  private registry: ToolRegistry
   private initialized: boolean
   private waitMs: number
   private dataDir?: string
@@ -177,25 +90,48 @@ export class McpServer {
   private delegate: ((req: JsonRpcRequest) => Promise<JsonRpcResponse | null>) | null
   private dbSource: (() => Database) | null
   private afterWrite: (() => void) | null
+  private desktopBridge: ((channel: string, args: unknown[]) => Promise<unknown>) | null
   private configFile?: string
 
   constructor(opts?: McpServerOpts) {
     this.configFile = opts?.configFile
-    this.cfg = loadConfig(opts ? { configFile: opts.configFile } : undefined)
-    this.waitMs = opts?.waitMs ?? this.cfg.maxWaitLockMs
+    this.registry = opts?.registry ?? defaultRegistry()
     this.dataDir = opts?.dataDir?.trim() || (process.env.ZDNOTES_DATA_DIR ?? undefined)
-    this.tools = buildTools(this.cfg)
+    // 加载第三方插件工具进统一注册表（GUI 侧传入的 registry 已含插件，重复注册会抛错，这里幂等处理）
+    if (this.dataDir && !opts?.registry) {
+      loadPluginsIntoRegistry(this.registry, this.dataDir)
+    }
+    this.cfg = loadConfig({
+      configFile: opts?.configFile,
+      catalog: this.registry.toCatalog(),
+    })
+    this.waitMs = opts?.waitMs ?? this.cfg.maxWaitLockMs
+    this.tools = buildTools(this.cfg, this.registry)
     this.delegate = opts?.delegate ?? null
     this.dbSource = opts?.dbSource ?? null
     this.afterWrite = opts?.afterWrite ?? null
+    this.desktopBridge = opts?.desktopBridge ?? null
     this.initialized = opts?.trusted ?? false
   }
 
   // 配置（agent-mcp-config.json）变更后重载：重新生成工具白名单。
   reloadConfig(): void {
-    this.cfg = loadConfig(this.configFile ? { configFile: this.configFile } : undefined)
+    this.cfg = loadConfig({
+      configFile: this.configFile,
+      catalog: this.registry.toCatalog(),
+    })
     this.waitMs = this.cfg.maxWaitLockMs
-    this.tools = buildTools(this.cfg)
+    this.tools = buildTools(this.cfg, this.registry)
+  }
+
+  // 插件热重载：替换注册表（重建内置+插件）并重建工具白名单。
+  setRegistry(registry: ToolRegistry): void {
+    this.registry = registry
+    this.cfg = loadConfig({
+      configFile: this.configFile,
+      catalog: this.registry.toCatalog(),
+    })
+    this.tools = buildTools(this.cfg, this.registry)
   }
 
   get serverInfo() {
@@ -266,15 +202,42 @@ export class McpServer {
           }
           const args = p.arguments ?? {}
           const result = await this.enqueue(() => {
-            if (this.dbSource) {
-              const r = (tool.run as any)(this.dbSource(), args)
-              if (!this.isReadonly(tool.name)) this.afterWrite?.()
-              return r
+            if (tool.kind === 'plugin') {
+              // 插件工具：能力 ctx（无 db），storage/日志按插件隔离
+              const pluginId = tool.pluginId ?? 'unknown'
+              const ctx: PluginToolContext = {
+                kind: 'plugin',
+                dataDir: this.dataDir ?? '',
+                pluginId,
+                storage: createPluginStorage(this.dataDir ?? '', pluginId),
+                log: (level, msg) => {
+                  const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log
+                  fn(`[plugin:${pluginId}]`, msg)
+                },
+              }
+              if (tool.pluginPermissions?.includes('http:request')) {
+                ctx.httpRequest = buildHttpCapability()
+              }
+              if (tool.pluginPermissions?.includes('desktop') && this.desktopBridge) {
+                ctx.desktop = (channel, ...args) => this.desktopBridge!(channel, args)
+              }
+              return Promise.resolve(tool.run(ctx, args))
             }
-            return withDb((db) => (tool.run as any)(db, args), {
+            if (this.dbSource) {
+              const ctx = {
+                kind: 'builtin' as const,
+                db: this.dbSource(),
+                dataDir: this.dataDir ?? '',
+                save: this.afterWrite ?? undefined,
+              }
+              const r = tool.run(ctx, args)
+              if (!tool.readonly) this.afterWrite?.()
+              return Promise.resolve(r)
+            }
+            return withDb((db) => tool.run({ kind: 'builtin', db, dataDir: this.dataDir ?? '' }, args), {
               dataDir: this.dataDir,
               waitMs: this.waitMs,
-              readonly: this.isReadonly(tool.name),
+              readonly: tool.readonly,
             })
           })
           return this.result(id, {
@@ -288,13 +251,6 @@ export class McpServer {
     } catch (e) {
       return this.error(-32000, e instanceof Error ? e.message : String(e), id)
     }
-  }
-
-  private readonlySet = new Set([
-    'task_list', 'task_get', 'category_list',
-  ])
-  private isReadonly(name: string): boolean {
-    return this.readonlySet.has(name)
   }
 
   // 同一进程内的工具调用串行化：避免并发操作同一个 SQL.js 内存库造成竞态。
@@ -311,6 +267,13 @@ export class McpServer {
   private error(code: number, message: string, id: string | number | null): JsonRpcResponse {
     return { jsonrpc: '2.0', id, error: { code, message } }
   }
+}
+
+// 默认注册表：内置任务工具。GUI 侧（mcp-ipc）会传入含插件工具的 registry。
+export function defaultRegistry(): ToolRegistry {
+  const reg = new ToolRegistry()
+  reg.registerAll(TASK_TOOLS)
+  return reg
 }
 
 // ---- stdio 传输 ----

@@ -1,0 +1,11 @@
+{
+  "id": "http",
+  "name": "HTTP 请求",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "entry": "index.js",
+  "author": "zdn",
+  "description": "内置插件：提供 HTTP 请求工具（capability: http:request）",
+  "permissions": ["http:request"],
+  "builtin": true
+}

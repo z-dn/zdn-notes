@@ -7,7 +7,8 @@ import { showConfirm } from '@/components/confirm-dialog'
 import { toast } from '@/lib/toast'
 import { useFlipDialog } from '@/hooks/use-flip-dialog'
 
-type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+type UpdateStatus =
+  'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 
 interface SettingsDialogProps {
   open: boolean
@@ -21,17 +22,6 @@ const THEME_OPTIONS: { value: 'system' | 'light' | 'dark'; label: string }[] = [
   { value: 'dark', label: '深色' },
 ]
 
-const MCP_PERMISSION_LABELS: Record<McpOperationKey, string> = {
-  'task:create': '创建任务',
-  'task:read_list': '查看任务列表',
-  'task:read_detail': '查看任务详情',
-  'task:update_status': '切换任务状态',
-  'task:update': '更新任务内容',
-  'task:delete': '删除任务',
-}
-
-
-
 export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialogProps) {
   const editing = useSettingsStore((s) => s.editing)
   const dirty = useSettingsStore((s) => s.dirty)
@@ -44,7 +34,6 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   const [dataDir, setDataDir] = useState('')
   const [dataDirWarning, setDataDirWarning] = useState<string | null>(null)
   const [inboxDir, setInboxDir] = useState('')
-  const [mcpConfig, setMcpConfig] = useState<McpConfig | null>(null)
   const { contentRef, overlayRef, mounted, playClose } = useFlipDialog(open, onClose)
 
   useEffect(() => {
@@ -52,7 +41,6 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     window.electronAPI.getDataDir().then(setDataDir)
     window.electronAPI.getDataDirFallback().then(setDataDirWarning)
     window.electronAPI.getInboxDir().then(setInboxDir)
-    window.electronAPI.mcpGetConfig().then(setMcpConfig)
   }, [])
 
   useEffect(() => {
@@ -145,7 +133,13 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   }
 
   async function handleRestore() {
-    if (!(await showConfirm('恢复数据', '恢复将覆盖当前所有任务、分类和设置，且不可撤销。确定继续吗？'))) return
+    if (
+      !(await showConfirm(
+        '恢复数据',
+        '恢复将覆盖当前所有任务、分类和设置，且不可撤销。确定继续吗？',
+      ))
+    )
+      return
     const result = await window.electronAPI.importBackup()
     if (result.ok) {
       useTaskStore.getState().selectTask(null)
@@ -164,7 +158,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     if (
       !(await showConfirm(
         '更改存储位置',
-        `数据将被迁移到：\n${picked}\n\n现有数据会复制到新位置，成功后旧位置将被清理。确定继续吗？`
+        `数据将被迁移到：\n${picked}\n\n现有数据会复制到新位置，成功后旧位置将被清理。确定继续吗？`,
       ))
     )
       return
@@ -181,7 +175,13 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   }
 
   async function handleResetDataDir() {
-    if (!(await showConfirm('恢复默认存储位置', '数据将被移回应用默认目录，旧位置将被清理。确定继续吗？'))) return
+    if (
+      !(await showConfirm(
+        '恢复默认存储位置',
+        '数据将被移回应用默认目录，旧位置将被清理。确定继续吗？',
+      ))
+    )
+      return
     const result = await window.electronAPI.setDataDir('')
     if (result.ok) {
       setDataDir(result.path ?? '')
@@ -194,13 +194,6 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     }
   }
 
-  async function updateMcpConfig(patch: Partial<McpConfig>) {
-    if (!mcpConfig) return
-    const next = await window.electronAPI.mcpSetConfig({ ...mcpConfig, ...patch })
-    setMcpConfig(next)
-    toast('MCP 配置已保存')
-  }
-
   return (
     <div className="fixed inset-0 z-50">
       <div ref={overlayRef} className="absolute inset-0 bg-black/40" onClick={() => playClose()} />
@@ -210,7 +203,9 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-divider px-6 py-3">
-          <h2 className="flex items-center gap-1.5 text-base font-semibold"><Settings className="size-4" /> 设置</h2>
+          <h2 className="flex items-center gap-1.5 text-base font-semibold">
+            <Settings className="size-4" /> 设置
+          </h2>
           <button
             onClick={handleCancel}
             className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -262,7 +257,9 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           </div>
 
           <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">描述编辑方式</label>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">
+              描述编辑方式
+            </label>
             <div className="flex gap-3">
               {[
                 { value: 'edit' as const, label: '编辑即显示' },
@@ -325,11 +322,15 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
                 恢复数据
               </button>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">备份包含数据库与图片，恢复将覆盖当前全部数据。</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              备份包含数据库与图片，恢复将覆盖当前全部数据。
+            </p>
           </div>
 
           <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">数据存储位置</label>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">
+              数据存储位置
+            </label>
             <p
               className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
               title={dataDir}
@@ -355,11 +356,15 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
                 恢复默认
               </button>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">数据库与图片将存储在所选目录中，更改后需确认迁移。</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              数据库与图片将存储在所选目录中，更改后需确认迁移。
+            </p>
           </div>
 
           <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">增量导入（收件夹）</label>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">
+              增量导入（收件夹）
+            </label>
             <p
               className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
               title={inboxDir}
@@ -367,47 +372,15 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
               {inboxDir}
             </p>
             <button
-              onClick={async () => { await window.electronAPI.openInboxDir() }}
+              onClick={async () => {
+                await window.electronAPI.openInboxDir()
+              }}
               className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               打开收件夹
             </button>
             <p className="mt-2 text-xs text-muted-foreground">
               将 zdn-notes.db 或备份 zip 放入收件夹会自动增量合入本地（按时间取新，只增不删）。
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">AI 智能体（MCP）</label>
-            <label className="mb-3 flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={mcpConfig?.enabled ?? false}
-                onChange={(e) => updateMcpConfig({ enabled: e.target.checked })}
-                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-              <span className="text-xs font-medium text-muted-foreground">启用 MCP（允许智能体访问任务数据）</span>
-            </label>
-            {mcpConfig && (
-              <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-                {(Object.keys(MCP_PERMISSION_LABELS) as McpOperationKey[]).map((key) => (
-                  <label key={key} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={mcpConfig.permissions[key]}
-                      disabled={!mcpConfig.enabled}
-                      onChange={(e) =>
-                        updateMcpConfig({ permissions: { ...mcpConfig.permissions, [key]: e.target.checked } })
-                      }
-                      className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40"
-                    />
-                    <span className="text-xs text-muted-foreground">{MCP_PERMISSION_LABELS[key]}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">
-              MCP 仅暴露任务增改查删能力，分类与内部信息不提供。改动即时生效；已连接的独立 MCP 进程需重启。
             </p>
           </div>
 

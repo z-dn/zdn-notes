@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getFeatures: () => ipcRenderer.invoke('app:getFeatures'),
 
   exportMarkdown: () => ipcRenderer.invoke('task:exportMarkdown'),
   exportBackup: () => ipcRenderer.invoke('db:export'),
@@ -55,6 +56,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   mcpGetConfig: () => ipcRenderer.invoke('mcp:getConfig'),
   mcpSetConfig: (cfg: unknown) => ipcRenderer.invoke('mcp:setConfig', cfg),
+  mcpGetCatalog: () => ipcRenderer.invoke('mcp:getCatalog'),
+  mcpListPlugins: () => ipcRenderer.invoke('mcp:listPlugins'),
+  mcpInstallPlugin: () => ipcRenderer.invoke('mcp:installPlugin'),
+  mcpUninstallPlugin: (id: string) => ipcRenderer.invoke('mcp:uninstallPlugin', id),
+  mcpGetPluginsDir: () => ipcRenderer.invoke('mcp:getPluginsDir'),
+  onMcpCatalogChanged: (cb: () => void) => {
+    const handler = () => cb()
+    ipcRenderer.on('mcp:catalogChanged', handler)
+    return () => ipcRenderer.removeListener('mcp:catalogChanged', handler)
+  },
 
   toolGetAll: () => ipcRenderer.invoke('tool:getAll'),
   toolSet: (key: string, value: string) => ipcRenderer.invoke('tool:set', key, value),

@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import { Database } from 'sql.js'
 import { McpServer } from '../mcp/mcp-server'
 import { configFileForDataDir } from '../mcp/config'
+import type { ToolRegistry } from '../core/tool-registry'
 
 // ===================================================================
 // GUI 侧本地 IPC 端点（GUI-IPC 委托模式的服务端）。
@@ -21,6 +22,7 @@ export interface McpIpcServer {
   token: string
   stop: () => Promise<void>
   reloadConfig: () => void
+  setRegistry: (registry: ToolRegistry) => void
 }
 
 export interface McpIpcDeps {
@@ -28,6 +30,8 @@ export interface McpIpcDeps {
   getDB: () => Database
   saveAsync: () => void
   notify: () => void
+  registry?: ToolRegistry
+  desktopBridge?: (channel: string, args: unknown[]) => Promise<unknown>
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -48,6 +52,8 @@ export function startMcpIpc(deps: McpIpcDeps): Promise<McpIpcServer> {
     configFile: configFileForDataDir(deps.dataDir),
     trusted: true, // 本端点仅对已握手的 zdn-mcp 开放，跳过握手要求
     dbSource: deps.getDB,
+    registry: deps.registry,
+    desktopBridge: deps.desktopBridge,
     afterWrite: () => {
       deps.saveAsync()
       deps.notify()
@@ -99,6 +105,7 @@ export function startMcpIpc(deps: McpIpcDeps): Promise<McpIpcServer> {
         port,
         token,
         reloadConfig: () => server.reloadConfig(),
+        setRegistry: (registry) => server.setRegistry(registry),
         stop: () => new Promise<void>((r) => http.close(() => r())),
       })
     })
