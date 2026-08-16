@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { List, Network, Trash2 } from 'lucide-react'
+import { List, Network, RotateCcw, Trash2 } from 'lucide-react'
 import type { MindNode } from '@/types/tool'
 import { parseMindmap, mindmapToMarkdown } from '@/lib/mindmap'
 import {
@@ -10,6 +10,10 @@ import {
 } from '@/lib/mindmap-outline'
 import { cn } from '@/lib/utils'
 import { MindMapCanvas } from './mindmap-canvas'
+
+const DEFAULT_HEIGHT = 240
+const MIN_HEIGHT = 160
+const MAX_HEIGHT = 640
 
 export function MindMapBlock({
   source,
@@ -23,9 +27,28 @@ export function MindMapBlock({
   const [view, setView] = useState<'outline' | 'canvas'>('outline')
   const [sourceText, setSourceText] = useState(source)
   const [nodes, setNodes] = useState<MindNode[]>(() => parseMindmap(source))
+  const [height, setHeight] = useState(DEFAULT_HEIGHT)
   const lastEmitted = useRef(source)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const taRef = useRef<HTMLTextAreaElement>(null)
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = height
+    const prevSelect = document.body.style.userSelect
+    document.body.style.userSelect = 'none'
+    const onMove = (ev: MouseEvent) => {
+      setHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startH + ev.clientY - startY)))
+    }
+    const onUp = () => {
+      document.body.style.userSelect = prevSelect
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   useEffect(() => {
     if (source !== lastEmitted.current) {
@@ -81,7 +104,7 @@ export function MindMapBlock({
   }
 
   return (
-    <div className="flex min-h-56 flex-col overflow-hidden rounded-md border border-input bg-muted/30">
+    <div className="flex flex-col overflow-hidden rounded-md border border-input bg-muted/30">
       <div className="flex items-center justify-between border-b border-divider px-2 py-1">
         <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
           <Network className="size-3" /> 思维图
@@ -105,6 +128,15 @@ export function MindMapBlock({
               </button>
             ))}
           </div>
+          {height !== DEFAULT_HEIGHT && (
+            <button
+              onClick={() => setHeight(DEFAULT_HEIGHT)}
+              title="重置高度"
+              className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <RotateCcw className="size-3" />
+            </button>
+          )}
           {onDelete && (
             <button
               onClick={onDelete}
@@ -116,7 +148,7 @@ export function MindMapBlock({
           )}
         </div>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-40" style={{ height }}>
         {view === 'outline' ? (
           <textarea
             ref={taRef}
@@ -153,6 +185,14 @@ export function MindMapBlock({
         ) : (
           <MindMapCanvas nodes={nodes} onChange={handleCanvasChange} />
         )}
+      </div>
+      <div
+        className="flex h-1.5 shrink-0 cursor-ns-resize items-center justify-center hover:bg-accent/50"
+        onMouseDown={startResize}
+        onDoubleClick={() => setHeight(DEFAULT_HEIGHT)}
+        title="拖拽调整高度，双击复原"
+      >
+        <div className="h-0.5 w-8 rounded-full bg-border/70" />
       </div>
     </div>
   )

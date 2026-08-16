@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Editor } from '@milkdown/core'
 import { editorViewCtx } from '@milkdown/core'
 import { MilkdownEditor } from '@/components/milkdown-editor'
@@ -27,17 +27,6 @@ export function ScratchText({ page }: { page: ScratchPage }) {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [content] = useState(() => stripEmptyMindmapBlocks(page.markdown))
   const [mountKey] = useState(() => crypto.randomUUID())
-
-  useEffect(() => {
-    if (content === page.markdown) return
-    const scratch = (useToolStore.getState().states[TOOL_KEYS.scratch] ??
-      TOOL_DEFAULTS[TOOL_KEYS.scratch]) as ScratchToolState
-    updateState(TOOL_KEYS.scratch, {
-      pages: scratch.pages.map((p) =>
-        p.id === page.id ? { ...p, markdown: content, updatedAt: Date.now() } : p,
-      ),
-    })
-  }, [content, page.id, page.markdown, updateState])
 
   function handleChange(markdown: string) {
     const cleaned = stripEmptyMindmapBlocks(markdown)

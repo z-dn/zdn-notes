@@ -4,6 +4,7 @@ import { editorViewCtx } from '@milkdown/core'
 import { insert } from '@milkdown/utils'
 import type { Editor } from '@milkdown/core'
 import type { NodeViewConstructor } from '@milkdown/prose/view'
+import type { EditorView } from '@milkdown/prose/view'
 import type { Node } from '@milkdown/prose/model'
 import { TextSelection } from '@milkdown/prose/state'
 import { createRoot } from 'react-dom/client'
@@ -133,5 +134,16 @@ export function insertMindmapBlock(pos?: number) {
     }
     view.focus()
     insert(`\`\`\`mindmap\n${MINDMAP_EMPTY_OUTLINE}\n\`\`\`\n`, false)(ctx)
+    ensureParagraphAfterMindmap(view)
   })
+}
+
+// atom 块本身没有可输入的位置：当思维图恰好是文档末尾（或唯一）的块时，
+// 在后面补一个空段落，否则用户无法继续输入文本。
+function ensureParagraphAfterMindmap(view: EditorView) {
+  const doc = view.state.doc
+  const last = doc.lastChild
+  if (!last || last.type.name !== 'mindmap') return
+  const end = doc.content.size
+  view.dispatch(view.state.tr.insert(end, doc.type.schema.nodes.paragraph.create()))
 }
