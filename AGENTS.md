@@ -42,7 +42,8 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 - **内置工具聚合**：`mcp:listPlugins` 把 registry 中 `kind:'builtin'` 的工具聚合为一条「待办任务」内置插件（不可卸载）展示在管理页
 - **插件能力 ctx**：插件工具的 `run(ctx, args)` 只拿到 `{ storage, log, pluginId, dataDir }` 及声明权限对应的能力（`http:request`→HTTP 客户端、`desktop`→桌面桥 `electron/main/desktop-bridge.ts` 白名单通道）；无 db 访问
 - **热重载**：`electron/main/plugin-watcher.ts` 监听 agent-tools 目录变化，重建注册表并推给 GUI MCP 端点（`mcp:catalogChanged` 通知渲染层）
-- **打包 CLI**：`scripts/ztool.mjs`（`npm run ztool`）— `init`/`build`/`install`/`list`；示例插件见 `examples/agent-tools/http/`
+- **打包 CLI**：`scripts/ztool.mjs`（`npm run ztool`；同时也是独立 npm 包 `zdn-agent-tool`，见 `scripts/package.json`，`private:true` 仅本地）— `init`/`build`/`install`/`list`；第三方可 `npx zdn-agent-tool ...`（无需 clone 仓库），也可纯手工 zip / 目录复制
+- **第三方开发规范**：见 `docs/plugin-spec.md`（ztool.json 清单/入口 JS 契约/能力 ctx/沙箱约束/三种开发路径/常见排查/完整示例）
 - 设置页「AI 智能体」小节动态渲染内置+插件工具开关，插件工具按权限显示能力徽标
 
 ### IPC 通信

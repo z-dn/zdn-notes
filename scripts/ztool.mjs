@@ -2,11 +2,22 @@
 // ===================================================================
 // ztool — ZDNotes 插件打包/安装 CLI（P5）
 //
+// 独立 npm 包（scripts/package.json，name=zdn-agent-tool），不依赖平台。
 // 用法：
 //   node scripts/ztool.mjs init <dir> [id]              # 脚手架新插件
 //   node scripts/ztool.mjs build <dir> [-o out.ztool]   # 校验并打包 .ztool
 //   node scripts/ztool.mjs install <file.ztool> [dataDir]  # 解压到 agent-tools/
 //   node scripts/ztool.mjs list <dataDir>               # 列出已安装插件
+//
+// 第三方可用 npm 包（无需 clone 仓库）：
+//   npx zdn-agent-tool init ./my-plugin myplugin
+//   npx zdn-agent-tool build ./my-plugin -o ./myplugin.ztool
+//   npx zdn-agent-tool install ./myplugin.ztool
+//   npx zdn-agent-tool list
+//
+// 也可不依赖任何工具：
+//   - 纯手工 zip：把插件目录压缩成 zip 后改扩展名为 .ztool，GUI「安装插件」选中即可
+//   - 目录复制：把插件目录复制到 <数据目录>/agent-tools/<id>/ 即热重载生效
 //
 // 包格式：zip（内含 ztool.json + 入口 JS + 资源）。解压目录名 = 插件 id。
 // ===================================================================
@@ -168,12 +179,20 @@ try {
     case '-h':
     case undefined:
       console.log(`
-ztool — ZDNotes 插件 CLI
-  用法:
-    node scripts/ztool.mjs init <dir> [id]                 新建插件脚手架
-    node scripts/ztool.mjs build <dir> [-o out.ztool]      校验并打包
-    node scripts/ztool.mjs install <file.ztool> [dataDir]  安装插件
-    node scripts/ztool.mjs list [dataDir]                  列出插件
+ztool — ZDNotes 插件 CLI（npm 包 zdn-agent-tool）
+
+用法:
+  node scripts/ztool.mjs init <dir> [id]                 新建插件脚手架
+  node scripts/ztool.mjs build <dir> [-o out.ztool]      校验并打包
+  node scripts/ztool.mjs install <file.ztool> [dataDir]  安装插件
+  node scripts/ztool.mjs list [dataDir]                  列出插件
+
+第三方（无需 clone 仓库）:
+  npx zdn-agent-tool init/build/install/list 同上
+
+纯手工（无需 Node/npm）:
+  - 目录压缩为 zip 后改 .ztool，GUI「安装插件」选中
+  - 或把插件目录复制到 <数据目录>/agent-tools/<id>/ 热重载生效
 `)
       break
     default:

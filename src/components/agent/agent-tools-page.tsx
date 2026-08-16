@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plug, Trash2, FolderOpen, Boxes } from 'lucide-react'
+import { Plug, Trash2, FolderOpen, Boxes, FileText, Download } from 'lucide-react'
 import { showConfirm } from '@/components/confirm-dialog'
 import { toast } from '@/lib/toast'
+import { renderMarkdown } from '@/lib/markdown'
 
 // ===================================================================
-// AGENT 工具 — 插件卡片总览。
-// 与「待办项」「工具箱」同级的侧边栏 tab：
-//   - 每个插件一张卡片，网格排列（内置插件 / 第三方插件）
-//   - 卡片内列出该插件的全部工具，每个工具带授权开关
-//     （写 agent-mcp-config.json 白名单）
-//   - 内置插件（含「待办任务」6 个任务方法）不可卸载
-//   - 第三方插件卡片带卸载入口
-// 安装/卸载/热重载后经 mcp:catalogChanged 自动刷新。
+// AGENT 工具 — 插件管理（二级菜单：插件 / 插件开发文档）。
+// 与「待办项」「工具箱」同级的侧边栏 tab，页内再分左右两栏：
+//   左侧二级菜单：
+//     插件          —— 插件卡片网格（内置/第三方）+ 安装/卸载 + 授权
+//     插件开发文档   —— 展示 docs/plugin-spec.md 并可下载为 Markdown
 // ===================================================================
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -19,10 +17,15 @@ const PERMISSION_LABELS: Record<string, string> = {
   desktop: '桌面 API',
 }
 
+type MenuKey = 'plugins' | 'docs'
+
 export function AgentToolsPage() {
+  const [menu, setMenu] = useState<MenuKey>('plugins')
   const [plugins, setPlugins] = useState<McpPluginInfo[]>([])
   const [config, setConfig] = useState<McpConfig | null>(null)
   const [installing, setInstalling] = useState(false)
+  const [specHtml, setSpecHtml] = useState('')
+  const [specLoading, setSpecLoading] = useState(false)
 
   const refresh = useCallback(async () => {
     const [p, c] = await Promise.all([
@@ -38,6 +41,30 @@ export function AgentToolsPage() {
     const unsub = window.electronAPI.onMcpCatalogChanged(() => refresh())
     return () => unsub()
   }, [refresh])
+
+  // 进入「开发文档」菜单时加载并渲染 markdown
+  useEffect(() => {
+    if (menu !== 'docs') return
+    let mounted = true
+    setSpecLoading(true)
+    window.electronAPI
+      .mcpGetPluginSpec()
+      .then(async (res) => {
+        if (!mounted) return
+        if (res.ok && res.content) {
+          const html = await renderMarkdown(res.content)
+          if (mounted) setSpecHtml(html)
+        } else {
+          toast(`加载开发文档失败: ${res.error ?? '未知错误'}`)
+        }
+      })
+      .finally(() => {
+        if (mounted) setSpecLoading(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [menu])
 
   async function handleInstall() {
     setInstalling(true)
@@ -80,10 +107,19 @@ export function AgentToolsPage() {
 
   async function toggleEnabled(enabled: boolean) {
     if (!config) return
-    const next = { ...config, enabled }
-    setConfig(next)
+    setConfig({ ...config, enabled })
     const saved = await window.electronAPI.mcpSetConfig({ enabled })
     setConfig(saved)
+  }
+
+  async function handleDownloadSpec() {
+    const res = await window.electronAPI.mcpDownloadPluginSpec()
+    if (res.canceled) return
+    if (res.ok) {
+      toast(`已保存: ${res.path}`)
+    } else {
+      toast(`保存失败: ${res.error ?? '未知错误'}`)
+    }
   }
 
   const builtinPlugins = plugins.filter((p) => p.builtin)
@@ -163,79 +199,143 @@ export function AgentToolsPage() {
     )
   }
 
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-divider px-3 py-2">
-        <h2 className="flex items-center gap-1.5 text-sm font-medium">
-          <Boxes className="size-3.5" />
-          AGENT 插件
-        </h2>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={config?.enabled ?? false}
-              onChange={(e) => toggleEnabled(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-            <span className="text-[11px] text-muted-foreground">启用 MCP</span>
-          </label>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={async () => {
-                const dir = await window.electronAPI.mcpGetPluginsDir()
-                toast(`插件目录: ${dir}`)
-              }}
-              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
-              title="插件目录"
-            >
-              <FolderOpen className="size-3" />
-              目录
-            </button>
-            <button
-              onClick={handleInstall}
-              disabled={installing}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              <Plug className="size-3" />
-              {installing ? '安装中…' : '安装插件'}
-            </button>
-          </div>
-        </div>
-      </div>
+  const MENUS: { id: MenuKey; label: string; icon: typeof Boxes }[] = [
+    { id: 'plugins', label: '插件', icon: Boxes },
+    { id: 'docs', label: '插件开发文档', icon: FileText },
+  ]
 
-      <div className="flex-1 overflow-y-auto p-3">
-        {plugins.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Boxes className="size-6" />
-            <p className="text-xs">暂无可用的 AGENT 插件</p>
-            <p className="text-[11px]">
-              点击右上角「安装插件」选择 .ztool 包，或把插件目录放入数据目录的 agent-tools/
-            </p>
-          </div>
+  return (
+    <div className="flex h-full">
+      {/* 左侧二级菜单 */}
+      <aside className="flex w-40 shrink-0 flex-col border-r border-divider bg-panel-sidebar">
+        <div className="space-y-0.5 p-2">
+          {MENUS.map((item) => {
+            const Icon = item.icon
+            const active = menu === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => setMenu(item.id)}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                  active
+                    ? 'bg-primary/10 font-medium text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                }`}
+              >
+                <Icon className="size-3.5 shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </aside>
+
+      {/* 右侧内容区 */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {menu === 'plugins' ? (
+          <>
+            <div className="flex items-center justify-between border-b border-divider px-3 py-2">
+              <h2 className="flex items-center gap-1.5 text-sm font-medium">
+                <Boxes className="size-3.5" />
+                插件
+              </h2>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config?.enabled ?? false}
+                    onChange={(e) => toggleEnabled(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                  <span className="text-[11px] text-muted-foreground">启用 MCP</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      const dir = await window.electronAPI.mcpGetPluginsDir()
+                      toast(`插件目录: ${dir}`)
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
+                    title="插件目录"
+                  >
+                    <FolderOpen className="size-3" />
+                    目录
+                  </button>
+                  <button
+                    onClick={handleInstall}
+                    disabled={installing}
+                    className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <Plug className="size-3" />
+                    {installing ? '安装中…' : '安装插件'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3">
+              {plugins.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <Boxes className="size-6" />
+                  <p className="text-xs">暂无可用的 AGENT 插件</p>
+                  <p className="text-[11px]">
+                    点击右上角「安装插件」选择 .ztool 包，或把插件目录放入数据目录的 agent-tools/
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {builtinPlugins.length > 0 && (
+                    <section>
+                      <h3 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        内置插件
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+                        {builtinPlugins.map(renderCard)}
+                      </div>
+                    </section>
+                  )}
+                  {thirdPartyPlugins.length > 0 && (
+                    <section>
+                      <h3 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        第三方插件
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+                        {thirdPartyPlugins.map(renderCard)}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
         ) : (
-          <div className="space-y-5">
-            {builtinPlugins.length > 0 && (
-              <section>
-                <h3 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                  内置插件
-                </h3>
-                <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-                  {builtinPlugins.map(renderCard)}
-                </div>
-              </section>
-            )}
-            {thirdPartyPlugins.length > 0 && (
-              <section>
-                <h3 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                  第三方插件
-                </h3>
-                <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
-                  {thirdPartyPlugins.map(renderCard)}
-                </div>
-              </section>
-            )}
-          </div>
+          <>
+            <div className="flex items-center justify-between border-b border-divider px-3 py-2">
+              <h2 className="flex items-center gap-1.5 text-sm font-medium">
+                <FileText className="size-3.5" />
+                插件开发文档
+              </h2>
+              <button
+                onClick={handleDownloadSpec}
+                className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
+              >
+                <Download className="size-3" />
+                下载 Markdown
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {specLoading ? (
+                <p className="text-xs text-muted-foreground">加载中…</p>
+              ) : specHtml ? (
+                <div
+                  className="text-sm [&_h1]:mb-2 [&_h1]:border-b [&_h1]:border-divider [&_h1]:pb-1 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-medium [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[12px] [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:text-xs [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-divider [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-divider [&_td]:px-2 [&_td]:py-1 [&_a]:text-primary [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: specHtml }}
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">未找到开发文档</p>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

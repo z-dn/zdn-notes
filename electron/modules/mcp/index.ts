@@ -1,4 +1,6 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, app } from 'electron'
+import { readFileSync, writeFileSync } from 'fs'
+import { join } from 'path'
 import { startMcpIpc } from '../../main/mcp-ipc'
 import type { McpIpcServer } from '../../main/mcp-ipc'
 import { desktopBridge } from '../../main/desktop-bridge'
@@ -12,6 +14,14 @@ import type { FeatureModule, MainModuleContext } from '../../core/contracts'
 
 let mcpIpc: McpIpcServer | null = null
 let currentToolRegistry: ToolRegistry | undefined
+
+/** 插件开发规范文档路径：dev 读仓库 docs/，prod 读 extraResources 打包的 plugin-spec.md */
+export function pluginSpecPath(): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'plugin-spec.md')
+  }
+  return join(app.getAppPath(), 'docs', 'plugin-spec.md')
+}
 
 export function getMcpIpc(): McpIpcServer | null {
   return mcpIpc
@@ -29,9 +39,16 @@ function registerIpc(ctx: MainModuleContext): void {
     loadConfig({ configFile: configFileForDataDir(ctx.getDataDir()), catalog: getCatalogMap() }),
   )
   ipcMain.handle('mcp:setConfig', (_e, cfg: unknown) => {
-    writeConfig(configFileForDataDir(ctx.getDataDir()), cfg as Parameters<typeof writeConfig>[1], getCatalogMap())
+    writeConfig(
+      configFileForDataDir(ctx.getDataDir()),
+      cfg as Parameters<typeof writeConfig>[1],
+      getCatalogMap(),
+    )
     mcpIpc?.reloadConfig()
-    return loadConfig({ configFile: configFileForDataDir(ctx.getDataDir()), catalog: getCatalogMap() })
+    return loadConfig({
+      configFile: configFileForDataDir(ctx.getDataDir()),
+      catalog: getCatalogMap(),
+    })
   })
   // 设置页渲染完整工具目录（内置 + 插件），按 kind 分组展示
   ipcMain.handle('mcp:getCatalog', () => {
@@ -49,8 +66,8 @@ function registerIpc(ctx: MainModuleContext): void {
         defaultEnabled: t.defaultEnabled ?? false,
         capabilities: t.pluginPermissions ?? [],
       }))
-      .sort(
-        (a, b) => (a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === 'builtin' ? -1 : 1),
+      .sort((a, b) =>
+        a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === 'builtin' ? -1 : 1,
       )
     return { tools }
   })
@@ -87,6 +104,30 @@ function registerIpc(ctx: MainModuleContext): void {
   })
   // 插件目录路径（供渲染层展示/打开）
   ipcMain.handle('mcp:getPluginsDir', () => pluginRoot(ctx.getDataDir()))
+  // 插件开发规范文档内容
+  ipcMain.handle('mcp:getPluginSpec', () => {
+    try {
+      return { ok: true, content: readFileSync(pluginSpecPath(), 'utf-8') }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+  // 下载插件开发规范为 Markdown
+  ipcMain.handle('mcp:downloadPluginSpec', async () => {
+    try {
+      const content = readFileSync(pluginSpecPath(), 'utf-8')
+      const result = await dialog.showSaveDialog({
+        title: '保存插件开发规范',
+        defaultPath: 'plugin-spec.md',
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      })
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+      writeFileSync(result.filePath, content, 'utf-8')
+      return { ok: true, path: result.filePath }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
 }
 
 async function onStart(ctx: MainModuleContext): Promise<void> {

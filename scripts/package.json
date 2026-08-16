@@ -1,0 +1,16 @@
+{
+  "name": "zdn-agent-tool",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "zdn-agent-tool": "./ztool.mjs"
+  },
+  "files": [
+    "ztool.mjs"
+  ],
+  "dependencies": {
+    "adm-zip": "^0.6.0"
+  },
+  "private": true,
+  "description": "ZDNotes 第三方 Agent 插件打包/安装 CLI"
+}

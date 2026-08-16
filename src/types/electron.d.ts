@@ -83,15 +83,26 @@ declare global {
       }>
       onMcpCatalogChanged(cb: () => void): () => void
       mcpListPlugins(): Promise<McpPluginInfo[]>
-      mcpInstallPlugin(): Promise<{ ok: boolean; canceled?: boolean; id?: string; name?: string; error?: string }>
+      mcpInstallPlugin(): Promise<{
+        ok: boolean
+        canceled?: boolean
+        id?: string
+        name?: string
+        error?: string
+      }>
       mcpUninstallPlugin(id: string): Promise<{ ok: boolean; removed?: boolean; error?: string }>
       mcpGetPluginsDir(): Promise<string>
+      mcpGetPluginSpec(): Promise<{ ok: boolean; content?: string; error?: string }>
+      mcpDownloadPluginSpec(): Promise<{
+        ok: boolean
+        canceled?: boolean
+        path?: string
+        error?: string
+      }>
 
       toolGetAll(): Promise<Record<string, string>>
       toolSet(key: string, value: string): Promise<void>
-      httpRequest(
-        config: HttpRequestConfig,
-      ): Promise<{
+      httpRequest(config: HttpRequestConfig): Promise<{
         ok: boolean
         status?: number
         statusText?: string
