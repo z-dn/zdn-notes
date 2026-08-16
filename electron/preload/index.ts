@@ -42,11 +42,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('inbox:processed', handler)
     return () => ipcRenderer.removeListener('inbox:processed', handler)
   },
+  onDataChanged: (cb: () => void) => {
+    const handler = () => cb()
+    ipcRenderer.on('data:changed', handler)
+    return () => ipcRenderer.removeListener('data:changed', handler)
+  },
   saveImageFromData: (dataUri: string) => ipcRenderer.invoke('image:saveFromData', dataUri),
   pickAndSaveImage: () => ipcRenderer.invoke('image:pickAndSave'),
   deleteImage: (url: string) => ipcRenderer.invoke('image:delete', url),
   settingsGetAll: () => ipcRenderer.invoke('settings:getAll'),
   settingsSet: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
+
+  mcpGetConfig: () => ipcRenderer.invoke('mcp:getConfig'),
+  mcpSetConfig: (cfg: unknown) => ipcRenderer.invoke('mcp:setConfig', cfg),
 
   toolGetAll: () => ipcRenderer.invoke('tool:getAll'),
   toolSet: (key: string, value: string) => ipcRenderer.invoke('tool:set', key, value),

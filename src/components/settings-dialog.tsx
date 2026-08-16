@@ -21,6 +21,15 @@ const THEME_OPTIONS: { value: 'system' | 'light' | 'dark'; label: string }[] = [
   { value: 'dark', label: '深色' },
 ]
 
+const MCP_PERMISSION_LABELS: Record<McpOperationKey, string> = {
+  'task:create': '创建任务',
+  'task:read_list': '查看任务列表',
+  'task:read_detail': '查看任务详情',
+  'task:update_status': '切换任务状态',
+  'task:update': '更新任务内容',
+  'task:delete': '删除任务',
+}
+
 
 
 export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialogProps) {
@@ -35,6 +44,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   const [dataDir, setDataDir] = useState('')
   const [dataDirWarning, setDataDirWarning] = useState<string | null>(null)
   const [inboxDir, setInboxDir] = useState('')
+  const [mcpConfig, setMcpConfig] = useState<McpConfig | null>(null)
   const { contentRef, overlayRef, mounted, playClose } = useFlipDialog(open, onClose)
 
   useEffect(() => {
@@ -42,6 +52,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     window.electronAPI.getDataDir().then(setDataDir)
     window.electronAPI.getDataDirFallback().then(setDataDirWarning)
     window.electronAPI.getInboxDir().then(setInboxDir)
+    window.electronAPI.mcpGetConfig().then(setMcpConfig)
   }, [])
 
   useEffect(() => {
@@ -181,6 +192,13 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     } else {
       toast(`恢复失败: ${result.error ?? '未知错误'}`)
     }
+  }
+
+  async function updateMcpConfig(patch: Partial<McpConfig>) {
+    if (!mcpConfig) return
+    const next = await window.electronAPI.mcpSetConfig({ ...mcpConfig, ...patch })
+    setMcpConfig(next)
+    toast('MCP 配置已保存')
   }
 
   return (
@@ -356,6 +374,40 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
             </button>
             <p className="mt-2 text-xs text-muted-foreground">
               将 zdn-notes.db 或备份 zip 放入收件夹会自动增量合入本地（按时间取新，只增不删）。
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">AI 智能体（MCP）</label>
+            <label className="mb-3 flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={mcpConfig?.enabled ?? false}
+                onChange={(e) => updateMcpConfig({ enabled: e.target.checked })}
+                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <span className="text-xs font-medium text-muted-foreground">启用 MCP（允许智能体访问任务数据）</span>
+            </label>
+            {mcpConfig && (
+              <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                {(Object.keys(MCP_PERMISSION_LABELS) as McpOperationKey[]).map((key) => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={mcpConfig.permissions[key]}
+                      disabled={!mcpConfig.enabled}
+                      onChange={(e) =>
+                        updateMcpConfig({ permissions: { ...mcpConfig.permissions, [key]: e.target.checked } })
+                      }
+                      className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40"
+                    />
+                    <span className="text-xs text-muted-foreground">{MCP_PERMISSION_LABELS[key]}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              MCP 仅暴露任务增改查删能力，分类与内部信息不提供。改动即时生效；已连接的独立 MCP 进程需重启。
             </p>
           </div>
 

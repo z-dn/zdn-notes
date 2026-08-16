@@ -86,6 +86,15 @@ export default function App() {
     return () => unsub()
   }, [loadTasks, loadCategories])
 
+  // 数据被外部写者（MCP 智能体经 GUI-IPC 委托）修改时刷新界面
+  useEffect(() => {
+    const unsub = window.electronAPI.onDataChanged(() => {
+      loadTasks(true)
+      loadCategories()
+    })
+    return () => unsub()
+  }, [loadTasks, loadCategories])
+
   useEffect(() => {
     selectTask(null)
   }, [activeCategoryId, selectTask])

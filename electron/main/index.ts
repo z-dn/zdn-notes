@@ -4,18 +4,26 @@ import { pathToFileURL } from 'url'
 import fs from 'fs'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
-import { initDB, closeDB } from './database'
+import { initDB, closeDB, getDB, saveAsync } from './database'
 import { registerIpcHandlers } from './ipc'
 import { getAllSettings } from './database/settings-dao'
-import { getImagesDir } from './data-location'
+import { getImagesDir, getDataDir } from './data-location'
 import { startInboxWatcher } from './import-inbox'
 import { isSafeImageFilename } from './image-utils'
+import { acquireGuiLock, releaseGuiLock } from '../mcp/lock'
+import { startMcpIpc } from './mcp-ipc'
+import type { McpIpcServer } from './mcp-ipc'
+import { runStdio } from '../mcp/mcp-server'
+import { runCli } from '../mcp/cli'
+import { buildGuiDelegate } from '../mcp/gui-client'
+import { loadConfig, writeConfig, configFileForDataDir } from '../mcp/config'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'zdn-img', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
 ])
 
 let mainWindow: BrowserWindow | null = null
+let mcpIpc: McpIpcServer | null = null
 
 function registerWindowIpc(): void {
   ipcMain.handle('window:minimize', () => mainWindow?.minimize())
@@ -119,11 +127,27 @@ ipcMain.handle('update:install', () => {
   autoUpdater.quitAndInstall()
 })
 
-const gotTheLock = app.requestSingleInstanceLock()
-
-if (!gotTheLock) {
-  app.quit()
+// ---- MCP 服务 / CLI 入口（打包后智能体可直接以命令行拉起，无需 Node/npm）----
+// 必须在单实例锁之前：GUI 在跑时，服务/CLI 进程不能被 requestSingleInstanceLock 挡退。
+const mcpArgs = process.argv.slice(1)
+if (mcpArgs.includes('--zdn-mcp-stdio')) {
+  const dataDir = getDataDir()
+  runStdio({ dataDir, delegate: buildGuiDelegate({ dataDir }) })
+  // runStdio 由 stdin 生命周期管理，常驻不退出；不建窗口、不抢单实例/GUI 锁
+} else if (mcpArgs.includes('--zdn-mcp-cli')) {
+  const idx = mcpArgs.indexOf('--zdn-mcp-cli')
+  runCli(mcpArgs.slice(idx + 1))
+    .then((code) => app.exit(code))
+    .catch((e) => {
+      process.stderr.write('fatal: ' + (e instanceof Error ? e.message : String(e)) + '\n')
+      app.exit(1)
+    })
 } else {
+  const gotTheLock = app.requestSingleInstanceLock()
+
+  if (!gotTheLock) {
+    app.quit()
+  } else {
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
@@ -135,6 +159,23 @@ if (!gotTheLock) {
     Menu.setApplicationMenu(null)
     registerUpdateHandlers()
     await initDB()
+    // GUI-IPC：GUI 作为权威单写者，启动本地端点并把 port/token 写进 GUI 锁，
+    // 智能体 zdn-mcp 检测到 GUI 在跑时会把 tools/call 委托到这里执行。
+    mcpIpc = await startMcpIpc({
+      dataDir: getDataDir(),
+      getDB,
+      saveAsync,
+      notify: () => mainWindow?.webContents.send('data:changed'),
+    })
+    // GUI 优先：启动即获取数据目录文件锁，成为权威写者（智能体 zdn-mcp 会尊重此锁）
+    acquireGuiLock(getDataDir(), { port: mcpIpc.port, token: mcpIpc.token })
+    // 设置界面读写 MCP 配置（agent-mcp-config.json）；写入后热更新 GUI 委托端点
+    ipcMain.handle('mcp:getConfig', () => loadConfig({ configFile: configFileForDataDir(getDataDir()) }))
+    ipcMain.handle('mcp:setConfig', (_e, cfg: unknown) => {
+      writeConfig(configFileForDataDir(getDataDir()), cfg as Parameters<typeof writeConfig>[1])
+      mcpIpc?.reloadConfig()
+      return loadConfig({ configFile: configFileForDataDir(getDataDir()) })
+    })
     registerIpcHandlers()
     registerWindowIpc()
 
@@ -165,6 +206,7 @@ if (!gotTheLock) {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })
   })
+  }
 }
 
 app.on('window-all-closed', () => {
@@ -175,4 +217,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   closeDB()
+  if (mcpIpc) void mcpIpc.stop()
+  releaseGuiLock(getDataDir())
 })

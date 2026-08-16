@@ -15,6 +15,21 @@ declare global {
     body: string
   }
 
+  type McpOperationKey =
+    | 'task:create'
+    | 'task:read_list'
+    | 'task:read_detail'
+    | 'task:update_status'
+    | 'task:update'
+    | 'task:delete'
+
+  interface McpConfig {
+    enabled: boolean
+    graph: string
+    maxWaitLockMs: number
+    permissions: Record<McpOperationKey, boolean>
+  }
+
   interface Window {
     electronAPI: {
       platform: string
@@ -36,6 +51,9 @@ declare global {
 
       settingsGetAll(): Promise<Record<string, string>>
       settingsSet(key: string, value: string): Promise<void>
+
+      mcpGetConfig(): Promise<McpConfig>
+      mcpSetConfig(cfg: Partial<McpConfig>): Promise<McpConfig>
 
       toolGetAll(): Promise<Record<string, string>>
       toolSet(key: string, value: string): Promise<void>
@@ -87,6 +105,7 @@ declare global {
           error?: string
         }) => void,
       ): () => void
+      onDataChanged(cb: () => void): () => void
 
       saveImageFromData(dataUri: string): Promise<string>
       pickAndSaveImage(): Promise<string | null>

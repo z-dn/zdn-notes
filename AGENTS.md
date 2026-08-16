@@ -37,8 +37,11 @@ src/                    → 渲染进程 (React)
 | `inbox:getDir/openDir` | 收件夹路径/打开 |
 | `window:minimize/maximizeToggle/close/setThemeSource` | 窗口控制 |
 | `update:check/download/install` | 自动更新 |
+| `data:changed`（事件） | 数据被外部写者（MCP 智能体经 GUI-IPC 委托）修改，主进程通知渲染层刷新 |
 
 > 渲染进程通过 `window.electronAPI` 调用，类型定义在 `src/types/electron.d.ts`。
+>
+> **GUI-IPC 委托（MCP）**：主进程 `startMcpIpc()`（`electron/main/mcp-ipc.ts`）启动 loopback 端点，把 port/token 写进 GUI 锁文件（`electron/mcp/lock.ts` 的 `acquireGuiLock`）；`zdn-mcp`（`electron/mcp/`）检测到 GUI 在跑时把 `tools/call` 整包转发给 GUI 执行（GUI 为权威单写者），GUI 不在时回退直接文件模式。
 
 ### 数据库层
 
