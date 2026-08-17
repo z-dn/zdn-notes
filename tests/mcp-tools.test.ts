@@ -131,3 +131,94 @@ describe('tools/call execution', () => {
     expect(JSON.parse(text2)).toHaveLength(1)
   })
 })
+
+describe('进程隔离：delegate 只转发内置工具，插件工具本地执行', () => {
+  function writeEchoPlugin() {
+    const dir = path.join(dataDir, 'agent-tools', 'echo')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'ztool.json'),
+      JSON.stringify({
+        id: 'echo',
+        name: 'Echo',
+        version: '1.0.0',
+        apiVersion: 1,
+        entry: 'index.js',
+        permissions: [],
+      }),
+      'utf-8',
+    )
+    fs.writeFileSync(
+      path.join(dir, 'index.js'),
+      `module.exports = { tools: [{ key: 'echo:say', name: 'echo_say', label: 'Echo', description: 'x', inputSchema: {}, run: async () => ({ ok: true, echo: true }) }] }`,
+      'utf-8',
+    )
+  }
+
+  it('内置工具经 delegate 转发', async () => {
+    writeEchoPlugin()
+    const configFile = path.join(dataDir, 'agent-mcp-config.json')
+    loadConfig({ configFile })
+    let delegatedCount = 0
+    const server = new McpServer({
+      configFile,
+      dataDir,
+      delegate: async (req) => {
+        delegatedCount++
+        const p = req.params as { name?: string }
+        return {
+          jsonrpc: '2.0',
+          id: req.id ?? null,
+          result: { content: [{ type: 'text', text: JSON.stringify({ delegated: p.name }) }] },
+        }
+      },
+    })
+    await initServer(server)
+    const call = await rpc(server, {
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/call',
+      params: { name: 'task_create', arguments: { title: 'x' } },
+    })
+    expect(delegatedCount).toBe(1)
+    const text = (call?.result as { content: { text: string }[] }).content[0].text
+    expect(JSON.parse(text)).toMatchObject({ delegated: 'task_create' })
+  })
+
+  it('插件工具不转发，本地沙箱执行', async () => {
+    writeEchoPlugin()
+    const configFile = path.join(dataDir, 'agent-mcp-config.json')
+    loadConfig({ configFile })
+    let delegated = false
+    const server = new McpServer({
+      configFile,
+      dataDir,
+      delegate: async () => {
+        delegated = true
+        return null
+      },
+    })
+    await initServer(server)
+    const call = await rpc(server, {
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'echo_say', arguments: {} },
+    })
+    expect(delegated).toBe(false)
+    const text = (call?.result as { content: { text: string }[] }).content[0].text
+    expect(JSON.parse(text)).toMatchObject({ ok: true, echo: true })
+  })
+
+  it('excludePlugins：tools/list 不暴露插件工具', async () => {
+    writeEchoPlugin()
+    const configFile = path.join(dataDir, 'agent-mcp-config.json')
+    loadConfig({ configFile })
+    const server = new McpServer({ configFile, dataDir, excludePlugins: true })
+    await initServer(server)
+    const list = await rpc(server, { jsonrpc: '2.0', id: 8, method: 'tools/list', params: {} })
+    const names = (list?.result as { tools: { name: string }[] }).tools.map((t) => t.name)
+    expect(names).toContain('task_create')
+    expect(names).not.toContain('echo_say')
+  })
+})

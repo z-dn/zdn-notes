@@ -46,6 +46,7 @@ export interface McpServerOpts {
   dataDir?: string
   waitMs?: number
   // 整包委托：返回响应则直接使用；返回 null 回退本地执行（MCP 进程转发到 GUI 用）
+  // 仅对内置工具生效；插件工具始终本地执行（独立 MCP 进程沙箱），不进主进程。
   delegate?: (req: JsonRpcRequest) => Promise<JsonRpcResponse | null>
   // 本地执行时用此数据库源（GUI 进程传 getDB()，写后触发 afterWrite）
   dbSource?: () => Database
@@ -57,6 +58,8 @@ export interface McpServerOpts {
   registry?: ToolRegistry
   // 插件 desktop 能力桥（GUI 侧注入；独立进程无桌面能力）
   desktopBridge?: (channel: string, args: unknown[]) => Promise<unknown>
+  // 仅暴露内置工具（GUI 端点用）：插件工具被排除，确保插件执行永不进入主进程
+  excludePlugins?: boolean
 }
 
 // ---- 工具定义 + 执行 ----
@@ -74,8 +77,10 @@ interface ToolSpec {
   run: McpToolSpec['run']
 }
 
-function buildTools(cfg: MpcConfig, registry: ToolRegistry): ToolSpec[] {
-  return registry.buildMcpTools(cfg)
+function buildTools(cfg: MpcConfig, registry: ToolRegistry, excludePlugins = false): ToolSpec[] {
+  const tools = registry.buildMcpTools(cfg)
+  if (!excludePlugins) return tools
+  return tools.filter((t) => t.kind === 'builtin')
 }
 
 // ---- 请求处理（对传输层中立） ----
@@ -92,9 +97,11 @@ export class McpServer {
   private afterWrite: (() => void) | null
   private desktopBridge: ((channel: string, args: unknown[]) => Promise<unknown>) | null
   private configFile?: string
+  private excludePlugins: boolean
 
   constructor(opts?: McpServerOpts) {
     this.configFile = opts?.configFile
+    this.excludePlugins = opts?.excludePlugins ?? false
     this.registry = opts?.registry ?? defaultRegistry()
     this.dataDir = opts?.dataDir?.trim() || (process.env.ZDNOTES_DATA_DIR ?? undefined)
     // 加载第三方插件工具进统一注册表（GUI 侧传入的 registry 已含插件，重复注册会抛错，这里幂等处理）
@@ -106,7 +113,7 @@ export class McpServer {
       catalog: this.registry.toCatalog(),
     })
     this.waitMs = opts?.waitMs ?? this.cfg.maxWaitLockMs
-    this.tools = buildTools(this.cfg, this.registry)
+    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins)
     this.delegate = opts?.delegate ?? null
     this.dbSource = opts?.dbSource ?? null
     this.afterWrite = opts?.afterWrite ?? null
@@ -121,7 +128,7 @@ export class McpServer {
       catalog: this.registry.toCatalog(),
     })
     this.waitMs = this.cfg.maxWaitLockMs
-    this.tools = buildTools(this.cfg, this.registry)
+    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins)
   }
 
   // 插件热重载：替换注册表（重建内置+插件）并重建工具白名单。
@@ -131,7 +138,7 @@ export class McpServer {
       configFile: this.configFile,
       catalog: this.registry.toCatalog(),
     })
-    this.tools = buildTools(this.cfg, this.registry)
+    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins)
   }
 
   get serverInfo() {
@@ -195,8 +202,9 @@ export class McpServer {
           if (!tool) {
             return this.error(-32602, `Unknown tool: ${p.name}`, id)
           }
-          // 委托模式（如转发到 GUI 执行）：整包转交，返回非 null 即采用其结果
-          if (this.delegate) {
+          // 委托模式（如转发到 GUI 执行）：仅内置工具整包转交（返回非 null 即采用其结果）；
+          // 插件工具始终本地执行（独立 MCP 进程沙箱），不进主进程。
+          if (this.delegate && tool.kind === 'builtin') {
             const delegated = await this.delegate(req)
             if (delegated) return delegated
           }

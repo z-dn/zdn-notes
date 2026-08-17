@@ -54,6 +54,8 @@ export function startMcpIpc(deps: McpIpcDeps): Promise<McpIpcServer> {
     dbSource: deps.getDB,
     registry: deps.registry,
     desktopBridge: deps.desktopBridge,
+    // GUI 端点只执行内置工具；插件工具在独立 MCP 进程沙箱执行，永不进入主进程
+    excludePlugins: true,
     afterWrite: () => {
       deps.saveAsync()
       deps.notify()
