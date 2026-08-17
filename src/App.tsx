@@ -13,6 +13,8 @@ import { SettingsDialog } from '@/components/settings-dialog'
 import { ToolboxSidebar } from '@/components/toolbox/toolbox-sidebar'
 import { ToolboxWorkspace } from '@/components/toolbox/toolbox-workspace'
 import { AgentToolsPage } from '@/components/agent/agent-tools-page'
+import { AgentSidebar } from '@/components/agent/agent-sidebar'
+import type { AgentMenuKey } from '@/components/agent/agent-sidebar'
 import { useTheme } from '@/hooks/use-theme'
 import { useFeature } from '@/hooks/use-feature'
 import { ToastContainer } from '@/components/toast'
@@ -43,6 +45,7 @@ export default function App() {
     return tasksEnabled
   })
   const [sidebarTab, setSidebarTab] = useState<string>(views[0]?.id ?? 'categories')
+  const [agentMenu, setAgentMenu] = useState<AgentMenuKey>('plugins')
 
   useEffect(() => {
     loadTasks()
@@ -248,7 +251,7 @@ export default function App() {
               className="flex min-h-0 flex-1 flex-col"
               render={(k) => {
                 if (k === 'toolbox') return <ToolboxSidebar />
-                if (k === 'agent') return null
+                if (k === 'agent') return <AgentSidebar menu={agentMenu} onMenuChange={setAgentMenu} />
                 return <CategorySidebar />
               }}
             />
@@ -267,7 +270,7 @@ export default function App() {
                   )
                 }
                 if (k === 'agent') {
-                  return <AgentToolsPage />
+                  return <AgentToolsPage menu={agentMenu} />
                 }
                 return (
                   <>

@@ -3,13 +3,12 @@ import { Plug, Trash2, FolderOpen, Boxes, FileText, Download } from 'lucide-reac
 import { showConfirm } from '@/components/confirm-dialog'
 import { toast } from '@/lib/toast'
 import { renderMarkdown } from '@/lib/markdown'
+import type { AgentMenuKey } from './agent-sidebar'
 
 // ===================================================================
-// AGENT 工具 — 插件管理（二级菜单：插件 / 插件开发文档）。
-// 与「待办项」「工具箱」同级的侧边栏 tab，页内再分左右两栏：
-//   左侧二级菜单：
-//     插件          —— 插件卡片网格（内置/第三方）+ 安装/卸载 + 授权
-//     插件开发文档   —— 展示 docs/plugin-spec.md 并可下载为 Markdown
+// AGENT 工具 — 插件管理内容区（二级菜单在全局左侧栏 AgentSidebar）：
+//   插件          —— 插件卡片网格（内置/第三方）+ 安装/卸载 + 授权
+//   插件开发文档   —— 展示 docs/plugin-spec.md 并可下载为 Markdown
 // ===================================================================
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -17,10 +16,11 @@ const PERMISSION_LABELS: Record<string, string> = {
   desktop: '桌面 API',
 }
 
-type MenuKey = 'plugins' | 'docs'
+interface AgentToolsPageProps {
+  menu: AgentMenuKey
+}
 
-export function AgentToolsPage() {
-  const [menu, setMenu] = useState<MenuKey>('plugins')
+export function AgentToolsPage({ menu }: AgentToolsPageProps) {
   const [plugins, setPlugins] = useState<McpPluginInfo[]>([])
   const [config, setConfig] = useState<McpConfig | null>(null)
   const [installing, setInstalling] = useState(false)
@@ -199,38 +199,9 @@ export function AgentToolsPage() {
     )
   }
 
-  const MENUS: { id: MenuKey; label: string; icon: typeof Boxes }[] = [
-    { id: 'plugins', label: '插件', icon: Boxes },
-    { id: 'docs', label: '插件开发文档', icon: FileText },
-  ]
-
   return (
     <div className="flex h-full">
-      {/* 左侧二级菜单 */}
-      <aside className="flex w-40 shrink-0 flex-col border-r border-divider bg-panel-sidebar">
-        <div className="space-y-0.5 p-2">
-          {MENUS.map((item) => {
-            const Icon = item.icon
-            const active = menu === item.id
-            return (
-              <button
-                key={item.id}
-                onClick={() => setMenu(item.id)}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-                  active
-                    ? 'bg-primary/10 font-medium text-primary'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                }`}
-              >
-                <Icon className="size-3.5 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </aside>
-
-      {/* 右侧内容区 */}
+      {/* 内容区 */}
       <div className="flex min-w-0 flex-1 flex-col">
         {menu === 'plugins' ? (
           <>
