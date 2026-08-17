@@ -71,9 +71,7 @@ npm run mcp -- config show
 
 ```json
 {  "mcp": {  "zdn-notes": {  "type": "stdio",  "command": "npx",  "args": ["tsx", "<仓库路径>/electron/mcp/index.ts", "--stdio"],  "enabled": true } } }
-```
-
-### Codex
+```### Codex
 
 按 stdio server 注册：
 
@@ -108,6 +106,20 @@ codex mcp add zdn-notes -- npx tsx <仓库路径>/electron/mcp/index.ts --stdio
 - 数据目录自动跟随应用（默认或 `data-location.json` 自定义），无需额外传参。
 - **实现说明**：Electron 主进程的 `process.stdin` 在 Windows 上启动即 EOF（readline 立即 close，无法承载 stdio 传输），因此 `--zdn-mcp-stdio` 会以 `ELECTRON_RUN_AS_NODE=1` 自举一个**纯 Node 子进程**（`out/mcp/index.cjs`，由 `scripts/build-mcp.mjs` 打包，源为 `electron/mcp/index.ts`）直接继承当前 stdin/stdout 跑 MCP server；主进程保持存活并镜像子进程退出码。插件加载/插件日志一律写 stderr，不污染 stdout（JSON-RPC 通道）。
 - **已知残留**：Windows 上 Electron 启动时会向 stdout 写入一个 `\r\n`（一个空行，位于任何 JSON-RPC 之前）。官方 MCP SDK 会跳过空行，属良性；要求绝对纯净 stdout 时可改用纯 Node 入口（`npx tsx <仓库>/electron/mcp/index.ts --stdio`）或远程 HTTP 模式。
+
+## 开发环境验证打包同款链路
+
+日常开发用 `npm run mcp:stdio`（tsx 直跑源码，改代码即时生效）快速调试；当需要确认行为与打包一致时，可用 **electron 入口**复现打包的完整调用链（主进程 `--zdn-mcp-stdio` 分支 → 自举纯 Node 子进程 → `getDataDir()` 数据目录 → stdout 空行残留等）：
+
+```bash
+# 与打包同链路启动 MCP stdio server（electron-vite 透传 --zdn-mcp-stdio 给主进程）
+npm run mcp:stdio:dev
+
+# 同链路 + 子进程挂 V8 inspector（端口 9229），可用 Chrome DevTools 断点调试子进程
+npm run mcp:stdio:dev:debug
+```
+
+> 调试子进程对应 `electron/main/index.ts` 里的 `ZDNOTES_MCP_INSPECT=<port>` 环境变量（`mcp:stdio:dev:debug` 已内置）；不设置时与打包行为零差异。
 
 ## 能力配置（`agent-mcp-config.json`）
 
