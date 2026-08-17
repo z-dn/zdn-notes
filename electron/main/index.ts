@@ -33,7 +33,11 @@ if (mcpArgs.includes('--zdn-mcp-stdio')) {
     process.stderr.write(`fatal: MCP bundle not found at ${mcpEntry}（请先运行 npm run build:mcp）\n`)
     app.exit(1)
   }
-  const child = spawn(process.execPath, [mcpEntry, '--stdio', '--data-dir', dataDir], {
+  // 调试：设置 ZDNOTES_MCP_INSPECT=<port> 时给子进程挂 V8 inspector（仅开发用；
+  // 不设置则与打包行为完全一致，此环境变量默认不影响线上）。
+  const inspectPort = process.env.ZDNOTES_MCP_INSPECT?.trim()
+  const childArgs = inspectPort ? [`--inspect=${inspectPort}`, mcpEntry] : [mcpEntry]
+  const child = spawn(process.execPath, [...childArgs, '--stdio', '--data-dir', dataDir], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['inherit', 'inherit', 'inherit'],
   })
@@ -64,6 +68,7 @@ if (mcpArgs.includes('--zdn-mcp-stdio')) {
       const win = BrowserWindow.getAllWindows()[0]
       if (win) {
         if (win.isMinimized()) win.restore()
+        if (!win.isVisible()) win.show()
         win.focus()
       }
     })
@@ -80,9 +85,8 @@ if (mcpArgs.includes('--zdn-mcp-stdio')) {
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  // 托盘驻留：所有窗口关闭后应用继续在后台运行（MCP/收件夹/更新等）。
+  // 真正退出只经托盘菜单「退出」（触发 before-quit 清理）。
 })
 
 app.on('before-quit', () => {

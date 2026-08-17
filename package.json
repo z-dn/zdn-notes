@@ -22,6 +22,8 @@
     "mcp": "tsx electron/mcp/index.ts",
     "mcp:stdio": "tsx electron/mcp/index.ts --stdio",
     "mcp:http": "tsx electron/mcp/index.ts --http",
+    "mcp:stdio:dev": "electron-vite dev -- --zdn-mcp-stdio",
+    "mcp:stdio:dev:debug": "cross-env ZDNOTES_MCP_INSPECT=9229 electron-vite dev -- --zdn-mcp-stdio",
     "mcp:test": "node scripts/test-mcp.mjs",
     "mcp:e2e": "tsx scripts/e2e-ipc-check.mts",
     "ztool": "node scripts/ztool.mjs"
@@ -39,6 +41,10 @@
       {
         "from": "resources/agent-tools",
         "to": "agent-tools"
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
       },
       {
         "from": "docs/plugin-spec.md",
@@ -107,6 +113,7 @@
     "autoprefixer": "^10.5.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cross-env": "^10.1.0",
     "electron": "^42.5.1",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
