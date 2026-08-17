@@ -80,3 +80,26 @@ export function forwardCall(ep: GuiEndpoint, req: JsonRpcRequest): Promise<JsonR
     request.end()
   })
 }
+
+// 构造插件 ctx.app 的委托桥：把 app/invoke 转发到 GUI 主进程的 AppService 执行。
+// GUI 未运行时调用会抛错（插件应回退使用 Node 原生能力）。
+export function buildAppBridge(opts?: { dataDir?: string }): (
+  channel: string,
+  args: unknown[],
+) => Promise<unknown> {
+  const dataDir = opts?.dataDir?.trim() || resolveDataDir()
+  return async (channel: string, args: unknown[]): Promise<unknown> => {
+    const ep = readGuiEndpoint(dataDir)
+    if (!ep) {
+      throw new Error('GUI 未在运行，ctx.app 不可用（插件可改用 Node 原生能力）')
+    }
+    const resp = await forwardCall(ep, {
+      jsonrpc: '2.0',
+      id: Math.floor(Math.random() * 1e9) + 1,
+      method: 'app/invoke',
+      params: { channel, args },
+    })
+    if (resp.error) throw new Error(resp.error.message)
+    return resp.result
+  }
+}

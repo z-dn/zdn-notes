@@ -1,4 +1,3 @@
-import { ipcMain } from 'electron'
 import {
   createCategory,
   getAllCategories,
@@ -7,13 +6,18 @@ import {
   getCategoryTaskCounts,
 } from '../../main/database/category-dao'
 import type { FeatureModule, MainModuleContext } from '../../core/contracts'
+import type { AppService } from '../../core/app-service'
+import type { CreateCategoryDTO, Category } from '@/types/task'
 
-function registerIpc(_ctx: MainModuleContext): void {
-  ipcMain.handle('category:create', (_e, dto) => createCategory(dto))
-  ipcMain.handle('category:getAll', () => getAllCategories())
-  ipcMain.handle('category:update', (_e, id, data) => updateCategory(id, data))
-  ipcMain.handle('category:delete', (_e, id) => deleteCategory(id))
-  ipcMain.handle('category:getTaskCounts', () => getCategoryTaskCounts())
+// 应用业务层：分类 CRUD/计数（UI 与插件 ctx.app 共用）
+function appService(svc: AppService, _ctx: MainModuleContext): void {
+  svc.register('category:create', (dto: unknown) => createCategory(dto as CreateCategoryDTO))
+  svc.register('category:getAll', () => getAllCategories())
+  svc.register('category:update', (id: unknown, data: unknown) =>
+    updateCategory(String(id), data as Partial<Pick<Category, 'name' | 'color' | 'sortOrder'>>),
+  )
+  svc.register('category:delete', (id: unknown) => deleteCategory(String(id)))
+  svc.register('category:getTaskCounts', () => getCategoryTaskCounts())
 }
 
 export const categoriesModule: FeatureModule = {
@@ -21,5 +25,5 @@ export const categoriesModule: FeatureModule = {
   name: '分类',
   kind: 'core',
   defaultEnabled: true,
-  registerIpc,
+  appService,
 }

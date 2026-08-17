@@ -4,9 +4,9 @@ import { isPrivateHost } from './net-utils'
 import type { HttpRequestConfig, HttpRequestResult } from '../core/contracts'
 
 // ===================================================================
-// 共享 HTTP 请求客户端。
-// 被工具箱模块（http:request IPC）与插件 ctx 的 httpRequest 能力共用，
-// 保证访问内网/本机地址的防护策略一致。
+// 共享 HTTP 请求客户端（工具箱 http:request IPC 用）。
+// 插件不再依赖本模块——插件是完整 Node 模块，直接用原生 http/https/fetch。
+// 保留内网/本机地址防护策略，与工具箱行为一致。
 // ===================================================================
 
 export async function httpRequest(config: HttpRequestConfig): Promise<HttpRequestResult> {

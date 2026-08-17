@@ -48,14 +48,12 @@ const VALID_MANIFEST = {
   version: '1.0.0',
   apiVersion: 1,
   entry: 'index.js',
-  permissions: ['http:request'],
 }
 
 describe('validateManifest', () => {
   it('accepts a valid manifest', () => {
     const m = validateManifest(JSON.stringify(VALID_MANIFEST), 'test')
     expect(m.id).toBe('http')
-    expect(m.permissions).toEqual(['http:request'])
   })
 
   it('rejects non-matching apiVersion', () => {
@@ -103,7 +101,7 @@ describe('extractPluginZip', () => {
 })
 
 describe('listPlugins / uninstallPlugin', () => {
-  it('lists installed plugins with tools/permissions', () => {
+  it('lists installed plugins with tools', () => {
     const dir = path.join(pluginRoot(dataDir), 'http')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'ztool.json'), JSON.stringify(VALID_MANIFEST), 'utf-8')
@@ -115,7 +113,6 @@ describe('listPlugins / uninstallPlugin', () => {
     const plugins = listPlugins(dataDir)
     expect(plugins).toHaveLength(1)
     expect(plugins[0]).toMatchObject({ id: 'http', name: 'HTTP 请求', version: '1.0.0' })
-    expect(plugins[0].permissions).toEqual(['http:request'])
     expect(plugins[0].tools[0].name).toBe('http_request')
   })
 

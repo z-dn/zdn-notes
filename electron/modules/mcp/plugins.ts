@@ -26,7 +26,6 @@ export interface PluginInfo {
   version: string
   author?: string
   description?: string
-  permissions: string[]
   tools: PluginToolInfo[]
   dir: string
   /** 内置插件（随应用分发，不可卸载） */
@@ -51,7 +50,6 @@ export function listPlugins(dataDir: string, registry?: ToolRegistry): PluginInf
         name: '待办任务',
         version: '',
         description: '内置任务工具，随应用提供',
-        permissions: [],
         tools: builtinTools,
         dir: '',
         builtin: true,
@@ -81,7 +79,6 @@ function toPluginInfo(dir: string, manifest: PluginManifest): PluginInfo {
     version: manifest.version,
     author: manifest.author,
     description: manifest.description,
-    permissions: manifest.permissions ?? [],
     tools: (manifest.tools ?? []).map((t) => ({
       key: t.key,
       name: t.name,
@@ -106,7 +103,6 @@ export function validateManifest(raw: string, origin: string): PluginManifest {
     name: parsed.name ?? parsed.id,
     version: parsed.version ?? '0.0.0',
     apiVersion: parsed.apiVersion,
-    permissions: Array.isArray(parsed.permissions) ? parsed.permissions : [],
     tools: [],
     entry: parsed.entry,
     author: parsed.author,

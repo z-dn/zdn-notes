@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plug, Trash2, FolderOpen, Boxes, FileText, Download } from 'lucide-react'
+import {
+  Plug,
+  Trash2,
+  FolderOpen,
+  Boxes,
+  FileText,
+  Download,
+  History,
+  RefreshCw,
+} from 'lucide-react'
+import { format } from 'date-fns'
 import { showConfirm } from '@/components/confirm-dialog'
 import { toast } from '@/lib/toast'
 import { renderMarkdown } from '@/lib/markdown'
@@ -9,12 +19,8 @@ import type { AgentMenuKey } from './agent-sidebar'
 // AGENT 工具 — 插件管理内容区（二级菜单在全局左侧栏 AgentSidebar）：
 //   插件          —— 插件卡片网格（内置/第三方）+ 安装/卸载 + 授权
 //   插件开发文档   —— 展示 docs/plugin-spec.md 并可下载为 Markdown
+//   调用日志       —— 智能体对 MCP 的 tools/call 调用记录（实时/历史）
 // ===================================================================
-
-const PERMISSION_LABELS: Record<string, string> = {
-  'http:request': 'HTTP 请求',
-  desktop: '桌面 API',
-}
 
 interface AgentToolsPageProps {
   menu: AgentMenuKey
@@ -26,6 +32,9 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
   const [installing, setInstalling] = useState(false)
   const [specHtml, setSpecHtml] = useState('')
   const [specLoading, setSpecLoading] = useState(false)
+  const [logs, setLogs] = useState<McpCallLog[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [clearingLogs, setClearingLogs] = useState(false)
 
   const refresh = useCallback(async () => {
     const [p, c] = await Promise.all([
@@ -34,6 +43,15 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
     ])
     setPlugins(p)
     setConfig(c)
+  }, [])
+
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true)
+    try {
+      setLogs(await window.electronAPI.mcpGetCallLogs())
+    } finally {
+      setLogsLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -65,6 +83,29 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
       mounted = false
     }
   }, [menu])
+
+  // 进入「调用日志」菜单时加载历史并订阅实时新条目
+  useEffect(() => {
+    if (menu !== 'logs') return
+    loadLogs()
+    const unsub = window.electronAPI.onMcpCallLogged((entry) => {
+      setLogs((prev) => [entry, ...prev.filter((l) => l.id !== entry.id)].slice(0, 500))
+    })
+    return () => unsub()
+  }, [menu, loadLogs])
+
+  async function handleClearLogs() {
+    const ok = await showConfirm('清空调用日志', '确定清空所有调用日志吗？此操作不可恢复。')
+    if (!ok) return
+    setClearingLogs(true)
+    try {
+      await window.electronAPI.mcpClearCallLogs()
+      setLogs([])
+      toast('已清空调用日志')
+    } finally {
+      setClearingLogs(false)
+    }
+  }
 
   async function handleInstall() {
     setInstalling(true)
@@ -165,19 +206,6 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
           )}
         </div>
 
-        {plugin.permissions.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {plugin.permissions.map((perm) => (
-              <span
-                key={perm}
-                className="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground"
-              >
-                {PERMISSION_LABELS[perm] ?? perm}
-              </span>
-            ))}
-          </div>
-        )}
-
         <div className="mt-3 flex-1 space-y-1 border-t border-divider pt-2">
           {plugin.tools.map((tool) => (
             <label key={tool.key} className="flex items-center gap-2 py-0.5">
@@ -276,6 +304,93 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
                     </section>
                   )}
                 </div>
+              )}
+            </div>
+          </>
+        ) : menu === 'logs' ? (
+          <>
+            <div className="flex items-center justify-between border-b border-divider px-3 py-2">
+              <h2 className="flex items-center gap-1.5 text-sm font-medium">
+                <History className="size-3.5" />
+                调用日志
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={loadLogs}
+                  disabled={logsLoading}
+                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                >
+                  <RefreshCw className="size-3" />
+                  刷新
+                </button>
+                <button
+                  onClick={handleClearLogs}
+                  disabled={clearingLogs || logs.length === 0}
+                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-destructive disabled:opacity-50"
+                >
+                  <Trash2 className="size-3" />
+                  清空
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              {logsLoading ? (
+                <p className="text-xs text-muted-foreground">加载中…</p>
+              ) : logs.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <History className="size-6" />
+                  <p className="text-xs">暂无调用记录</p>
+                  <p className="text-[11px]">
+                    智能体通过 MCP 调用工具后，记录会出现在这里（本地 JSONL 文件，跨会话保留）
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {logs.map((log) => (
+                    <li
+                      key={log.id}
+                      className="animate-fade-slide-up rounded-lg border border-divider bg-panel p-2.5 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-mono text-xs font-medium">{log.tool}</span>
+                          {log.source === 'gui' ? (
+                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
+                              GUI
+                            </span>
+                          ) : (
+                            <span className="rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                              MCP
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {log.ok ? (
+                            <span className="text-[11px] text-green-700 dark:text-green-300">
+                              成功
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-red-700 dark:text-red-300">失败</span>
+                          )}
+                          <span className="text-[11px] text-muted-foreground">{log.ms}ms</span>
+                        </div>
+                      </div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        {format(log.ts, 'yyyy-MM-dd HH:mm:ss')}
+                      </div>
+                      {Object.keys(log.args).length > 0 && (
+                        <div className="mt-1.5 truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                          {JSON.stringify(log.args)}
+                        </div>
+                      )}
+                      {log.error && (
+                        <div className="mt-1.5 truncate rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700 dark:bg-red-950 dark:text-red-300">
+                          {log.error}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </>

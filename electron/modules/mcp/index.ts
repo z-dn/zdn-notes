@@ -3,14 +3,15 @@ import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { startMcpIpc } from '../../main/mcp-ipc'
 import type { McpIpcServer } from '../../main/mcp-ipc'
-import { desktopBridge } from '../../main/desktop-bridge'
 import { configFileForDataDir } from '../../mcp/config'
 import { loadConfig, writeConfig } from '../../mcp/config'
 import { acquireGuiLock, releaseGuiLock } from '../../mcp/lock'
+import { appendCallLog, readCallLogs, clearCallLogs, makeCallLogEntry } from '../../mcp/call-log'
 import { listPlugins, extractPluginZip, uninstallPlugin } from './plugins'
 import { pluginRoot } from '../../core/plugin-loader'
 import type { ToolRegistry } from '../../core/tool-registry'
 import type { FeatureModule, MainModuleContext } from '../../core/contracts'
+import type { AppService } from '../../core/app-service'
 
 let mcpIpc: McpIpcServer | null = null
 let currentToolRegistry: ToolRegistry | undefined
@@ -32,13 +33,14 @@ export function setCurrentToolRegistry(registry: ToolRegistry | undefined): void
   currentToolRegistry = registry
 }
 
-function registerIpc(ctx: MainModuleContext): void {
+// 应用业务层：MCP 配置/目录/插件管理/调用日志（UI 与插件 ctx.app 共用）
+function appService(svc: AppService, ctx: MainModuleContext): void {
   currentToolRegistry = ctx.toolRegistry
   const getCatalogMap = () => currentToolRegistry?.toCatalog()
-  ipcMain.handle('mcp:getConfig', () =>
+  svc.register('mcp:getConfig', () =>
     loadConfig({ configFile: configFileForDataDir(ctx.getDataDir()), catalog: getCatalogMap() }),
   )
-  ipcMain.handle('mcp:setConfig', (_e, cfg: unknown) => {
+  svc.register('mcp:setConfig', (cfg: unknown) => {
     writeConfig(
       configFileForDataDir(ctx.getDataDir()),
       cfg as Parameters<typeof writeConfig>[1],
@@ -51,7 +53,7 @@ function registerIpc(ctx: MainModuleContext): void {
     })
   })
   // 设置页渲染完整工具目录（内置 + 插件），按 kind 分组展示
-  ipcMain.handle('mcp:getCatalog', () => {
+  svc.register('mcp:getCatalog', () => {
     const reg = currentToolRegistry
     if (!reg) return { tools: [] }
     const tools = reg
@@ -64,7 +66,6 @@ function registerIpc(ctx: MainModuleContext): void {
         kind: t.kind,
         danger: t.danger ?? false,
         defaultEnabled: t.defaultEnabled ?? false,
-        capabilities: t.pluginPermissions ?? [],
       }))
       .sort((a, b) =>
         a.kind === b.kind ? a.label.localeCompare(b.label) : a.kind === 'builtin' ? -1 : 1,
@@ -72,8 +73,54 @@ function registerIpc(ctx: MainModuleContext): void {
     return { tools }
   })
   // 已安装插件清单（内置聚合 + 第三方）
-  ipcMain.handle('mcp:listPlugins', () => listPlugins(ctx.getDataDir(), currentToolRegistry))
-  // 从 .ztool 安装插件
+  svc.register('mcp:listPlugins', () => listPlugins(ctx.getDataDir(), currentToolRegistry))
+  // 卸载插件
+  svc.register('mcp:uninstallPlugin', (id: unknown) => {
+    try {
+      const removed = uninstallPlugin(ctx.getDataDir(), String(id))
+      return { ok: true, removed }
+    } catch (e) {
+      console.error('[mcp:uninstallPlugin]', e)
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+  // 插件目录路径（供渲染层展示/打开）
+  svc.register('mcp:getPluginsDir', () => pluginRoot(ctx.getDataDir()))
+  // 读取调用日志（倒序，最近 500 条）
+  svc.register('mcp:getCallLogs', () => readCallLogs(ctx.getDataDir()))
+  // 清空调用日志
+  svc.register('mcp:clearCallLogs', () => {
+    clearCallLogs(ctx.getDataDir())
+    return true
+  })
+  // 插件开发规范文档内容
+  svc.register('mcp:getPluginSpec', () => {
+    try {
+      return { ok: true, content: readFileSync(pluginSpecPath(), 'utf-8') }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+}
+
+/** 安装前警告：插件 = 任意代码（与应用同权限），仅信任来源可装 */
+async function confirmInstallWarning(): Promise<boolean> {
+  const result = await dialog.showMessageBox({
+    type: 'warning',
+    title: '安装第三方插件',
+    message: '安装插件 = 运行任意代码（与应用同权限）',
+    detail:
+      '插件代码将获得与 ZDNotes 相同的权限，可读写你的文件、执行程序、访问应用数据。仅安装你信任来源的插件。',
+    buttons: ['取消', '继续安装'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  })
+  return result.response === 1
+}
+
+function registerIpc(ctx: MainModuleContext): void {
+  // 文件/对话框类通道保持 IPC 专属（UI 交互，不进业务层）
   ipcMain.handle('mcp:installPlugin', async () => {
     const result = await dialog.showOpenDialog({
       title: '安装 AGENT 插件',
@@ -84,31 +131,12 @@ function registerIpc(ctx: MainModuleContext): void {
       ],
     })
     if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    if (!(await confirmInstallWarning())) return { ok: false, canceled: true }
     try {
       const manifest = extractPluginZip(result.filePaths[0], ctx.getDataDir())
       return { ok: true, id: manifest.id, name: manifest.name }
     } catch (e) {
       console.error('[mcp:installPlugin]', e)
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
-  })
-  // 卸载插件
-  ipcMain.handle('mcp:uninstallPlugin', (_e, id: string) => {
-    try {
-      const removed = uninstallPlugin(ctx.getDataDir(), id)
-      return { ok: true, removed }
-    } catch (e) {
-      console.error('[mcp:uninstallPlugin]', e)
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
-  })
-  // 插件目录路径（供渲染层展示/打开）
-  ipcMain.handle('mcp:getPluginsDir', () => pluginRoot(ctx.getDataDir()))
-  // 插件开发规范文档内容
-  ipcMain.handle('mcp:getPluginSpec', () => {
-    try {
-      return { ok: true, content: readFileSync(pluginSpecPath(), 'utf-8') }
-    } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   })
@@ -139,7 +167,13 @@ async function onStart(ctx: MainModuleContext): Promise<void> {
     saveAsync: ctx.saveAsync,
     notify: () => ctx.send('data:changed'),
     registry: toolRegistry,
-    desktopBridge,
+    appService: ctx.appService,
+    // GUI 端点执行的调用：落盘 + 实时推送渲染层
+    onCall: (call) => {
+      const entry = makeCallLogEntry({ ...call, source: 'gui' })
+      appendCallLog(ctx.getDataDir(), entry)
+      ctx.send('mcp:callLogged', entry)
+    },
   })
   // GUI 优先：启动即获取数据目录文件锁，成为权威写者（智能体 zdn-mcp 会尊重此锁）
   acquireGuiLock(ctx.getDataDir(), { port: mcpIpc.port, token: mcpIpc.token })
@@ -157,6 +191,7 @@ export const mcpModule: FeatureModule = {
   kind: 'optional',
   defaultEnabled: true,
   registerIpc,
+  appService,
   onStart,
   onShutdown,
 }

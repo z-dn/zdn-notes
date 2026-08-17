@@ -144,7 +144,6 @@ describe('进程隔离：delegate 只转发内置工具，插件工具本地执�
         version: '1.0.0',
         apiVersion: 1,
         entry: 'index.js',
-        permissions: [],
       }),
       'utf-8',
     )

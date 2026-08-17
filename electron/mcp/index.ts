@@ -10,8 +10,19 @@
 import { runStdio } from './mcp-server'
 import { runHttpServer } from './http-server'
 import { runCli } from './cli'
-import { buildGuiDelegate } from './gui-client'
+import { buildGuiDelegate, buildAppBridge } from './gui-client'
 import { configFileForDataDir } from './config'
+import { resolveDataDir } from './data-location'
+import { appendCallLog, makeCallLogEntry } from './call-log'
+import type { McpCallLogEntry } from './call-log'
+
+// 独立 MCP 进程执行的调用（插件工具 / GUI 离线回退本地执行）统一落盘。
+// GUI 在线时内置工具经 delegate 转交 GUI，由 GUI 端点记录，这里不会重复。
+function mcpCallLogger(dataDir?: string): (call: Omit<McpCallLogEntry, 'id' | 'source'>) => void {
+  return (call) => {
+    appendCallLog(dataDir?.trim() || resolveDataDir(), makeCallLogEntry({ ...call, source: 'mcp' }))
+  }
+}
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
@@ -19,14 +30,24 @@ async function main(): Promise<void> {
   // MCP http 常驻模式
   if (argv.includes('--http')) {
     const opts = parseHttpOpts(argv)
-    await runHttpServer({ ...opts, delegate: buildGuiDelegate({ dataDir: opts.dataDir }) })
+    await runHttpServer({
+      ...opts,
+      delegate: buildGuiDelegate({ dataDir: opts.dataDir }),
+      appBridge: buildAppBridge({ dataDir: opts.dataDir }),
+      onCall: mcpCallLogger(opts.dataDir),
+    })
     return // 常驻，不退出
   }
 
   // MCP stdio 模式：--stdio 或受智能体拉起时
   if (argv.includes('--stdio')) {
     const opts = parseStdioOpts(argv)
-    runStdio({ ...opts, delegate: buildGuiDelegate({ dataDir: opts.dataDir }) })
+    runStdio({
+      ...opts,
+      delegate: buildGuiDelegate({ dataDir: opts.dataDir }),
+      appBridge: buildAppBridge({ dataDir: opts.dataDir }),
+      onCall: mcpCallLogger(opts.dataDir),
+    })
     return // 由 stdin 生命周期管理，不会 resolve
   }
 
@@ -75,7 +96,11 @@ function parseHttpOpts(argv: string[]): HttpCliOpts & StdioOpts {
   if (port) opts.port = Number(port)
   if (host) opts.host = host
   if (token) opts.token = token
-  if (cors) opts.corsOrigins = cors.split(',').map((s) => s.trim()).filter(Boolean)
+  if (cors)
+    opts.corsOrigins = cors
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
   return opts
 }
 

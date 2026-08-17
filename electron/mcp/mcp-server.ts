@@ -6,8 +6,10 @@ import { ToolRegistry, McpToolSpec } from '../core/tool-registry'
 import { TASK_TOOLS } from '../modules/tasks/tools'
 import { createPluginStorage } from '../core/plugin-storage'
 import { loadPluginsIntoRegistry } from '../core/plugin-loader'
-import { buildHttpCapability } from './http-capability'
+import { truncateArgs } from './call-log'
+import type { McpCallLogEntry } from './call-log'
 import type { PluginToolContext } from '../core/contracts'
+import type { AppService } from '../core/app-service'
 
 // ===================================================================
 // stdio MCP server（Model Context Protocol）
@@ -46,7 +48,7 @@ export interface McpServerOpts {
   dataDir?: string
   waitMs?: number
   // 整包委托：返回响应则直接使用；返回 null 回退本地执行（MCP 进程转发到 GUI 用）
-  // 仅对内置工具生效；插件工具始终本地执行（独立 MCP 进程沙箱），不进主进程。
+  // 仅对内置工具生效；插件工具始终本地执行（独立 MCP 进程），不进主进程。
   delegate?: (req: JsonRpcRequest) => Promise<JsonRpcResponse | null>
   // 本地执行时用此数据库源（GUI 进程传 getDB()，写后触发 afterWrite）
   dbSource?: () => Database
@@ -56,10 +58,15 @@ export interface McpServerOpts {
   trusted?: boolean
   // 自定义工具注册表（默认构建：内置任务工具；GUI 侧传入含插件的 registry）
   registry?: ToolRegistry
-  // 插件 desktop 能力桥（GUI 侧注入；独立进程无桌面能力）
-  desktopBridge?: (channel: string, args: unknown[]) => Promise<unknown>
+  // 插件 ctx.app 委托桥（GUI 侧注入）：应用业务层经 loopback 调用；独立进程无 GUI 时缺省
+  appBridge?: (channel: string, args: unknown[]) => Promise<unknown>
+  // 统一业务层（AppService）：本服务直接处理 app/invoke（GUI loopback 端点用）
+  appService?: AppService
   // 仅暴露内置工具（GUI 端点用）：插件工具被排除，确保插件执行永不进入主进程
   excludePlugins?: boolean
+  // 工具调用完成回调（执行方记录调用日志）：不含 id/source，由调用方补齐。
+  // 只在本地实际执行时触发——delegate 转发成功时由被转交方记录，避免重复。
+  onCall?: (call: Omit<McpCallLogEntry, 'id' | 'source'>) => void
 }
 
 // ---- 工具定义 + 执行 ----
@@ -72,7 +79,6 @@ interface ToolSpec {
   readonly: boolean
   danger: boolean
   pluginId?: string
-  pluginPermissions?: string[]
   // 通过 withDb 执行；write 操作会被权限白名单过滤
   run: McpToolSpec['run']
 }
@@ -95,9 +101,11 @@ export class McpServer {
   private delegate: ((req: JsonRpcRequest) => Promise<JsonRpcResponse | null>) | null
   private dbSource: (() => Database) | null
   private afterWrite: (() => void) | null
-  private desktopBridge: ((channel: string, args: unknown[]) => Promise<unknown>) | null
+  private appBridge: ((channel: string, args: unknown[]) => Promise<unknown>) | null
+  private appService: AppService | null
   private configFile?: string
   private excludePlugins: boolean
+  private onCall: ((call: Omit<McpCallLogEntry, 'id' | 'source'>) => void) | null
 
   constructor(opts?: McpServerOpts) {
     this.configFile = opts?.configFile
@@ -117,7 +125,9 @@ export class McpServer {
     this.delegate = opts?.delegate ?? null
     this.dbSource = opts?.dbSource ?? null
     this.afterWrite = opts?.afterWrite ?? null
-    this.desktopBridge = opts?.desktopBridge ?? null
+    this.appBridge = opts?.appBridge ?? null
+    this.appService = opts?.appService ?? null
+    this.onCall = opts?.onCall ?? null
     this.initialized = opts?.trusted ?? false
   }
 
@@ -183,6 +193,21 @@ export class McpServer {
           return null // 通知，无响应
         case 'ping':
           return { jsonrpc: '2.0', id, result: {} }
+        case 'app/invoke': {
+          // 插件 ctx.app 委托入口：仅 GUI loopback 端点持有 AppService，独立进程无
+          if (!this.appService) {
+            return this.error(-32001, 'AppService not available', id)
+          }
+          const p = (req.params ?? {}) as { channel?: string; args?: unknown[] }
+          if (!p.channel || typeof p.channel !== 'string') {
+            return this.error(-32602, 'app/invoke 需要 channel 参数', id)
+          }
+          const result = await this.appService.invoke(
+            p.channel,
+            ...(Array.isArray(p.args) ? p.args : []),
+          )
+          return this.result(id, result)
+        }
         case 'tools/list': {
           return {
             jsonrpc: '2.0',
@@ -203,57 +228,74 @@ export class McpServer {
             return this.error(-32602, `Unknown tool: ${p.name}`, id)
           }
           // 委托模式（如转发到 GUI 执行）：仅内置工具整包转交（返回非 null 即采用其结果）；
-          // 插件工具始终本地执行（独立 MCP 进程沙箱），不进主进程。
+          // 插件工具始终本地执行（独立 MCP 进程），不进主进程。
           if (this.delegate && tool.kind === 'builtin') {
             const delegated = await this.delegate(req)
-            if (delegated) return delegated
+            if (delegated) return delegated // 已由被转交方记录日志，此处不重复
           }
           const args = p.arguments ?? {}
-          const result = await this.enqueue(() => {
-            if (tool.kind === 'plugin') {
-              // 插件工具：能力 ctx（无 db），storage/日志按插件隔离
-              const pluginId = tool.pluginId ?? 'unknown'
-              const ctx: PluginToolContext = {
-                kind: 'plugin',
-                dataDir: this.dataDir ?? '',
-                pluginId,
-                storage: createPluginStorage(this.dataDir ?? '', pluginId),
-                log: (level, msg) => {
-                  // 一律写 stderr：stdio 传输的 stdout 只能承载 JSON-RPC
-                  const fn =
-                    level === 'error' ? console.error : level === 'warn' ? console.warn : console.error
-                  fn(`[plugin:${pluginId}]`, msg)
+          const startedAt = Date.now()
+          try {
+            const result = await this.enqueue(() => {
+              if (tool.kind === 'plugin') {
+                // 插件工具：全权 Node 能力 + ctx.app 委托应用业务层；storage/日志按插件隔离
+                const pluginId = tool.pluginId ?? 'unknown'
+                const ctx: PluginToolContext = {
+                  kind: 'plugin',
+                  dataDir: this.dataDir ?? '',
+                  pluginId,
+                  storage: createPluginStorage(this.dataDir ?? '', pluginId),
+                  log: (level, msg) => {
+                    // 一律写 stderr：stdio 传输的 stdout 只能承载 JSON-RPC
+                    const fn =
+                      level === 'error'
+                        ? console.error
+                        : level === 'warn'
+                          ? console.warn
+                          : console.error
+                    fn(`[plugin:${pluginId}]`, msg)
+                  },
+                }
+                if (this.appBridge) {
+                  ctx.app = (channel, ...args) => this.appBridge!(channel, args)
+                }
+                return Promise.resolve(tool.run(ctx, args))
+              }
+              if (this.dbSource) {
+                const ctx = {
+                  kind: 'builtin' as const,
+                  db: this.dbSource(),
+                  dataDir: this.dataDir ?? '',
+                  save: this.afterWrite ?? undefined,
+                }
+                const r = tool.run(ctx, args)
+                if (!tool.readonly) this.afterWrite?.()
+                return Promise.resolve(r)
+              }
+              return withDb(
+                (db) => tool.run({ kind: 'builtin', db, dataDir: this.dataDir ?? '' }, args),
+                {
+                  dataDir: this.dataDir,
+                  waitMs: this.waitMs,
+                  readonly: tool.readonly,
                 },
-              }
-              if (tool.pluginPermissions?.includes('http:request')) {
-                ctx.httpRequest = buildHttpCapability()
-              }
-              if (tool.pluginPermissions?.includes('desktop') && this.desktopBridge) {
-                ctx.desktop = (channel, ...args) => this.desktopBridge!(channel, args)
-              }
-              return Promise.resolve(tool.run(ctx, args))
-            }
-            if (this.dbSource) {
-              const ctx = {
-                kind: 'builtin' as const,
-                db: this.dbSource(),
-                dataDir: this.dataDir ?? '',
-                save: this.afterWrite ?? undefined,
-              }
-              const r = tool.run(ctx, args)
-              if (!tool.readonly) this.afterWrite?.()
-              return Promise.resolve(r)
-            }
-            return withDb((db) => tool.run({ kind: 'builtin', db, dataDir: this.dataDir ?? '' }, args), {
-              dataDir: this.dataDir,
-              waitMs: this.waitMs,
-              readonly: tool.readonly,
+              )
             })
-          })
-          return this.result(id, {
-            content: [{ type: 'text', text: JSON.stringify(result ?? null) }],
-            isError: false,
-          })
+            this.logCall(tool.name, args, startedAt, true)
+            return this.result(id, {
+              content: [{ type: 'text', text: JSON.stringify(result ?? null) }],
+              isError: false,
+            })
+          } catch (e) {
+            this.logCall(
+              tool.name,
+              args,
+              startedAt,
+              false,
+              e instanceof Error ? e.message : String(e),
+            )
+            throw e
+          }
         }
         default:
           return this.error(-32601, `Method not found: ${req.method}`, id)
@@ -267,7 +309,10 @@ export class McpServer {
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.callQueue.then(fn, fn)
     // 无论成功失败都让队列继续，但不把错误吞掉
-    this.callQueue = next.then(() => undefined, () => undefined)
+    this.callQueue = next.then(
+      () => undefined,
+      () => undefined,
+    )
     return next
   }
 
@@ -276,6 +321,22 @@ export class McpServer {
   }
   private error(code: number, message: string, id: string | number | null): JsonRpcResponse {
     return { jsonrpc: '2.0', id, error: { code, message } }
+  }
+  private logCall(
+    tool: string,
+    args: Record<string, unknown>,
+    startedAt: number,
+    ok: boolean,
+    error?: string,
+  ): void {
+    this.onCall?.({
+      ts: startedAt,
+      tool,
+      args: truncateArgs(args),
+      ok,
+      error,
+      ms: Date.now() - startedAt,
+    })
   }
 }
 
@@ -288,6 +349,12 @@ export function defaultRegistry(): ToolRegistry {
 
 // ---- stdio 传输 ----
 export function runStdio(opts?: McpServerOpts): void {
+  // stdout 只承载 JSON-RPC：任何 console.log/warn（含插件在 run() 里误用）都重定向到 stderr
+  const origLog = console.log
+  const origWarn = console.warn
+  console.log = (...a: unknown[]) => console.error(...a)
+  console.warn = (...a: unknown[]) => console.error(...a)
+
   const server = new McpServer(opts)
   const rl = readline.createInterface({ input: process.stdin, terminal: false })
   rl.on('line', (line) => {
@@ -303,10 +370,14 @@ export function runStdio(opts?: McpServerOpts): void {
       })
   })
   rl.on('close', () => {
+    console.log = origLog
+    console.warn = origWarn
     closeCachedDb().finally(() => process.exit(0))
   })
   // 低频：正常退出时关库
   process.on('SIGINT', () => {
+    console.log = origLog
+    console.warn = origWarn
     closeCachedDb().finally(() => process.exit(0))
   })
 }

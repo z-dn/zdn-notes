@@ -70,9 +70,8 @@ function initPlugin(dir, id) {
     entry: 'index.js',
     author: '',
     description: '新的 ZDNotes 插件',
-    permissions: [],
   }
-  const entry = `// ${id} 插件入口（运行于受限沙箱，只能使用 ctx 授权能力）
+  const entry = `// ${id} 插件入口（完整 Node 模块：可 require 任意包，依赖随插件目录分发）
 module.exports = {
   tools: [
     {
@@ -103,6 +102,14 @@ function buildPlugin(pluginDir, outFile) {
   const entry = path.join(dir, manifest.entry || 'index.js')
   if (!fs.existsSync(entry)) throw new Error(`入口不存在: ${entry}`)
 
+  // 依赖随插件分发（VS Code 风格）：有 package.json 时提示先安装依赖再打包
+  if (fs.existsSync(path.join(dir, 'package.json'))) {
+    if (!fs.existsSync(path.join(dir, 'node_modules'))) {
+      console.warn('⚠ 检测到 package.json 但没有 node_modules。')
+      console.warn('  请在打包前运行 `npm install`，依赖会随 .ztool 分发（插件 = 完整 Node 模块）。')
+    }
+  }
+
   const zip = new AdmZip()
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name)
@@ -127,6 +134,8 @@ function installPlugin(pkg, dataDir) {
   if (manifest.apiVersion !== PLUGIN_API_VERSION) {
     throw new Error(`apiVersion 应为 ${PLUGIN_API_VERSION}`)
   }
+  console.warn('⚠ 安装插件 = 运行任意代码（与应用同权限）。')
+  console.warn('  插件代码可读写你的文件、执行程序、访问应用数据。仅安装你信任来源的插件。')
   const target = path.join(resolveDataDir(dataDir), 'agent-tools', manifest.id)
   fs.mkdirSync(target, { recursive: true })
   zip.extractAllTo(target, true)

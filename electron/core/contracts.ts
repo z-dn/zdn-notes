@@ -1,5 +1,6 @@
 import type { Database } from 'sql.js'
 import type { ToolRegistry } from './tool-registry'
+import type { AppService } from './app-service'
 
 // ===================================================================
 // 平台契约（Platform Contracts）—— 纯 TS，无 Electron 依赖。
@@ -17,17 +18,15 @@ export interface BuiltinToolContext {
   save?: () => void
 }
 
-/** 插件工具执行上下文（第三方插件）：无 db，只有被授权的能力 */
+/** 插件工具执行上下文（第三方插件）：全权 Node 能力 + 应用业务层委托 */
 export interface PluginToolContext {
   kind: 'plugin'
   dataDir: string
   pluginId: string
   storage: PluginStorage
   log: (level: 'debug' | 'info' | 'warn' | 'error', msg: string) => void
-  /** 能力：HTTP 请求（manifest.permissions 含 'http:request' 时提供） */
-  httpRequest?: (config: HttpRequestConfig) => Promise<HttpRequestResult>
-  /** 能力：桌面 API 调用（manifest.permissions 含 'desktop' 时提供，P4 扩展） */
-  desktop?: (channel: string, ...args: unknown[]) => Promise<unknown>
+  /** 应用业务层（AppService）：GUI 运行时经 GUI-IPC 委托执行；GUI 不在时调用会抛错 */
+  app?: (channel: string, ...args: unknown[]) => Promise<unknown>
 }
 
 export interface HttpRequestConfig {
@@ -63,8 +62,6 @@ export interface AgentTool {
   kind: 'builtin' | 'plugin'
   /** 插件工具：所属插件 id */
   pluginId?: string
-  /** 插件工具：插件声明的权限（manifest.permissions） */
-  pluginPermissions?: string[]
   run(ctx: ToolContext, args: Record<string, unknown>): unknown
 }
 
@@ -81,7 +78,7 @@ export interface PluginStorage {
   keys(): string[]
 }
 
-/** 第三方插件声明的工具（能力 ctx，无 db） */
+/** 第三方插件声明的工具（全权 Node 能力 + ctx.app 应用委托） */
 export interface PluginTool {
   key: string
   name: string
@@ -98,7 +95,6 @@ export interface PluginManifest {
   name: string
   version: string
   apiVersion: number
-  permissions: string[]
   tools: PluginTool[]
   entry?: string
   author?: string
@@ -115,17 +111,6 @@ export interface LoadedPlugin {
   entryPath: string
 }
 
-// ---- 能力（Capability-based 权限模型）----
-
-/** 平台能力注册表条目：id 是授权粒度 */
-export interface Capability {
-  id: string
-  label: string
-  description: string
-  /** 为插件 ctx 构建该能力服务对象 */
-  create(host: { dataDir: string; pluginId: string }): unknown
-}
-
 // ---- 平台模块（内置，你本人开发）----
 
 export interface MainModuleContext {
@@ -135,6 +120,8 @@ export interface MainModuleContext {
   getDataDir: () => string
   /** app-shell 装配后注入的统一 Agent 工具注册表（mcp 模块消费） */
   toolRegistry?: ToolRegistry
+  /** 统一业务层（AppService），模块可在此注册应用能力 */
+  appService?: AppService
 }
 
 export interface RendererViewDefinition {
@@ -154,6 +141,8 @@ export interface FeatureModule {
   kind: 'core' | 'optional' // core 不可禁用
   defaultEnabled?: boolean
   registerIpc?(ctx: MainModuleContext): void
+  /** 注册应用能力到统一业务层（AppService）；与 UI 解耦，UI 与插件共用 */
+  appService?(svc: AppService, ctx: MainModuleContext): void
   onStart?(ctx: MainModuleContext): void
   onShutdown?(ctx: MainModuleContext): void
   /** Agent 工具贡献（注册进统一 MCP） */

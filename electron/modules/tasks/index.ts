@@ -12,8 +12,9 @@ import {
 import { getImagesDir } from '../../main/data-location'
 import { isSafeImageFilename } from '../../main/image-utils'
 import type { FeatureModule, MainModuleContext } from '../../core/contracts'
+import type { AppService } from '../../core/app-service'
 import { TASK_TOOLS } from './tools'
-import type { Task, Status } from '@/types/task'
+import type { Task, Status, TaskFilter, CreateTaskDTO, UpdateTaskDTO } from '@/types/task'
 
 async function exportMarkdown(): Promise<boolean> {
   const tasks = getAllTasks()
@@ -80,40 +81,49 @@ async function exportMarkdown(): Promise<boolean> {
   return true
 }
 
-function registerIpc(_ctx: MainModuleContext): void {
-  ipcMain.handle('task:create', (_e, dto) => createTask(dto))
-  ipcMain.handle('task:getById', (_e, id) => getTaskById(id))
-  ipcMain.handle('task:getAll', (_e, filter) => getAllTasks(filter))
-  ipcMain.handle('task:update', (_e, dto) => updateTask(dto))
-  ipcMain.handle('task:delete', (_e, id) => {
-    const task = getTaskById(id)
-    if (!task) return false
+function deleteTaskWithImages(id: string): boolean {
+  const task = getTaskById(id)
+  if (!task) return false
 
-    const imageUrls = task.description?.match(/zdn-img:\/\/\/(\S+?)(?=[\s")}\]]|$)/g) || []
+  const imageUrls = task.description?.match(/zdn-img:\/\/\/(\S+?)(?=[\s")}\]]|$)/g) || []
 
-    const result = deleteTask(id)
-    if (!result) return false
+  const result = deleteTask(id)
+  if (!result) return false
 
-    if (imageUrls.length) {
-      const imageDir = getImagesDir()
-      const allTasks = getAllTasks()
-      for (const url of imageUrls) {
-        const filename = url.replace('zdn-img:///', '')
-        if (!isSafeImageFilename(filename)) continue
-        const stillUsed = allTasks.some((t) => t.description?.includes(filename))
-        if (!stillUsed) {
-          const filePath = join(imageDir, filename)
-          try {
-            if (existsSync(filePath)) unlinkSync(filePath)
-          } catch {
-            /* ignore */
-          }
+  if (imageUrls.length) {
+    const imageDir = getImagesDir()
+    const allTasks = getAllTasks()
+    for (const url of imageUrls) {
+      const filename = url.replace('zdn-img:///', '')
+      if (!isSafeImageFilename(filename)) continue
+      const stillUsed = allTasks.some((t) => t.description?.includes(filename))
+      if (!stillUsed) {
+        const filePath = join(imageDir, filename)
+        try {
+          if (existsSync(filePath)) unlinkSync(filePath)
+        } catch {
+          /* ignore */
         }
       }
     }
-    return true
-  })
-  ipcMain.handle('task:updateStatus', (_e, id, status) => updateTaskStatus(id, status))
+  }
+  return true
+}
+
+// 应用业务层：任务 CRUD（UI 与插件 ctx.app 共用；写操作由 DAO 内部触发落盘）
+function appService(svc: AppService, _ctx: MainModuleContext): void {
+  svc.register('task:create', (dto: unknown) => createTask(dto as CreateTaskDTO))
+  svc.register('task:getById', (id: unknown) => getTaskById(String(id)))
+  svc.register('task:getAll', (filter?: unknown) => getAllTasks(filter as TaskFilter | undefined))
+  svc.register('task:update', (dto: unknown) => updateTask(dto as UpdateTaskDTO))
+  svc.register('task:delete', (id: unknown) => deleteTaskWithImages(String(id)))
+  svc.register('task:updateStatus', (id: unknown, status: unknown) =>
+    updateTaskStatus(String(id), String(status)),
+  )
+}
+
+function registerIpc(_ctx: MainModuleContext): void {
+  // 对话框类通道保持 IPC 专属（UI 交互，不进业务层）
   ipcMain.handle('task:exportMarkdown', exportMarkdown)
 }
 
@@ -123,6 +133,7 @@ export const tasksModule: FeatureModule = {
   kind: 'core',
   defaultEnabled: true,
   registerIpc,
+  appService,
   agentTools: TASK_TOOLS,
   renderer: {
     view: { id: 'categories', label: '待办项' },

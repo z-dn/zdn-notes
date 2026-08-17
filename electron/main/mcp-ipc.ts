@@ -3,7 +3,9 @@ import { randomBytes } from 'crypto'
 import { Database } from 'sql.js'
 import { McpServer } from '../mcp/mcp-server'
 import { configFileForDataDir } from '../mcp/config'
+import type { McpCallLogEntry } from '../mcp/call-log'
 import type { ToolRegistry } from '../core/tool-registry'
+import type { AppService } from '../core/app-service'
 
 // ===================================================================
 // GUI 侧本地 IPC 端点（GUI-IPC 委托模式的服务端）。
@@ -31,7 +33,10 @@ export interface McpIpcDeps {
   saveAsync: () => void
   notify: () => void
   registry?: ToolRegistry
-  desktopBridge?: (channel: string, args: unknown[]) => Promise<unknown>
+  /** 统一业务层（AppService）：供插件 ctx.app 经 app/invoke 委托调用 */
+  appService?: AppService
+  /** 工具调用完成回调（记录调用日志 + 通知渲染层） */
+  onCall?: (call: Omit<McpCallLogEntry, 'id' | 'source'>) => void
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -53,8 +58,9 @@ export function startMcpIpc(deps: McpIpcDeps): Promise<McpIpcServer> {
     trusted: true, // 本端点仅对已握手的 zdn-mcp 开放，跳过握手要求
     dbSource: deps.getDB,
     registry: deps.registry,
-    desktopBridge: deps.desktopBridge,
-    // GUI 端点只执行内置工具；插件工具在独立 MCP 进程沙箱执行，永不进入主进程
+    appService: deps.appService,
+    onCall: deps.onCall,
+    // GUI 端点只执行内置工具；插件工具在独立 MCP 进程执行，永不进入主进程
     excludePlugins: true,
     afterWrite: () => {
       deps.saveAsync()
@@ -71,7 +77,11 @@ export function startMcpIpc(deps: McpIpcDeps): Promise<McpIpcServer> {
     if ((req.headers.authorization ?? '') !== 'Bearer ' + token) {
       res.writeHead(401, { 'Content-Type': 'application/json' })
       res.end(
-        JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } }),
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: null,
+          error: { code: -32001, message: 'Unauthorized' },
+        }),
       )
       return
     }

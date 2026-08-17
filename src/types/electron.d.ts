@@ -30,7 +30,6 @@ declare global {
     kind: 'builtin' | 'plugin'
     danger: boolean
     defaultEnabled: boolean
-    capabilities: string[]
   }
 
   interface McpPluginInfo {
@@ -39,10 +38,20 @@ declare global {
     version: string
     author?: string
     description?: string
-    permissions: string[]
     tools: { key: string; name: string; label: string }[]
     dir: string
     builtin: boolean
+  }
+
+  interface McpCallLog {
+    id: string
+    ts: number
+    tool: string
+    args: Record<string, unknown>
+    ok: boolean
+    error?: string
+    ms: number
+    source: 'gui' | 'mcp'
   }
 
   interface Window {
@@ -78,7 +87,6 @@ declare global {
           kind: 'builtin' | 'plugin'
           danger: boolean
           defaultEnabled: boolean
-          capabilities: string[]
         }[]
       }>
       onMcpCatalogChanged(cb: () => void): () => void
@@ -99,6 +107,9 @@ declare global {
         path?: string
         error?: string
       }>
+      mcpGetCallLogs(): Promise<McpCallLog[]>
+      mcpClearCallLogs(): Promise<boolean>
+      onMcpCallLogged(cb: (entry: McpCallLog) => void): () => void
 
       toolGetAll(): Promise<Record<string, string>>
       toolSet(key: string, value: string): Promise<void>
@@ -150,6 +161,7 @@ declare global {
         }) => void,
       ): () => void
       onDataChanged(cb: () => void): () => void
+      onReminderOpen(cb: (taskId: string) => void): () => void
 
       saveImageFromData(dataUri: string): Promise<string>
       pickAndSaveImage(): Promise<string | null>

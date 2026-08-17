@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import vm from 'vm'
+import { createRequire } from 'module'
 import { PLUGIN_API_VERSION, LoadedPlugin, PluginManifest, PluginTool } from './contracts'
 import type { ToolRegistry } from './tool-registry'
 
@@ -11,13 +11,10 @@ import type { ToolRegistry } from './tool-registry'
 //   <dataDir>/agent-tools/<pluginId>/ztool.json   ← 插件清单
 //   <dataDir>/agent-tools/<pluginId>/<entry>      ← 入口 JS（CommonJS，导出 { tools }）
 //
-// 插件入口运行在受限 VM 沙箱里：
-//   - 只提供 module/exports/require（require 限定 node 内建 + 插件目录内相对路径）
-//   - 无 process、无 Electron、无 db —— 只能通过 ctx 的授权能力做事
-//   - 超时保护：入口执行限时，防止死循环
-//
-// 插件工具的 run(ctx, args) 在 MCP tools/call 时由 registry 分发执行
-// （ctx 为 PluginToolContext，见 mcp-server）。
+// 信任模型：插件 = 任意代码，与应用主进程同权限（无沙箱、无依赖限制）。
+// 入口直接 require() 加载，依赖随插件目录分发（node_modules 打进 .ztool）。
+// 安全靠用户自觉 + 安装时警告弹窗。保留的仅是结构契约：清单校验、
+// tools 导出、key 唯一性（MCP 集成需要）。
 // ===================================================================
 
 export function pluginRoot(dataDir: string): string {
@@ -55,38 +52,12 @@ export function readManifest(pluginDir: string): PluginManifest {
     name: parsed.name ?? parsed.id,
     version: parsed.version ?? '0.0.0',
     apiVersion: parsed.apiVersion,
-    permissions: Array.isArray(parsed.permissions) ? parsed.permissions : [],
     tools: [],
     entry: parsed.entry,
     author: parsed.author,
     description: parsed.description,
     builtin: parsed.builtin === true,
     marketplace: parsed.marketplace,
-  }
-}
-
-const ALLOWED_BUILTINS = new Set([
-  'fs', 'path', 'url', 'util', 'assert', 'crypto', 'os', 'http', 'https', 'stream', 'buffer',
-])
-
-/** 受限 require：只允许 node 内建白名单 + 插件目录内的相对/绝对模块 */
-function makeRequire(pluginDir: string, sandboxDir: string) {
-  return function localRequire(spec: string): unknown {
-    if (typeof spec !== 'string') throw new Error('require 参数必须是字符串')
-    if (spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('file:')) {
-      const resolved = spec.startsWith('.') ? path.resolve(sandboxDir, spec) : path.resolve(spec)
-      const rel = path.relative(pluginDir, resolved)
-      if (rel.startsWith('..') || path.isAbsolute(rel)) {
-        throw new Error(`不允许加载插件目录外的模块: ${spec}`)
-      }
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require(resolved)
-    }
-    if (ALLOWED_BUILTINS.has(spec)) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require(spec)
-    }
-    throw new Error(`插件不允许 require 非白名单模块: ${spec}`)
   }
 }
 
@@ -98,52 +69,32 @@ interface PluginModuleExports {
   author?: string
 }
 
-/** 在受限 VM 中加载插件入口，返回其导出的 tools */
+/** 清掉插件目录下已加载模块的 require 缓存（热重载时强制重新执行入口） */
+function clearPluginCache(pluginDir: string, requireFrom: NodeRequire): void {
+  for (const key of Object.keys(requireFrom.cache ?? {})) {
+    if (key.startsWith(pluginDir + path.sep)) delete requireFrom.cache[key]
+  }
+}
+
+/** 加载插件入口（全权信任：直接 require，无沙箱） */
 function loadPluginEntry(pluginDir: string, entry: string): PluginModuleExports {
   const entryPath = path.resolve(pluginDir, entry)
   if (!fs.existsSync(entryPath)) throw new Error(`插件入口不存在: ${entryPath}`)
-  const code = fs.readFileSync(entryPath, 'utf-8')
-
-  const moduleObj = { exports: {} }
-  const sandbox = {
-    module: moduleObj,
-    exports: moduleObj.exports,
-    require: makeRequire(pluginDir, path.dirname(entryPath)),
-    console: {
-      // 一律写 stderr：插件日志不得污染 MCP stdio 的 stdout（JSON-RPC 通道）
-      log: (...a: unknown[]) => console.error(`[plugin:${path.basename(pluginDir)}]`, ...a),
-      error: (...a: unknown[]) => console.error(`[plugin:${path.basename(pluginDir)}]`, ...a),
-      warn: (...a: unknown[]) => console.warn(`[plugin:${path.basename(pluginDir)}]`, ...a),
-    },
-    setTimeout,
-    clearTimeout,
-    Date,
-    Math,
-    JSON,
-    Promise,
-  }
-  sandbox.exports = moduleObj.exports
-  vm.createContext(sandbox)
-
-  // 超时保护：同步入口限时执行
-  let finished = false
-  const timer = setTimeout(() => {
-    if (!finished) throw new Error(`插件入口执行超时: ${path.basename(pluginDir)}`)
-  }, 3000)
+  // 以插件入口为锚点创建 require：CJS/ESM 双兼容，且插件自身依赖（node_modules）
+  // 从插件目录正常解析（依赖随插件分发）
+  const requireFrom = createRequire(entryPath)
+  clearPluginCache(pluginDir, requireFrom)
+  // 加载期间把 console.log/warn 重定向到 stderr：插件日志不得污染 MCP stdio 的 stdout
+  const orig = { ...console }
+  const prefix = `[plugin:${path.basename(pluginDir)}]`
+  console.log = (...a: unknown[]) => orig.error(prefix, ...a)
+  console.warn = (...a: unknown[]) => orig.error(prefix, ...a)
   try {
-    vm.runInContext(code, sandbox, { filename: entryPath })
+    const mod = requireFrom(entryPath) as PluginModuleExports
+    return mod
   } finally {
-    finished = true
-    clearTimeout(timer)
-  }
-
-  const mod = moduleObj.exports as PluginModuleExports
-  return {
-    tools: mod.tools,
-    name: mod.name,
-    version: mod.version,
-    description: mod.description,
-    author: mod.author,
+    console.log = orig.log
+    console.warn = orig.warn
   }
 }
 
@@ -188,9 +139,7 @@ export function loadPluginsIntoRegistry(
           defaultEnabled: true,
           kind: 'plugin',
           pluginId: plugin.manifest.id,
-          pluginPermissions: plugin.manifest.permissions,
           run: (ctx, args) => {
-            // 由 mcp-server 构建的 PluginToolContext 传入；这里做类型收窄
             if (ctx.kind !== 'plugin') {
               throw new Error(`插件工具 ${tool.name} 需要 plugin 上下文`)
             }

@@ -17,8 +17,6 @@ export interface McpToolSpec {
   danger: boolean
   /** 插件工具：所属插件 id（供构建 PluginToolContext） */
   pluginId?: string
-  /** 插件工具：插件声明的权限（manifest.permissions，能力授权判断） */
-  pluginPermissions?: string[]
   run(ctx: ToolContext, args: Record<string, unknown>): unknown
 }
 
@@ -93,7 +91,6 @@ export class ToolRegistry {
         readonly: t.readonly ?? false,
         danger: t.danger ?? false,
         pluginId: t.pluginId,
-        pluginPermissions: t.pluginPermissions,
         run: t.run,
       })
     }

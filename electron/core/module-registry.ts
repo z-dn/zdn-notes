@@ -1,5 +1,6 @@
 import type { FeatureModule, MainModuleContext } from './contracts'
 import type { AgentTool } from './contracts'
+import type { AppService } from './app-service'
 import { isEnabled } from './feature-flags'
 import type { ToolRegistry } from './tool-registry'
 
@@ -67,6 +68,16 @@ export class ModuleRegistry {
   registerIpcAll(ctx: Partial<MainModuleContext>, flags?: Record<string, boolean>): void {
     const c = this.collectCtx(ctx)
     for (const m of this.enabled(flags)) m.registerIpc?.(c)
+  }
+
+  /** 让启用的模块把应用能力注册进统一 AppService */
+  registerAppServiceAll(
+    svc: AppService,
+    ctx: Partial<MainModuleContext>,
+    flags?: Record<string, boolean>,
+  ): void {
+    const c = this.collectCtx(ctx)
+    for (const m of this.enabled(flags)) m.appService?.(svc, c)
   }
 
   /** 执行启用的模块的 onShutdown */
