@@ -1,10 +1,11 @@
-import { Boxes, FileText } from 'lucide-react'
+import { Boxes, FileText, History } from 'lucide-react'
 
-export type AgentMenuKey = 'plugins' | 'docs'
+export type AgentMenuKey = 'plugins' | 'docs' | 'logs'
 
 const MENUS: { id: AgentMenuKey; label: string; icon: typeof Boxes }[] = [
   { id: 'plugins', label: '插件', icon: Boxes },
   { id: 'docs', label: '插件开发文档', icon: FileText },
+  { id: 'logs', label: '调用日志', icon: History },
 ]
 
 interface AgentSidebarProps {

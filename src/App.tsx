@@ -109,6 +109,23 @@ export default function App() {
     return () => unsub()
   }, [loadTasks, loadCategories])
 
+  // 点击系统提醒通知：唤起任务页并定位到对应任务
+  useEffect(() => {
+    const unsub = window.electronAPI.onReminderOpen((taskId) => {
+      setSidebarTab('categories')
+      const found = useTaskStore.getState().tasks.find((t) => t.id === taskId)
+      if (found) {
+        selectTask(found)
+        return
+      }
+      loadTasks().then(() => {
+        const task = useTaskStore.getState().tasks.find((t) => t.id === taskId)
+        if (task) selectTask(task)
+      })
+    })
+    return () => unsub()
+  }, [loadTasks, selectTask])
+
   useEffect(() => {
     selectTask(null)
   }, [activeCategoryId, selectTask])

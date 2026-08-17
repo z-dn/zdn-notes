@@ -228,6 +228,16 @@ function cascadeStatus(db: Database, parentId: string, status: string): void {
   }
 }
 
+/** 查询已到提醒时间的未完成任务（供主进程提醒调度器使用） */
+export function getDueTasks(now: number, _db?: Database): Task[] {
+  const db = _db ?? getDB()
+  return rowsToTasks(
+    db,
+    "status != 'done' AND reminder_time IS NOT NULL AND reminder_time <= ?",
+    [now],
+  )
+}
+
 export function updateTaskStatus(id: string, newStatus: string, _db?: Database): Task | null {
   const db = _db ?? getDB()
   const existing = getRowById(db, id)

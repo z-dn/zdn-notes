@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('data:changed', handler)
     return () => ipcRenderer.removeListener('data:changed', handler)
   },
+  onReminderOpen: (cb: (taskId: string) => void) => {
+    const handler = (_e: unknown, id: string) => cb(id)
+    ipcRenderer.on('reminder:open', handler)
+    return () => ipcRenderer.removeListener('reminder:open', handler)
+  },
   saveImageFromData: (dataUri: string) => ipcRenderer.invoke('image:saveFromData', dataUri),
   pickAndSaveImage: () => ipcRenderer.invoke('image:pickAndSave'),
   deleteImage: (url: string) => ipcRenderer.invoke('image:delete', url),
@@ -63,6 +68,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcpGetPluginsDir: () => ipcRenderer.invoke('mcp:getPluginsDir'),
   mcpGetPluginSpec: () => ipcRenderer.invoke('mcp:getPluginSpec'),
   mcpDownloadPluginSpec: () => ipcRenderer.invoke('mcp:downloadPluginSpec'),
+  mcpGetCallLogs: () => ipcRenderer.invoke('mcp:getCallLogs'),
+  mcpClearCallLogs: () => ipcRenderer.invoke('mcp:clearCallLogs'),
+  onMcpCallLogged: (cb: (entry: unknown) => void) => {
+    const handler = (_e: unknown, entry: unknown) => cb(entry)
+    ipcRenderer.on('mcp:callLogged', handler)
+    return () => ipcRenderer.removeListener('mcp:callLogged', handler)
+  },
   onMcpCatalogChanged: (cb: () => void) => {
     const handler = () => cb()
     ipcRenderer.on('mcp:catalogChanged', handler)
