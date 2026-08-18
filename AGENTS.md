@@ -1,5 +1,7 @@
 # ZDNotes — Agent 指南
 
+> 面向开发者的整体架构（含 ASCII 字符图）见 [docs/architecture.md](docs/architecture.md)。
+
 ## 项目简介
 
 ZDNotes 是一款基于 Electron 的本地笔记与任务管理桌面应用，支持快速输入创建任务。仅支持 Windows 平台（NSIS 安装包）。
