@@ -3,6 +3,7 @@ import type { Task } from '@/types/task'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
+import { Bell } from 'lucide-react'
 import { useTaskStore } from '@/stores/task-store'
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -181,6 +182,19 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
       {task.dueDate && (
         <span className="hidden text-xs text-muted-foreground sm:inline">
           {new Date(task.dueDate).toLocaleDateString('zh-CN')}
+        </span>
+      )}
+
+      {task.reminderTime && !isDone && (
+        <span
+          className="hidden shrink-0 items-center gap-0.5 text-xs text-muted-foreground/70 sm:inline-flex"
+          title="已设置提醒"
+        >
+          <Bell className="size-3" />
+          {new Date(task.reminderTime).toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
         </span>
       )}
 

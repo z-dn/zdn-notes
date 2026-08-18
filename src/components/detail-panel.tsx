@@ -30,6 +30,8 @@ export function DetailPanel() {
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [startDate, setStartDate] = useState('')
+  const [reminderDate, setReminderDate] = useState('')
+  const [reminderTime, setReminderTime] = useState('')
   const [newTag, setNewTag] = useState('')
   const [newOwner, setNewOwner] = useState('')
   const [previewMode, setPreviewMode] = useState(false)
@@ -64,6 +66,12 @@ export function DetailPanel() {
         selectedTask.startDate
           ? format(new Date(selectedTask.startDate), 'yyyy-MM-dd')
           : '',
+      )
+      setReminderDate(
+        selectedTask.reminderTime ? format(new Date(selectedTask.reminderTime), 'yyyy-MM-dd') : '',
+      )
+      setReminderTime(
+        selectedTask.reminderTime ? format(new Date(selectedTask.reminderTime), 'HH:mm') : '',
       )
     }
   }, [selectedTask])
@@ -112,6 +120,19 @@ export function DetailPanel() {
         选择一个任务查看详情
       </div>
     )
+  }
+
+  function applyReminder(date: string, time: string) {
+    if (date && time && selectedTask) {
+      updateTask({ id: selectedTask.id, reminderTime: new Date(date + 'T' + time).getTime() })
+    }
+  }
+
+  function clearReminder() {
+    if (!selectedTask) return
+    setReminderDate('')
+    setReminderTime('')
+    updateTask({ id: selectedTask.id, reminderTime: null })
   }
 
   return (
@@ -392,6 +413,64 @@ export function DetailPanel() {
                 setDueDate('')
                 updateTask({ id: selectedTask.id, dueDate: null })
               }}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-input bg-background text-xs text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground/60">提醒时间</label>
+        <div className="flex gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className={`flex h-7 flex-1 items-center rounded-md border border-input bg-background px-2 text-xs transition-colors hover:bg-accent ${
+                  reminderDate && reminderTime ? 'text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {reminderDate && reminderTime
+                  ? format(new Date(`${reminderDate}T${reminderTime}`), 'M月d日 EEE HH:mm', {
+                      locale: zhCN,
+                    })
+                  : '设置提醒'}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-3">
+              <Calendar
+                mode="single"
+                selected={reminderDate ? new Date(reminderDate + 'T00:00:00') : undefined}
+                onSelect={(selected: Date | undefined) => {
+                  if (selected) {
+                    const val = format(selected, 'yyyy-MM-dd')
+                    const time = reminderTime || '09:00'
+                    setReminderDate(val)
+                    setReminderTime(time)
+                    applyReminder(val, time)
+                  }
+                }}
+                locale={zhCN}
+                weekStartsOn={1}
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground/60">时间</span>
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => {
+                    setReminderTime(e.target.value)
+                    applyReminder(reminderDate, e.target.value)
+                  }}
+                  className="h-7 flex-1 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
+          {reminderDate && reminderTime && (
+            <button
+              onClick={clearReminder}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-input bg-background text-xs text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
             >
               ✕
