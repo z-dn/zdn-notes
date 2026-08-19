@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  BookOpen,
   Plug,
   Trash2,
   FolderOpen,
@@ -17,10 +18,18 @@ import type { AgentMenuKey } from './agent-sidebar'
 
 // ===================================================================
 // AGENT 工具 — 插件管理内容区（二级菜单在全局左侧栏 AgentSidebar）：
+//   Agent工具使用  —— 使用指南：如何配置 Agent（opencode 等）接入 ZDNotes MCP
 //   插件          —— 插件卡片网格（内置/第三方）+ 安装/卸载 + 授权
 //   插件开发文档   —— 展示 docs/plugin-spec.md 并可下载为 Markdown
 //   调用日志       —— 智能体对 MCP 的 tools/call 调用记录（实时/历史）
 // ===================================================================
+
+const MARKDOWN_STYLES =
+  'text-sm [&_h1]:mb-2 [&_h1]:border-b [&_h1]:border-divider [&_h1]:pb-1 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-medium [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[12px] [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:text-xs [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-divider [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-divider [&_td]:px-2 [&_td]:py-1 [&_a]:text-primary [&_a]:underline'
+
+function MarkdownDoc({ html }: { html: string }) {
+  return <div className={MARKDOWN_STYLES} dangerouslySetInnerHTML={{ __html: html }} />
+}
 
 interface AgentToolsPageProps {
   menu: AgentMenuKey
@@ -32,6 +41,8 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
   const [installing, setInstalling] = useState(false)
   const [specHtml, setSpecHtml] = useState('')
   const [specLoading, setSpecLoading] = useState(false)
+  const [guideHtml, setGuideHtml] = useState('')
+  const [guideLoading, setGuideLoading] = useState(false)
   const [logs, setLogs] = useState<McpCallLog[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [clearingLogs, setClearingLogs] = useState(false)
@@ -78,6 +89,30 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
       })
       .finally(() => {
         if (mounted) setSpecLoading(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [menu])
+
+  // 进入「Agent工具使用」菜单时加载并渲染使用指南
+  useEffect(() => {
+    if (menu !== 'usage') return
+    let mounted = true
+    setGuideLoading(true)
+    window.electronAPI
+      .mcpGetAgentGuide()
+      .then(async (res) => {
+        if (!mounted) return
+        if (res.ok && res.content) {
+          const html = await renderMarkdown(res.content)
+          if (mounted) setGuideHtml(html)
+        } else {
+          toast(`加载使用指南失败: ${res.error ?? '未知错误'}`)
+        }
+      })
+      .finally(() => {
+        if (mounted) setGuideLoading(false)
       })
     return () => {
       mounted = false
@@ -394,6 +429,24 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
               )}
             </div>
           </>
+        ) : menu === 'usage' ? (
+          <>
+            <div className="flex items-center justify-between border-b border-divider px-3 py-2">
+              <h2 className="flex items-center gap-1.5 text-sm font-medium">
+                <BookOpen className="size-3.5" />
+                Agent工具使用
+              </h2>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {guideLoading ? (
+                <p className="text-xs text-muted-foreground">加载中…</p>
+              ) : guideHtml ? (
+                <MarkdownDoc html={guideHtml} />
+              ) : (
+                <p className="text-xs text-muted-foreground">未找到使用指南</p>
+              )}
+            </div>
+          </>
         ) : (
           <>
             <div className="flex items-center justify-between border-b border-divider px-3 py-2">
@@ -413,10 +466,7 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
               {specLoading ? (
                 <p className="text-xs text-muted-foreground">加载中…</p>
               ) : specHtml ? (
-                <div
-                  className="text-sm [&_h1]:mb-2 [&_h1]:border-b [&_h1]:border-divider [&_h1]:pb-1 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-medium [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[12px] [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:text-xs [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-muted [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-divider [&_th]:bg-muted/50 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-divider [&_td]:px-2 [&_td]:py-1 [&_a]:text-primary [&_a]:underline"
-                  dangerouslySetInnerHTML={{ __html: specHtml }}
-                />
+                <MarkdownDoc html={specHtml} />
               ) : (
                 <p className="text-xs text-muted-foreground">未找到开发文档</p>
               )}

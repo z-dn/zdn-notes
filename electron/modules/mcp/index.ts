@@ -24,6 +24,14 @@ export function pluginSpecPath(): string {
   return join(app.getAppPath(), 'docs', 'plugin-spec.md')
 }
 
+/** Agent 工具使用指南路径：dev 读仓库 docs/，prod 读 extraResources 打包的 agent-usage.md */
+export function agentGuidePath(): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'agent-usage.md')
+  }
+  return join(app.getAppPath(), 'docs', 'agent-usage.md')
+}
+
 export function getMcpIpc(): McpIpcServer | null {
   return mcpIpc
 }
@@ -97,6 +105,14 @@ function appService(svc: AppService, ctx: MainModuleContext): void {
   svc.register('mcp:getPluginSpec', () => {
     try {
       return { ok: true, content: readFileSync(pluginSpecPath(), 'utf-8') }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+  // Agent 工具使用指南内容
+  svc.register('mcp:getAgentGuide', () => {
+    try {
+      return { ok: true, content: readFileSync(agentGuidePath(), 'utf-8') }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }

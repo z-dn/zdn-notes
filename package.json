@@ -1,6 +1,6 @@
 {
   "name": "zdn-notes",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {
@@ -49,6 +49,10 @@
       {
         "from": "docs/plugin-spec.md",
         "to": "plugin-spec.md"
+      },
+      {
+        "from": "docs/agent-usage.md",
+        "to": "agent-usage.md"
       }
     ],
     "win": {

@@ -1,8 +1,9 @@
-import { Boxes, FileText, History } from 'lucide-react'
+import { BookOpen, Boxes, FileText, History } from 'lucide-react'
 
-export type AgentMenuKey = 'plugins' | 'docs' | 'logs'
+export type AgentMenuKey = 'usage' | 'plugins' | 'docs' | 'logs'
 
 const MENUS: { id: AgentMenuKey; label: string; icon: typeof Boxes }[] = [
+  { id: 'usage', label: 'Agent工具使用', icon: BookOpen },
   { id: 'plugins', label: '插件', icon: Boxes },
   { id: 'docs', label: '插件开发文档', icon: FileText },
   { id: 'logs', label: '调用日志', icon: History },

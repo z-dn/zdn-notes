@@ -101,6 +101,7 @@ declare global {
       mcpUninstallPlugin(id: string): Promise<{ ok: boolean; removed?: boolean; error?: string }>
       mcpGetPluginsDir(): Promise<string>
       mcpGetPluginSpec(): Promise<{ ok: boolean; content?: string; error?: string }>
+      mcpGetAgentGuide(): Promise<{ ok: boolean; content?: string; error?: string }>
       mcpDownloadPluginSpec(): Promise<{
         ok: boolean
         canceled?: boolean
