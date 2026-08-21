@@ -11,6 +11,15 @@
   min-height: 100%;
 }
 
+/* 让可编辑区铺满容器：点击内容下方的空白处时，
+   ProseMirror 会把光标放到文档末尾，而不是毫无反应。
+   必须用 height（显式）而不能只用 min-height，
+   否则子元素 min-height:100% 会解析为 auto。 */
+.scratchpad-editor [data-milkdown-root],
+.desc-editor [data-milkdown-root] {
+  height: 100%;
+}
+
 .milkdown-editor h1 {
   font-size: 1.125rem;
   font-weight: 700;

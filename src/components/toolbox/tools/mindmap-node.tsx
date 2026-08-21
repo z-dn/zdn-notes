@@ -1,14 +1,15 @@
 import type { Ctx, MilkdownPlugin } from '@milkdown/ctx'
-import { $nodeSchema, $view } from '@milkdown/utils'
-import { editorViewCtx } from '@milkdown/core'
+import { $inputRule, $nodeSchema, $view } from '@milkdown/utils'
+import { editorViewCtx, schemaCtx } from '@milkdown/core'
 import { insert } from '@milkdown/utils'
 import type { Editor } from '@milkdown/core'
 import type { NodeViewConstructor } from '@milkdown/prose/view'
 import type { EditorView } from '@milkdown/prose/view'
 import type { Node } from '@milkdown/prose/model'
 import { TextSelection } from '@milkdown/prose/state'
+import { InputRule, textblockTypeInputRule } from '@milkdown/prose/inputrules'
 import { createRoot } from 'react-dom/client'
-import { commonmark, codeBlockSchema } from '@milkdown/preset-commonmark'
+import { commonmark, codeBlockSchema, createCodeBlockInputRule } from '@milkdown/preset-commonmark'
 import { MindMapBlock } from './mindmap-block'
 import { MINDMAP_EMPTY_OUTLINE } from '@/lib/mindmap'
 
@@ -29,7 +30,22 @@ const patchedCodeBlock = codeBlockSchema.extendSchema((prev) => (ctx) => {
   }
 })
 
-export const commonmarkForMindmap: MilkdownPlugin[] = [...commonmark, ...patchedCodeBlock]
+// 输入 ```mindmap 时默认会被 code_block 的 input rule 命中生成普通代码块。
+// 这里替换掉原版 input rule（负向先行断言跳过 mindmap），
+// 让 ```js 等仍生成代码块，```mindmap 则落到 mindmapInputRule 生成思维图。
+const patchedCodeBlockInputRule = $inputRule((ctx) =>
+  textblockTypeInputRule(
+    /^```(?<language>(?!mindmap)[a-z]*)?[\s\n]$/,
+    codeBlockSchema.type(ctx),
+    (match) => ({ language: match.groups?.language ?? '' }),
+  ),
+)
+
+export const commonmarkForMindmap: MilkdownPlugin[] = [
+  ...commonmark.filter((p) => p !== createCodeBlockInputRule),
+  patchedCodeBlockInputRule,
+  ...patchedCodeBlock,
+]
 
 export const mindmapSchema = $nodeSchema('mindmap', () => ({
   group: 'block',
@@ -108,8 +124,27 @@ const mindmapViewFactory = (): NodeViewConstructor => {
   }
 }
 
+// 输入 ```mindmap + 空格/回车 时把输入标记替换为思维图节点 + 后续空段落，
+// 否则它只会被当成普通代码块。
+const mindmapInputRule = $inputRule((ctx) =>
+  new InputRule(/^```mindmap[\s\n]$/, (state, _match, start, _end) => {
+    const $start = state.doc.resolve(start)
+    if ($start.parent.type.name !== 'paragraph') return null
+    const schema = ctx.get(schemaCtx)
+    const mindmap = schema.nodes.mindmap.create({ source: MINDMAP_EMPTY_OUTLINE })
+    const para = schema.nodes.paragraph.create()
+    const from = $start.before()
+    const to = from + $start.parent.nodeSize
+    const tr = state.tr.replaceWith(from, to, mindmap)
+    tr.insert(from + 1, para)
+    tr.setSelection(TextSelection.near(tr.doc.resolve(tr.doc.content.size)))
+    return tr
+  }),
+)
+
 export const mindmapNode: MilkdownPlugin[] = [
   ...mindmapSchema,
+  mindmapInputRule,
   $view(mindmapSchema.node, mindmapViewFactory),
 ]
 

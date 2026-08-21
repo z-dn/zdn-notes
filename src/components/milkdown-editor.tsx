@@ -1,9 +1,10 @@
 import { useRef, useCallback, useEffect } from 'react'
-import { Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx, editorViewCtx } from '@milkdown/core'
 import type { MilkdownPlugin } from '@milkdown/ctx'
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
+import { TextSelection } from '@milkdown/prose/state'
 import type { EditorView } from '@milkdown/prose/view'
 import './milkdown-theme.css'
 
@@ -62,6 +63,8 @@ function MilkdownEditorInner({
   commonmarkPluginsRef.current = commonmarkPlugins
   const onEditorReadyRef = useRef(onEditorReady)
   onEditorReadyRef.current = onEditorReady
+  const editorRef = useRef<Editor | undefined>(undefined)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(
     () => () => {
@@ -96,6 +99,28 @@ function MilkdownEditorInner({
         console.error('Failed to drop image:', err)
       }
     }
+  }, [])
+
+  // 兜底：点击 contenteditable 外部（padding 区域）时，把光标置到文档末尾。
+  // 用 setTimeout(0) 延迟到当前 mousedown 事件处理完毕后再 focus，
+  // 避免浏览器在 mousedown 阶段阻止 focus 生效。
+  useEffect(() => {
+    const el = wrapperRef.current?.parentElement
+    if (!el) return
+    const onDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest('.milkdown-editor')) return
+      const editor = editorRef.current
+      if (!editor) return
+      setTimeout(() => {
+        editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx)
+          view.focus()
+          view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)))
+        })
+      }, 0)
+    }
+    el.addEventListener('mousedown', onDown)
+    return () => el.removeEventListener('mousedown', onDown)
   }, [])
 
   useEditor(
@@ -137,6 +162,23 @@ function MilkdownEditorInner({
               event.preventDefault()
               return true
             },
+            handleDOMEvents: {
+              // 拦截 contenteditable 内部的空白区域点击
+              mousedown: (view, event) => {
+                const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })
+                if (!pos) {
+                  // 不调 preventDefault — 让 ProseMirror 默认行为（focus）正常执行
+                  setTimeout(() => {
+                    view.focus()
+                    view.dispatch(
+                      view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)),
+                    )
+                  }, 0)
+                  return true
+                }
+                return false
+              },
+            },
           }))
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
             onChangeRef.current(markdown)
@@ -146,13 +188,18 @@ function MilkdownEditorInner({
       for (const p of cmPlugins) editor.use(p)
       for (const p of extraPluginsRef.current ?? []) editor.use(p)
       editor.use(listener)
+      editorRef.current = editor
       onEditorReadyRef.current?.(editor)
       return editor
     },
     [handlePasteImages, handleDropImages],
   )
 
-  return <Milkdown />
+  return (
+    <div ref={wrapperRef} className="h-full min-h-0">
+      <Milkdown />
+    </div>
+  )
 }
 
 export function MilkdownEditor(props: MilkdownEditorProps) {

@@ -68,6 +68,7 @@ export function MindMapBlock({
   function emit(text: string) {
     if (timer.current) clearTimeout(timer.current)
     if (!text.trim()) {
+      lastEmitted.current = ''
       onDelete?.()
       return
     }

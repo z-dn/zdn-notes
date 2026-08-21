@@ -30,9 +30,10 @@ export function ScratchText({ page }: { page: ScratchPage }) {
 
   function handleChange(markdown: string) {
     const cleaned = stripEmptyMindmapBlocks(markdown)
-    if (cleaned === page.markdown) return
     const scratch = (useToolStore.getState().states[TOOL_KEYS.scratch] ??
       TOOL_DEFAULTS[TOOL_KEYS.scratch]) as ScratchToolState
+    const current = scratch.pages.find((p) => p.id === page.id)
+    if (current && cleaned === current.markdown) return
     updateState(TOOL_KEYS.scratch, {
       pages: scratch.pages.map((p) =>
         p.id === page.id ? { ...p, markdown: cleaned, updatedAt: Date.now() } : p,
@@ -48,7 +49,8 @@ export function ScratchText({ page }: { page: ScratchPage }) {
     const pos = editor.action((ctx) => {
       const view = ctx.get(editorViewCtx)
       const coords = view.posAtCoords({ left: e.clientX, top: e.clientY })
-      return coords?.pos ?? view.state.selection.from
+      if (coords?.pos != null) return coords.pos
+      return view.state.doc.content.size
     })
     const rect = containerRef.current?.getBoundingClientRect() ?? { left: 0, top: 0 }
     setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, pos })
@@ -57,7 +59,7 @@ export function ScratchText({ page }: { page: ScratchPage }) {
   return (
     <div
       ref={containerRef}
-      className="relative h-full min-h-0 overflow-auto rounded-md border border-input px-4 py-3"
+      className="scratchpad-editor relative h-full min-h-0 overflow-auto rounded-md border border-input px-4 py-3"
       onContextMenu={handleContextMenu}
     >
       <MilkdownEditor
