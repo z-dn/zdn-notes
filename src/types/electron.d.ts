@@ -41,6 +41,7 @@ declare global {
     tools: { key: string; name: string; label: string }[]
     dir: string
     builtin: boolean
+    error?: string
   }
 
   interface McpCallLog {

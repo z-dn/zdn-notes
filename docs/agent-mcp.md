@@ -9,7 +9,7 @@
 - **独立进程**：`zdn-mcp` 是独立 Node 进程，**不依赖 ZDNotes 窗口是否在跑**。
 - **GUI-IPC 委托（GUI 运行时）**：检测到 ZDNotes 界面在跑时，`zdn-mcp` 把 `tools/call` 整包转发给 GUI 主进程的本地 loopback 端点（`electron/main/mcp-ipc.ts`），由 GUI 在自己权威内存库上执行并落盘——**运行时只有 GUI 一个写者，无锁竞争、无覆盖丢失**；界面也会通过 `data:changed` 事件自动刷新。
 - **文件锁回退（GUI 不在时）**：GUI 未运行则回退直接文件模式，由 `.zdn-notes.lock` 单写者锁协调（GUI 优先、mcp 短持锁、残留锁按 pid 自动接管）。
-- **可配置能力暴露**：智能体只能做"模拟 GUI 对待办项的操作"——创建/修改/查看/删除任务；由数据目录下 `agent-mcp-config.json` 白名单控制，分类等其它能力不提供。
+- **可配置能力暴露**：智能体可操作待办任务（6 个内置工具：创建/查看详情/列表/改状态/改内容/删除）以及第三方插件工具；由数据目录下 `agent-mcp-config.json` 白名单控制（权限动态从 `ToolRegistry.toCatalog()` 派生）。
 - **本地优先**，数据直接落在 ZDNotes 自身数据目录（`zdn-notes.db`），无中间服务。
 
 ## 架构
@@ -141,7 +141,7 @@ npm run mcp:stdio:dev:debug
 }
 ```
 
-- **MCP 仅提供任务四项能力**：创建 / 修改（状态+内容）/ 查看（列表+详情）/ 删除。等价于 GUI 里普通用户对待办项能做的操作；分类、数据目录路径、设置等内部能力一律不暴露（连配置开关都没有）。
+- **MCP 提供任务 6 个内置工具 + 第三方插件工具**：任务工具包括 `task:create`（创建）、`task:read_list`（列表）、`task:read_detail`（详情）、`task:update_status`（改状态）、`task:update`（改内容）、`task:delete`（删除）；安装第三方插件后，其工具也会出现在 `tools/list` 中（需在 AGENT 工具页授权）。分类、数据目录路径、设置等内部能力不暴露。
 - 被禁止的操作**不会出现在** MCP 的 `tools/list` 里，智能体看不到也没有权限调用。
 - 配置文件缺失时自动生成以上默认值；**已存在的 `agent-mcp-config.json` 不会被自动改写**，如需应用新默认值请删除或手动编辑该文件（或在设置界面改）。
 - 配置变更：GUI 在跑时**即时生效**（热更新委托端点）；已连接的独立 MCP 进程需重启。

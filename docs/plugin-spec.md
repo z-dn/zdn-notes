@@ -231,7 +231,7 @@ npx zdn-agent-tool install ./myplugin.ztool
 ```
 
 - `.ztool` 本质是 zip；安装时平台**逐条目校验**，含 `..`/越界路径的包会被拒绝（防 zip-slip）。
-- 有 `package.json` 时 `build` 会提示先 `npm install`——依赖务必打进包内（VS Code 风格）。
+- 有 `package.json` 时 `build` 会**自动安装**生产依赖（`npm install --omit=dev`），无需手动操作。依赖务必打进包内（VS Code 风格）。
 - 平台兼容版本看 `apiVersion`：`ztool.json` 的 `apiVersion` 必须等于当前平台的 `PLUGIN_API_VERSION`（当前 `1`）。跨大版本升级平台时，旧 `apiVersion` 的插件会被拒绝加载并提示。
 - 发布前务必用 `ztool build` 自检；也可装到本机用 `ztool list` 确认被识别。
 
@@ -247,6 +247,7 @@ npx zdn-agent-tool install ./myplugin.ztool
 | 加载失败：apiVersion 不符 | `apiVersion` 不是当前平台版本 |
 | 加载失败：入口不存在 | `entry` 指向的文件缺失 |
 | 加载失败：工具 key 冲突 | 两个工具 `key` 相同（含与其他插件冲突） |
+| 加载失败：Cannot find module | 插件依赖未安装——在插件目录运行 `npm install` 后重启应用；`ztool build` 会自动安装生产依赖 |
 | 工具不显示在 `tools/list` | 白名单未授权（AGENT 工具页勾选「授权智能体使用」）；或 MCP 总开关关闭 |
 | 智能体调用报错 | 插件 `run` 抛异常；返回值不可 JSON 序列化 |
 | `ctx.app` 调用报错 | GUI 未在运行（应用未启动）——`ctx.app` 仅在 GUI 运行时可用，可改用 Node 原生能力 |
@@ -374,7 +375,7 @@ module.exports = {
 - [ ] `ztool.json` 含 `id`、`apiVersion`（= 1）
 - [ ] 每个工具含 `name`、`description`、`inputSchema`、`run`
 - [ ] 工具 `key` 全局唯一
-- [ ] 有 npm 依赖时：打包前 `npm install`，`node_modules` 随 `.ztool` 分发
+- [ ] 有 npm 依赖时：`ztool build` 自动安装生产依赖（`--omit=dev`），`node_modules` 随 `.ztool` 分发
 - [ ] `run` 返回可 JSON 序列化的值
 - [ ] 用 `ctx.log` 记日志（避免 `console.log` 污染 MCP 协议流）
 - [ ] `ztool build` 通过，装到本机能被 `ztool list` 识别

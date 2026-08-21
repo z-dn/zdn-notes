@@ -30,6 +30,8 @@ export interface PluginInfo {
   dir: string
   /** 内置插件（随应用分发，不可卸载） */
   builtin: boolean
+  /** 插件加载失败时的错误信息（仅展示，不阻断列表） */
+  error?: string
 }
 
 /** 内置工具聚合条目 id（registry 中 kind='builtin' 的工具聚合展示） */
@@ -65,8 +67,13 @@ export function listPlugins(dataDir: string, registry?: ToolRegistry): PluginInf
       const plugin = loadPlugin(dir)
       out.push(toPluginInfo(dir, plugin.manifest))
     } catch (e) {
-      // 清单/入口损坏的插件不阻断列表，仅跳过
-      console.error(`[plugins] 读取清单失败 ${path.basename(dir)}:`, e)
+      // 加载失败时仍尝试读取清单，展示基本信息 + 错误原因
+      try {
+        const manifest = readManifest(dir)
+        out.push({ ...toPluginInfo(dir, manifest), error: e instanceof Error ? e.message : String(e) })
+      } catch {
+        console.error(`[plugins] 读取清单失败 ${path.basename(dir)}:`, e)
+      }
     }
   }
   return out

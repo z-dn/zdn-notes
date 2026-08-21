@@ -60,6 +60,8 @@ export interface AgentTool {
   danger?: boolean // 高危标记（设置页警示）
   defaultEnabled?: boolean
   kind: 'builtin' | 'plugin'
+  /** 工具分层：core=始终暴露给 AI，extended=按需加载（初始 tools/list 不包含） */
+  tier?: 'core' | 'extended'
   /** 插件工具：所属插件 id */
   pluginId?: string
   run(ctx: ToolContext, args: Record<string, unknown>): unknown

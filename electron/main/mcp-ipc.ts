@@ -62,6 +62,8 @@ export function startMcpIpc(deps: McpIpcDeps): Promise<McpIpcServer> {
     onCall: deps.onCall,
     // GUI 端点只执行内置工具；插件工具在独立 MCP 进程执行，永不进入主进程
     excludePlugins: true,
+    // 启用分层发现模式：初始 tools/list 只返回核心工具 + 元工具，减少 token 消耗
+    layeredDiscovery: true,
     afterWrite: () => {
       deps.saveAsync()
       deps.notify()

@@ -43,6 +43,7 @@ export const TASK_TOOLS: AgentTool[] = [
     },
     defaultEnabled: true,
     kind: 'builtin',
+    tier: 'core',
     run: (ctx, args) => taskCreate(builtinCtx(ctx).db, args as never),
   },
   {
@@ -60,6 +61,7 @@ export const TASK_TOOLS: AgentTool[] = [
     readonly: true,
     defaultEnabled: true,
     kind: 'builtin',
+    tier: 'core',
     run: (ctx, args) =>
       taskList(builtinCtx(ctx).db, { status: args.status as string, search: args.search as string }),
   },
@@ -76,6 +78,7 @@ export const TASK_TOOLS: AgentTool[] = [
     readonly: true,
     defaultEnabled: true,
     kind: 'builtin',
+    tier: 'core',
     run: (ctx, args) => taskGetById(builtinCtx(ctx).db, args.id as string),
   },
   {
@@ -93,6 +96,7 @@ export const TASK_TOOLS: AgentTool[] = [
     },
     defaultEnabled: true,
     kind: 'builtin',
+    tier: 'core',
     run: (ctx, args) =>
       taskUpdateStatus(builtinCtx(ctx).db, args.id as string, args.status as string),
   },
@@ -120,6 +124,7 @@ export const TASK_TOOLS: AgentTool[] = [
     danger: true,
     defaultEnabled: true,
     kind: 'builtin',
+    tier: 'core',
     run: (ctx, args) => taskUpdate(builtinCtx(ctx).db, args.id as string, args),
   },
   {
@@ -135,6 +140,7 @@ export const TASK_TOOLS: AgentTool[] = [
     danger: true,
     defaultEnabled: true,
     kind: 'builtin',
+    tier: 'core',
     run: (ctx, args) => taskDelete(builtinCtx(ctx).db, args.id as string),
   },
 ]

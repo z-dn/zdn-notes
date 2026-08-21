@@ -21,6 +21,7 @@ export function startPluginWatcher(opts: {
   const root = pluginRoot(opts.dataDir)
   let timer: NodeJS.Timeout | null = null
   let watcher: fs.FSWatcher | null = null
+  let fallbackTimer: NodeJS.Timeout | null = null
 
   function rebuild() {
     const registry = new ToolRegistry()
@@ -41,12 +42,14 @@ export function startPluginWatcher(opts: {
     fs.mkdirSync(root, { recursive: true })
     watcher = fs.watch(root, { recursive: true }, () => schedule())
   } catch {
-    /* 目录不可写或 watch 不可用：降级为不监听 */
+    /* fs.watch 不可用时降级为轮询（每 3 秒检查一次） */
+    fallbackTimer = setInterval(() => schedule(), 3000)
   }
 
   return {
     stop: () => {
       if (timer) clearTimeout(timer)
+      if (fallbackTimer) clearInterval(fallbackTimer)
       watcher?.close()
       watcher = null
     },

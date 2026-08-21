@@ -25,6 +25,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { execSync } from 'child_process'
 import AdmZip from 'adm-zip'
 
 const PLUGIN_API_VERSION = 1
@@ -102,11 +103,17 @@ function buildPlugin(pluginDir, outFile) {
   const entry = path.join(dir, manifest.entry || 'index.js')
   if (!fs.existsSync(entry)) throw new Error(`入口不存在: ${entry}`)
 
-  // 依赖随插件分发（VS Code 风格）：有 package.json 时提示先安装依赖再打包
+  // 依赖随插件分发（VS Code 风格）：有 package.json 时自动安装依赖
   if (fs.existsSync(path.join(dir, 'package.json'))) {
     if (!fs.existsSync(path.join(dir, 'node_modules'))) {
-      console.warn('⚠ 检测到 package.json 但没有 node_modules。')
-      console.warn('  请在打包前运行 `npm install`，依赖会随 .ztool 分发（插件 = 完整 Node 模块）。')
+      console.log('检测到 package.json 但没有 node_modules，正在自动安装依赖...')
+      try {
+        execSync('npm install --omit=dev', { cwd: dir, stdio: 'inherit' })
+        console.log('依赖安装完成')
+      } catch {
+        console.error('依赖安装失败，请手动运行 npm install 后重试')
+        process.exit(1)
+      }
     }
   }
 

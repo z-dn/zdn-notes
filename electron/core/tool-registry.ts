@@ -13,6 +13,7 @@ export interface McpToolSpec {
   description: string
   inputSchema: Record<string, unknown>
   kind: 'builtin' | 'plugin'
+  tier: 'core' | 'extended'
   readonly: boolean
   danger: boolean
   /** 插件工具：所属插件 id（供构建 PluginToolContext） */
@@ -76,18 +77,26 @@ export class ToolRegistry {
    * 按配置白名单构建 MCP 工具列表。
    * 只有 enabled 且 permissions[key] === true 的工具才会暴露给智能体
    * —— 禁用的工具不进 tools/list，从而不进模型上下文（token 精简）。
+   *
+   * @param options.tier - 过滤层级：'core' 只返回核心工具，'all' 返回所有允许的工具（默认）
    */
-  buildMcpTools(cfg: McpCfgLike): McpToolSpec[] {
+  buildMcpTools(cfg: McpCfgLike, options?: { tier?: 'core' | 'all' }): McpToolSpec[] {
     const out: McpToolSpec[] = []
     for (const t of this.tools.values()) {
       const allowed = cfg.enabled !== false && cfg.permissions?.[t.key] !== false
       if (!allowed) continue
+
+      // 分层过滤：core 模式下只返回 tier='core' 的工具
+      const tier = t.tier ?? 'core' // 默认为 core，向后兼容
+      if (options?.tier === 'core' && tier !== 'core') continue
+
       out.push({
         key: t.key,
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema,
         kind: t.kind,
+        tier,
         readonly: t.readonly ?? false,
         danger: t.danger ?? false,
         pluginId: t.pluginId,
@@ -95,5 +104,30 @@ export class ToolRegistry {
       })
     }
     return out
+  }
+
+  /** 获取所有已注册工具的目录摘要（用于 plugin_discover 元工具） */
+  getPluginCatalog(): Record<string, { label: string; description: string; tools: { name: string; label: string; description: string }[] }> {
+    const plugins: Record<string, { label: string; description: string; tools: { name: string; label: string; description: string }[] }> = {}
+
+    for (const t of this.tools.values()) {
+      if (t.kind !== 'plugin' || !t.pluginId) continue
+
+      if (!plugins[t.pluginId]) {
+        plugins[t.pluginId] = {
+          label: t.pluginId,
+          description: `插件 ${t.pluginId} 提供的工具`,
+          tools: [],
+        }
+      }
+
+      plugins[t.pluginId].tools.push({
+        name: t.name,
+        label: t.label,
+        description: t.description.slice(0, 100), // 截断摘要
+      })
+    }
+
+    return plugins
   }
 }

@@ -239,7 +239,7 @@
 
 **插件 = 任意代码，与应用同权限**。无沙箱、无 require 白名单、无能力门禁（已删除 permission 体系），与 Obsidian/VS Code 插件一致。
 
-- 依赖随插件目录分发（node_modules 打进 `.ztool`，VS Code 风格）；`ztool build` 检测无 node_modules 时提示先 `npm install`。
+- 依赖随插件目录分发（node_modules 打进 `.ztool`，VS Code 风格）；`ztool build` 检测无 node_modules 时自动安装生产依赖（`npm install --omit=dev`）。
 - 安装警告：GUI 安装前弹「安装插件 = 运行任意代码（与应用同权限）」确认框；CLI `ztool install` 打印同样警告。
 - 内置插件（`resources/agent-tools/http`）随包分发，首次启动 `seed-plugins` 复制到数据目录，`builtin:true` 不可卸载。
 

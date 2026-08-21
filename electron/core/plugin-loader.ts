@@ -138,6 +138,7 @@ export function loadPluginsIntoRegistry(
           danger: tool.danger,
           defaultEnabled: true,
           kind: 'plugin',
+          tier: 'extended', // 插件工具默认为扩展层，按需加载
           pluginId: plugin.manifest.id,
           run: (ctx, args) => {
             if (ctx.kind !== 'plugin') {

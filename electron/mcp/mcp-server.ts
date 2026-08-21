@@ -64,6 +64,8 @@ export interface McpServerOpts {
   appService?: AppService
   // 仅暴露内置工具（GUI 端点用）：插件工具被排除，确保插件执行永不进入主进程
   excludePlugins?: boolean
+  // 分层工具发现模式：初始 tools/list 只返回核心工具 + 元工具，插件工具按需加载
+  layeredDiscovery?: boolean
   // 工具调用完成回调（执行方记录调用日志）：不含 id/source，由调用方补齐。
   // 只在本地实际执行时触发——delegate 转发成功时由被转交方记录，避免重复。
   onCall?: (call: Omit<McpCallLogEntry, 'id' | 'source'>) => void
@@ -76,6 +78,7 @@ interface ToolSpec {
   description: string
   inputSchema: Record<string, unknown>
   kind: 'builtin' | 'plugin'
+  tier: 'core' | 'extended'
   readonly: boolean
   danger: boolean
   pluginId?: string
@@ -83,8 +86,16 @@ interface ToolSpec {
   run: McpToolSpec['run']
 }
 
-function buildTools(cfg: MpcConfig, registry: ToolRegistry, excludePlugins = false): ToolSpec[] {
-  const tools = registry.buildMcpTools(cfg)
+function buildTools(
+  cfg: MpcConfig,
+  registry: ToolRegistry,
+  excludePlugins = false,
+  layeredDiscovery = false,
+): ToolSpec[] {
+  // 分层模式：只返回核心工具；非分层模式：返回所有允许的工具
+  const tier = layeredDiscovery ? 'core' : 'all'
+  const tools = registry.buildMcpTools(cfg, { tier })
+
   if (!excludePlugins) return tools
   return tools.filter((t) => t.kind === 'builtin')
 }
@@ -105,11 +116,13 @@ export class McpServer {
   private appService: AppService | null
   private configFile?: string
   private excludePlugins: boolean
+  private layeredDiscovery: boolean
   private onCall: ((call: Omit<McpCallLogEntry, 'id' | 'source'>) => void) | null
 
   constructor(opts?: McpServerOpts) {
     this.configFile = opts?.configFile
     this.excludePlugins = opts?.excludePlugins ?? false
+    this.layeredDiscovery = opts?.layeredDiscovery ?? false
     this.registry = opts?.registry ?? defaultRegistry()
     this.dataDir = opts?.dataDir?.trim() || (process.env.ZDNOTES_DATA_DIR ?? undefined)
     // 加载第三方插件工具进统一注册表（GUI 侧传入的 registry 已含插件，重复注册会抛错，这里幂等处理）
@@ -121,7 +134,7 @@ export class McpServer {
       catalog: this.registry.toCatalog(),
     })
     this.waitMs = opts?.waitMs ?? this.cfg.maxWaitLockMs
-    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins)
+    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins, this.layeredDiscovery)
     this.delegate = opts?.delegate ?? null
     this.dbSource = opts?.dbSource ?? null
     this.afterWrite = opts?.afterWrite ?? null
@@ -138,7 +151,7 @@ export class McpServer {
       catalog: this.registry.toCatalog(),
     })
     this.waitMs = this.cfg.maxWaitLockMs
-    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins)
+    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins, this.layeredDiscovery)
   }
 
   // 插件热重载：替换注册表（重建内置+插件）并重建工具白名单。
@@ -148,7 +161,7 @@ export class McpServer {
       configFile: this.configFile,
       catalog: this.registry.toCatalog(),
     })
-    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins)
+    this.tools = buildTools(this.cfg, this.registry, this.excludePlugins, this.layeredDiscovery)
   }
 
   get serverInfo() {

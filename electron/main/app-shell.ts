@@ -13,6 +13,7 @@ import { loadPluginsIntoRegistry } from '../core/plugin-loader'
 import { ensureBuiltinPlugins } from './seed-plugins'
 import { BUILTIN_MODULES } from '../modules'
 import { getMcpIpc, setCurrentToolRegistry } from '../modules/mcp'
+import { createMetaTools } from '../modules/mcp/tools'
 import type { MainModuleContext } from '../core/contracts'
 import type { AgentTool } from '../core/contracts'
 
@@ -52,10 +53,12 @@ export async function startAppShell(): Promise<AppShell> {
   // 内置插件首次启动播种到数据目录 agent-tools/（不可卸载）
   ensureBuiltinPlugins(getDataDir())
 
-  // 统一 Agent 工具注册表：内置模块贡献 + 第三方插件（agent-tools/）
+  // 统一 Agent 工具注册表：内置模块贡献 + 第三方插件（agent-tools/）+ 元工具（分层发现）
   const toolRegistry = new ToolRegistry()
   toolRegistry.registerAll(builtinTools)
   loadPluginsIntoRegistry(toolRegistry, getDataDir())
+  // 注册元工具（plugin_discover / plugin_load）：始终为 core 层
+  toolRegistry.registerAll(createMetaTools(() => toolRegistry))
 
   const ctx: MainModuleContext = {
     getDB: getDB as () => Database,
