@@ -119,22 +119,6 @@ function appService(svc: AppService, ctx: MainModuleContext): void {
   })
 }
 
-/** 安装前警告：插件 = 任意代码（与应用同权限），仅信任来源可装 */
-async function confirmInstallWarning(): Promise<boolean> {
-  const result = await dialog.showMessageBox({
-    type: 'warning',
-    title: '安装第三方插件',
-    message: '安装插件 = 运行任意代码（与应用同权限）',
-    detail:
-      '插件代码将获得与 ZDNotes 相同的权限，可读写你的文件、执行程序、访问应用数据。仅安装你信任来源的插件。',
-    buttons: ['取消', '继续安装'],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true,
-  })
-  return result.response === 1
-}
-
 function registerIpc(ctx: MainModuleContext): void {
   // 文件/对话框类通道保持 IPC 专属（UI 交互，不进业务层）
   ipcMain.handle('mcp:installPlugin', async () => {
@@ -147,7 +131,6 @@ function registerIpc(ctx: MainModuleContext): void {
       ],
     })
     if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
-    if (!(await confirmInstallWarning())) return { ok: false, canceled: true }
     try {
       const manifest = extractPluginZip(result.filePaths[0], ctx.getDataDir())
       return { ok: true, id: manifest.id, name: manifest.name }

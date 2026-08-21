@@ -48,12 +48,16 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
   const [clearingLogs, setClearingLogs] = useState(false)
 
   const refresh = useCallback(async () => {
-    const [p, c] = await Promise.all([
-      window.electronAPI.mcpListPlugins(),
-      window.electronAPI.mcpGetConfig(),
-    ])
-    setPlugins(p)
-    setConfig(c)
+    try {
+      const [p, c] = await Promise.all([
+        window.electronAPI.mcpListPlugins(),
+        window.electronAPI.mcpGetConfig(),
+      ])
+      setPlugins(p)
+      setConfig(c)
+    } catch (e) {
+      console.error('[agent-tools] refresh failed:', e)
+    }
   }, [])
 
   const loadLogs = useCallback(async () => {
@@ -143,6 +147,11 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
   }
 
   async function handleInstall() {
+    const ok = await showConfirm(
+      '安装第三方插件',
+      '安装插件 = 运行任意代码（与应用同权限）。插件代码将获得与 ZDNotes 相同的权限，可读写你的文件、执行程序、访问应用数据。仅安装你信任来源的插件。',
+    )
+    if (!ok) return
     setInstalling(true)
     try {
       const res = await window.electronAPI.mcpInstallPlugin()
@@ -242,6 +251,11 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
         </div>
 
         <div className="mt-3 flex-1 space-y-1 border-t border-divider pt-2">
+          {plugin.error && (
+            <div className="mb-2 rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-700 dark:bg-red-950 dark:text-red-300">
+              加载失败: {plugin.error}
+            </div>
+          )}
           {plugin.tools.map((tool) => (
             <label key={tool.key} className="flex items-center gap-2 py-0.5">
               <input
@@ -254,7 +268,7 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
               <span className="truncate text-xs text-muted-foreground">{tool.label}</span>
             </label>
           ))}
-          {plugin.tools.length === 0 && (
+          {plugin.tools.length === 0 && !plugin.error && (
             <p className="text-[11px] text-muted-foreground/60">该插件未声明工具</p>
           )}
         </div>
@@ -284,6 +298,14 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
                   <span className="text-[11px] text-muted-foreground">启用 MCP</span>
                 </label>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={refresh}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
+                    title="刷新插件列表"
+                  >
+                    <RefreshCw className="size-3" />
+                    刷新
+                  </button>
                   <button
                     onClick={async () => {
                       const dir = await window.electronAPI.mcpGetPluginsDir()
