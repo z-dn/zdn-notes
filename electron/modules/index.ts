@@ -12,6 +12,7 @@ import { updaterModule } from './updater'
 import { mcpModule } from './mcp'
 import { appModule } from './app'
 import { notificationsModule } from './notifications'
+import { dshModule } from './dsh'
 
 // ===================================================================
 // 内置平台模块清单（你本人开发，feature-flag 控制开关）。
@@ -31,4 +32,5 @@ export const BUILTIN_MODULES: FeatureModule[] = [
   updaterModule,
   mcpModule,
   notificationsModule,
+  dshModule,
 ]

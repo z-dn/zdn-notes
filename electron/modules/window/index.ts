@@ -86,6 +86,7 @@ export function createMainWindow(): BrowserWindow | null {
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       sandbox: true,
+      webviewTag: true,
     },
   })
 

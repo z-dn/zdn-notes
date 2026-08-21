@@ -34,11 +34,13 @@ export interface RendererModule {
 import { views as taskViews } from './tasks'
 import { views as toolboxViews } from './toolbox'
 import { views as mcpViews } from './mcp'
+import { views as dshViews } from './dsh'
 
 export const RENDERER_MODULES: RendererModule[] = [
   { id: 'tasks', views: taskViews, settingsSections: [] },
   { id: 'toolbox', views: toolboxViews, settingsSections: [] },
   { id: 'mcp', views: mcpViews, settingsSections: [] },
+  { id: 'dsh', views: dshViews, settingsSections: [] },
   { id: 'settings', views: [], settingsSections: [] },
 ]
 

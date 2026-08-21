@@ -6,3 +6,6 @@ release/
 *.log
 .env
 *.local
+
+# 应用自带的 DSH 运行时（node.exe + DSH 依赖 + profile），由 npm run build:dsh 生成
+resources/dsh/

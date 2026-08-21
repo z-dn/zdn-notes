@@ -15,6 +15,7 @@ import { ToolboxWorkspace } from '@/components/toolbox/toolbox-workspace'
 import { AgentToolsPage } from '@/components/agent/agent-tools-page'
 import { AgentSidebar } from '@/components/agent/agent-sidebar'
 import type { AgentMenuKey } from '@/components/agent/agent-sidebar'
+import { DshPage } from '@/components/dsh/dsh-page'
 import { useTheme } from '@/hooks/use-theme'
 import { useFeature } from '@/hooks/use-feature'
 import { ToastContainer } from '@/components/toast'
@@ -39,7 +40,9 @@ export default function App() {
   const tasksEnabled = useFeature('tasks')
   const toolboxEnabled = useFeature('toolbox')
   const mcpEnabled = useFeature('mcp')
+  const dshEnabled = false // useFeature('dsh') — 暂时屏蔽，太不成熟
   const views = collectViews().filter((v) => {
+    if (v.id === 'dsh') return dshEnabled
     if (v.id === 'toolbox') return toolboxEnabled
     if (v.id === 'agent') return mcpEnabled
     return tasksEnabled
@@ -262,17 +265,19 @@ export default function App() {
         </header>
 
         <div className="flex flex-1 overflow-hidden">
-          <aside className="hidden h-full w-48 flex-col border-r border-divider bg-panel-sidebar md:flex">
-            <FadeSwitch
-              current={sidebarTab}
-              className="flex min-h-0 flex-1 flex-col"
-              render={(k) => {
-                if (k === 'toolbox') return <ToolboxSidebar />
-                if (k === 'agent') return <AgentSidebar menu={agentMenu} onMenuChange={setAgentMenu} />
-                return <CategorySidebar />
-              }}
-            />
-          </aside>
+          {sidebarTab !== 'dsh' && (
+            <aside className="hidden h-full w-48 flex-col border-r border-divider bg-panel-sidebar md:flex">
+              <FadeSwitch
+                current={sidebarTab}
+                className="flex min-h-0 flex-1 flex-col"
+                render={(k) => {
+                  if (k === 'toolbox') return <ToolboxSidebar />
+                  if (k === 'agent') return <AgentSidebar menu={agentMenu} onMenuChange={setAgentMenu} />
+                  return <CategorySidebar />
+                }}
+              />
+            </aside>
+          )}
 
           <div className="animate-fade-slide-up relative flex-1 overflow-hidden bg-panel">
             <FadeSwitch
@@ -288,6 +293,9 @@ export default function App() {
                 }
                 if (k === 'agent') {
                   return <AgentToolsPage menu={agentMenu} />
+                }
+                if (k === 'dsh') {
+                  return <DshPage />
                 }
                 return (
                   <>
@@ -315,7 +323,7 @@ export default function App() {
             />
           </div>
 
-          {sidebarTab !== 'toolbox' && sidebarTab !== 'agent' && (
+          {sidebarTab !== 'toolbox' && sidebarTab !== 'agent' && sidebarTab !== 'dsh' && (
             <aside className="hidden w-80 border-l border-divider bg-panel-detail md:block">
               <DetailPanel />
             </aside>

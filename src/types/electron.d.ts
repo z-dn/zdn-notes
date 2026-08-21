@@ -178,6 +178,12 @@ declare global {
       onUpdateError(cb: (msg: string) => void): () => void
       onUpdateProgress(cb: (progress: unknown) => void): () => void
       onUpdateDownloaded(cb: (info: unknown) => void): () => void
+
+      // ---- DeepSeek Harness（DSH）内嵌 Web UI ----
+      dshIsReady(): Promise<{ ready: boolean; reason?: string }>
+      dshGetStatus(): Promise<{ running: boolean; port?: number }>
+      dshStart(opts?: { apiKey?: string; model?: string }): Promise<{ ok: boolean; port?: number; error?: string }>
+      dshStop(): Promise<boolean>
     }
   }
 }
