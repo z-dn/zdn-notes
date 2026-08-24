@@ -40,7 +40,7 @@ export default function App() {
   const tasksEnabled = useFeature('tasks')
   const toolboxEnabled = useFeature('toolbox')
   const mcpEnabled = useFeature('mcp')
-  const dshEnabled = false // useFeature('dsh') — 暂时屏蔽，太不成熟
+  const dshEnabled = useFeature('dsh')
   const views = collectViews().filter((v) => {
     if (v.id === 'dsh') return dshEnabled
     if (v.id === 'toolbox') return toolboxEnabled

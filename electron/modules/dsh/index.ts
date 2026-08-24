@@ -11,14 +11,15 @@ import type { FeatureModule, MainModuleContext } from '../../core/contracts'
 
 function registerIpc(ctx: MainModuleContext): void {
   dshManager.init({ dataDir: ctx.getDataDir() })
+  dshManager.onChange((status) => ctx.send('dsh:statusChanged', status))
 
   ipcMain.handle('dsh:isReady', () => dshManager.isReady())
   ipcMain.handle('dsh:getStatus', () => dshManager.status())
   ipcMain.handle('dsh:start', (_e, opts: unknown) =>
     dshManager.start(opts as { apiKey?: string; model?: string } | undefined),
   )
-  ipcMain.handle('dsh:stop', () => {
-    dshManager.stop()
+  ipcMain.handle('dsh:stop', async () => {
+    await dshManager.stop()
     return true
   })
 }

@@ -16,6 +16,12 @@
 > 当前实现见 `electron/modules/dsh/`、`src/components/dsh/dsh-page.tsx`、脚本 `scripts/build-dsh.mjs`。
 > 关键差异：无 node-pty / xterm / TUI 插件；启动命令为 `dsh --profile web`；渲染用 `<webview>`。
 > 第 1 节目标、技术约束表（已更新）、P0 版本验证结论仍有效。
+>
+> **当前实现状态（2026-08-24）**：
+> - 模块默认启用（feature flag `module.dsh`，optional）；侧边栏 tab「DSH」经 `useFeature('dsh')` 控制。
+> - 就绪判定 = 输出解析端口（忽略占位 0）+ HTTP 探测通过，总超时 15s（`DshManager.start`）。
+> - 状态变化经 `dsh:statusChanged` 事件推送渲染层，无轮询；停止用 `taskkill /T /F` 清理整棵进程树。
+> - TUI 时代的一次性验证脚本（validate-dsh-pty/tty-electron/boot.mjs）已删除，仅保留 `validate-dsh-integ.mjs`。
 
 ## 1. 目标
 

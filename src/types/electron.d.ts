@@ -184,6 +184,7 @@ declare global {
       dshGetStatus(): Promise<{ running: boolean; port?: number }>
       dshStart(opts?: { apiKey?: string; model?: string }): Promise<{ ok: boolean; port?: number; error?: string }>
       dshStop(): Promise<boolean>
+      onDshStatusChanged(cb: (status: { running: boolean; port?: number }) => void): () => void
     }
   }
 }
