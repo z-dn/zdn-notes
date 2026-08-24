@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 
 // ===================================================================
 // 主窗口共享句柄。
@@ -16,7 +16,9 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow
 }
 
-/** 向渲染层主窗口发送事件；无窗口时静默忽略 */
+/** 向所有渲染层窗口广播事件；无窗口时静默忽略 */
 export function sendToRenderer(channel: string, ...args: unknown[]): void {
-  mainWindow?.webContents.send(channel, ...args)
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(channel, ...args)
+  }
 }

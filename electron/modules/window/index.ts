@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage } from 'electron'
+import type { IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
-import { setMainWindow, sendToRenderer } from '../../main/window-store'
+import { getMainWindow, setMainWindow } from '../../main/window-store'
 import { getDataDir } from '../../main/data-location'
 import { loadConfig, configFileForDataDir } from '../../mcp/config'
 import type { FeatureModule, MainModuleContext } from '../../core/contracts'
@@ -18,7 +19,7 @@ function trayIconPath(): string {
 }
 
 function showMainWindow(): void {
-  const win = BrowserWindow.getAllWindows()[0]
+  const win = getMainWindow()
   if (!win) return
   if (win.isMinimized()) win.restore()
   win.show()
@@ -74,7 +75,11 @@ function quitApp(): void {
   app.quit()
 }
 
-export function createMainWindow(): BrowserWindow | null {
+/**
+ * 创建应用窗口。viewId 非空时通过 URL query 传给渲染层，作为初始激活的模块 tab。
+ * 主窗口关窗=隐藏到托盘（托盘驻留），子窗口关闭即销毁。
+ */
+export function createAppWindow(viewId?: string): BrowserWindow | null {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -90,14 +95,9 @@ export function createMainWindow(): BrowserWindow | null {
     },
   })
 
-  setMainWindow(win)
-  win.on('closed', () => {
-    setMainWindow(null)
-  })
-
-  // 关窗不退出：仅隐藏到托盘；真正退出走托盘菜单（quitting=true）放行 close
+  // 关窗不退出（仅主窗口）：隐藏到托盘；真正退出走托盘菜单（quitting=true）放行 close
   win.on('close', (e) => {
-    if (!quitting) {
+    if (!quitting && getMainWindow() === win) {
       e.preventDefault()
       win.hide()
     }
@@ -115,8 +115,8 @@ export function createMainWindow(): BrowserWindow | null {
     return { action: 'deny' }
   })
 
-  win.on('maximize', () => sendToRenderer('window:maximizedChange', true))
-  win.on('unmaximize', () => sendToRenderer('window:maximizedChange', false))
+  win.on('maximize', () => win.webContents.send('window:maximizedChange', true))
+  win.on('unmaximize', () => win.webContents.send('window:maximizedChange', false))
 
   win.webContents.on('before-input-event', (_e, input) => {
     if (input.key === 'F12' || (input.control && input.shift && input.key === 'I')) {
@@ -125,17 +125,32 @@ export function createMainWindow(): BrowserWindow | null {
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(
+      viewId
+        ? `${process.env['ELECTRON_RENDERER_URL']}/?view=${encodeURIComponent(viewId)}`
+        : process.env['ELECTRON_RENDERER_URL'],
+    )
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'), viewId ? { query: { view: viewId } } : undefined)
   }
   return win
 }
 
+/** 创建主窗口并登记到 window-store（托盘驻留/通知聚焦/second-instance 的锚点） */
+export function createMainWindow(): BrowserWindow | null {
+  const win = createAppWindow()
+  if (!win) return null
+  setMainWindow(win)
+  win.on('closed', () => {
+    if (getMainWindow() === win) setMainWindow(null)
+  })
+  return win
+}
+
 function registerIpc(_ctx: MainModuleContext): void {
-  ipcMain.handle('window:minimize', () => getWindow()?.minimize())
-  ipcMain.handle('window:maximizeToggle', () => {
-    const win = getWindow()
+  ipcMain.handle('window:minimize', (e) => windowFromEvent(e)?.minimize())
+  ipcMain.handle('window:maximizeToggle', (e) => {
+    const win = windowFromEvent(e)
     if (!win) return
     if (win.isMaximized()) {
       win.unmaximize()
@@ -143,14 +158,19 @@ function registerIpc(_ctx: MainModuleContext): void {
       win.maximize()
     }
   })
-  ipcMain.handle('window:close', () => getWindow()?.close())
+  ipcMain.handle('window:close', (e) => windowFromEvent(e)?.close())
   ipcMain.handle('window:setThemeSource', (_e, source: 'system' | 'light' | 'dark') => {
     nativeTheme.themeSource = source
   })
+  ipcMain.handle('window:openView', (_e, view: string) => {
+    const id = typeof view === 'string' ? view.trim() : ''
+    if (!id) return false
+    return createAppWindow(id) != null
+  })
 }
 
-function getWindow(): BrowserWindow | null {
-  return BrowserWindow.getAllWindows()[0] ?? null
+function windowFromEvent(e: IpcMainInvokeEvent): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(e.sender)
 }
 
 export const windowModule: FeatureModule = {

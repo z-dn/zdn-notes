@@ -63,7 +63,7 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 | `db:getDataDir/chooseDataDir/setDataDir/getDataDirFallback` | 自定义数据存储位置 | `modules/data-location` |
 | `inbox:getDir/openDir` | 收件夹路径/打开 | `modules/inbox` |
 | `tool:getAll/set`、`http:request` | 工具箱状态/HTTP 请求 | `modules/toolbox` |
-| `window:minimize/maximizeToggle/close/setThemeSource` | 窗口控制 | `modules/window` |
+| `window:minimize/maximizeToggle/close/setThemeSource/openView` | 窗口控制/模块 tab 新窗口打开（`?view=` 传初始视图） | `modules/window` |
 | `update:check/download/install` | 自动更新 | `modules/updater` |
 | `mcp:getConfig/setConfig/getCatalog` | MCP 配置/目录 | `modules/mcp` |
 | `mcp:listPlugins/installPlugin/uninstallPlugin/getPluginsDir` | 插件管理 | `modules/mcp` |

@@ -21,6 +21,7 @@ import { useFeature } from '@/hooks/use-feature'
 import { ToastContainer } from '@/components/toast'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { FadeSwitch } from '@/components/fade'
+import { TabContextMenu, type TabMenuState } from '@/components/tab-context-menu'
 import { collectViews } from '@/modules'
 
 import { toast } from '@/lib/toast'
@@ -47,8 +48,13 @@ export default function App() {
     if (v.id === 'agent') return mcpEnabled
     return tasksEnabled
   })
-  const [sidebarTab, setSidebarTab] = useState<string>(views[0]?.id ?? 'categories')
+  // 初始视图：新窗口通过 URL query（?view=<id>）指定要打开的模块 tab，
+  // 非法/被禁用的 id 由下方兜底 effect 回落到第一个可用视图
+  const [sidebarTab, setSidebarTab] = useState<string>(
+    () => new URLSearchParams(window.location.search).get('view') ?? views[0]?.id ?? 'categories',
+  )
   const [agentMenu, setAgentMenu] = useState<AgentMenuKey>('plugins')
+  const [tabMenu, setTabMenu] = useState<TabMenuState | null>(null)
 
   useEffect(() => {
     loadTasks()
@@ -158,6 +164,10 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setSidebarTab(tab.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setTabMenu({ x: e.clientX, y: e.clientY, viewId: tab.id })
+                  }}
                   className={`min-w-16 max-w-36 truncate rounded-md px-4 py-1.5 text-xs transition-colors ${
                     sidebarTab === tab.id
                       ? 'bg-accent font-medium text-foreground'
@@ -334,6 +344,7 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           pendingVersion={pendingUpdate || undefined}
         />
+        {tabMenu && <TabContextMenu menu={tabMenu} onClose={() => setTabMenu(null)} />}
         <ToastContainer />
         <ConfirmDialog />
       </div>

@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowMaximizeToggle: () => ipcRenderer.invoke('window:maximizeToggle'),
   windowClose: () => ipcRenderer.invoke('window:close'),
+  openViewWindow: (view: string) => ipcRenderer.invoke('window:openView', view),
   setThemeSource: (source: string) => ipcRenderer.invoke('window:setThemeSource', source),
   onWindowMaximizedChange: (cb: (maximized: boolean) => void) => {
     const handler = (_e: unknown, v: boolean) => cb(v)

@@ -129,6 +129,7 @@ declare global {
       windowMinimize(): Promise<void>
       windowMaximizeToggle(): Promise<void>
       windowClose(): Promise<void>
+      openViewWindow(view: string): Promise<boolean>
       setThemeSource(source: 'system' | 'light' | 'dark'): Promise<void>
       onWindowMaximizedChange(cb: (maximized: boolean) => void): () => void
 

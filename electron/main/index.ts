@@ -9,6 +9,7 @@ import { releaseGuiLock } from '../mcp/lock'
 import { runCli } from '../mcp/cli'
 import { startAppShell, AppShell } from './app-shell'
 import { createMainWindow } from '../modules/window'
+import { getMainWindow } from './window-store'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'zdn-img', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true, corsEnabled: true } }
@@ -65,7 +66,8 @@ if (mcpArgs.includes('--zdn-mcp-stdio')) {
     app.quit()
   } else {
     app.on('second-instance', () => {
-      const win = BrowserWindow.getAllWindows()[0]
+      // 聚焦主窗口（而非任意第一个窗口）：主窗口是托盘驻留/通知的锚点
+      const win = getMainWindow()
       if (win) {
         if (win.isMinimized()) win.restore()
         if (!win.isVisible()) win.show()
