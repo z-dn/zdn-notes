@@ -1,13 +1,13 @@
 import { createElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Play, Square, Bot, Minus, Puzzle } from 'lucide-react'
+import { Power, Bot, Minus, Puzzle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
 import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
 
 // ===================================================================
 // DshPage —— DSH 主区域，双形态：
-//   未启动：居中空状态卡片（图标 + 说明 + 启动按钮）；
-//   运行中：<webview> 全屏沉浸接管，右下角一枚可拖拽状态胶囊，
+//   未启动：居中空状态卡片（图标 + 说明 + 电源启动钮 + 管理插件入口）；
+//   运行中：<webview> 全屏接管，右下角一枚可拖拽状态胶囊，
 //           可收起为小圆点、可在内容区内任意拖动（位置跨重启记忆）。
 // 状态来源：主进程 dsh:statusChanged 事件推送（挂载时拉一次初值）。
 //
@@ -15,7 +15,7 @@ import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
 //   - 拖拽：Pointer Events + setPointerCapture（沿用 mindmap-canvas 先例），
 //     实时 clamp 在内容区边界内；拖拽中禁用过渡动画。
 //   - 点击 vs 拖拽：位移 < DRAG_THRESHOLD_PX 视为点击（收缩态点击展开）；
-//     带 .js-nodrag 的按钮（收起/关闭）不进入拖拽流程。
+//     带 .js-nodrag 的按钮（插件/收起/关闭）不进入拖拽流程。
 //   - 持久化：{x, y, collapsed} 存 localStorage（渲染层本地 UI 偏好），
 //     恢复时按容器边界 clamp 校验。
 // ===================================================================
@@ -68,18 +68,21 @@ export function DshPage() {
     })
     window.electronAPI.dshGetStatus().then((s) => {
       if (cancelled) return
-      setRunning(s.running)
-      setPort(s.running ? s.port ?? null : null)
+      applyStatus(s)
     })
     const unsub = window.electronAPI.onDshStatusChanged((s: DshStatus) => {
-      setRunning(s.running)
-      setPort(s.running ? s.port ?? null : null)
+      applyStatus(s)
     })
     return () => {
       cancelled = true
       unsub()
     }
   }, [])
+
+  function applyStatus(s: DshStatus) {
+    setRunning(s.running)
+    setPort(s.running ? s.port ?? null : null)
+  }
 
   async function handleStart() {
     setBusy(true)
@@ -127,7 +130,7 @@ export function DshPage() {
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return
-    // 按钮（收起/关闭）自身处理点击，不进入拖拽流程
+    // 按钮（插件/收起/关闭）自身处理点击，不进入拖拽流程
     if ((e.target as HTMLElement).closest('.js-nodrag')) return
     const el = pillRef.current
     const c = containerRef.current
@@ -194,16 +197,17 @@ export function DshPage() {
     const posClass = pill.pos ? '' : 'bottom-3 right-3'
     const dragClass = dragging ? 'cursor-grabbing select-none' : 'cursor-grab'
 
-    if (pill.collapsed) {
-      return (
-        <div ref={containerRef} className="relative h-full w-full bg-panel">
-          {createElement('webview', {
-            key: port,
-            src: `http://127.0.0.1:${port}`,
-            className: 'h-full w-full',
-            style: { width: '100%', height: '100%' },
-            allowpopups: 'false',
-          })}
+    return (
+      <div ref={containerRef} className="relative h-full w-full bg-panel">
+        {createElement('webview', {
+          key: port,
+          src: `http://127.0.0.1:${port}`,
+          className: 'h-full w-full',
+          style: { width: '100%', height: '100%' },
+          allowpopups: 'false',
+        })}
+
+        {pill.collapsed ? (
           <div
             ref={pillRef}
             role="button"
@@ -221,66 +225,55 @@ export function DshPage() {
           >
             <span className="size-2 animate-pulse rounded-full bg-green-500" />
           </div>
-          <DshPluginDialog open={pluginsOpen} onClose={() => setPluginsOpen(false)} running={running} />
-        </div>
-      )
-    }
-
-    return (
-      <div ref={containerRef} className="relative h-full w-full bg-panel">
-        {createElement('webview', {
-          key: port,
-          src: `http://127.0.0.1:${port}`,
-          className: 'h-full w-full',
-          style: { width: '100%', height: '100%' },
-          allowpopups: 'false',
-        })}
-        <div
-          ref={pillRef}
-          style={posStyle}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          className={`group absolute z-20 flex touch-none items-center gap-2 rounded-full border border-divider bg-panel py-1 pl-2.5 pr-1.5 shadow-lg ${posClass} ${dragClass}`}
-        >
-          <span
-            className="flex select-none items-center gap-1.5"
-            title={`http://127.0.0.1:${port}`}
+        ) : (
+          <div
+            ref={pillRef}
+            style={posStyle}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className={`group absolute z-20 flex touch-none items-center gap-2 rounded-full border border-divider bg-panel py-1 pl-2.5 pr-1.5 shadow-lg ${posClass} ${dragClass}`}
           >
-            <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-            <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
-              http://127.0.0.1:{port}
+            <span
+              className="flex select-none items-center gap-1.5"
+              title={`http://127.0.0.1:${port}`}
+            >
+              <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+              <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
+                http://127.0.0.1:{port}
+              </span>
             </span>
-          </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-            onClick={() => setPluginsOpen(true)}
-            title="管理插件"
-          >
-            <Puzzle className="size-3" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
-            onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
-            title="收起为小圆点"
-          >
-            <Minus className="size-3" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
-            onClick={handleStop}
-            title="关闭 DSH"
-          >
-            <Square className="size-3" />
-          </Button>
-        </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+              onClick={() => setPluginsOpen(true)}
+              title="管理插件"
+            >
+              <Puzzle className="size-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+              onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
+              title="收起为小圆点"
+            >
+              <Minus className="size-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+              onClick={handleStop}
+              title="关闭 DSH"
+            >
+              <Power className="size-3" />
+            </Button>
+          </div>
+        )}
+
         <DshPluginDialog open={pluginsOpen} onClose={() => setPluginsOpen(false)} running={running} />
       </div>
     )
@@ -306,20 +299,23 @@ export function DshPage() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={handleStart} disabled={busy || !!notReadyReason}>
+        {/* 电源启动按钮 */}
+        <div className="flex flex-col items-center gap-1.5">
+          <button
+            onClick={handleStart}
+            disabled={busy || !!notReadyReason}
+            title={busy ? '正在启动…' : '启动 DeepSeek Harness'}
+            className="group flex size-16 items-center justify-center rounded-full border border-divider bg-panel-header shadow-sm transition-all duration-200 ease-in-out hover:bg-accent hover:shadow-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {busy ? (
-              <>
-                <LoaderSpinner />
-                正在启动…
-              </>
+              <LoaderSpinner />
             ) : (
-              <>
-                <Play className="size-3.5" />
-                启动
-              </>
+              <Power className="size-6 text-muted-foreground transition-colors group-hover:text-foreground" />
             )}
-          </Button>
+          </button>
+          <span className="text-[11px] text-muted-foreground">
+            {busy ? '正在启动…' : notReadyReason ? '不可用' : '点击启动'}
+          </span>
         </div>
         <button
           onClick={() => setPluginsOpen(true)}
