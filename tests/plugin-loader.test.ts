@@ -290,7 +290,13 @@ describe('McpServer 集成：插件工具走 MCP 协议 + ctx.app 委托', () =>
     svc.register('task:getAll', () => [{ id: '1' }])
     const configFile = path.join(dataDir, 'agent-mcp-config.json')
     loadConfig({ configFile })
-    const server = new McpServer({ configFile, dataDir, appService: svc })
+    const calls: { tool: string; ok: boolean }[] = []
+    const server = new McpServer({
+      configFile,
+      dataDir,
+      appService: svc,
+      onCall: (c) => calls.push({ tool: c.tool, ok: c.ok }),
+    })
     await rpc(server, { jsonrpc: '2.0', id: 1, method: 'initialize' })
     const resp = await rpc(server, {
       jsonrpc: '2.0',
@@ -299,6 +305,32 @@ describe('McpServer 集成：插件工具走 MCP 协议 + ctx.app 委托', () =>
       params: { channel: 'task:getAll', args: [] },
     })
     expect(resp?.result).toEqual([{ id: '1' }])
+    expect(calls).toMatchObject([{ tool: 'ctx.app:task:getAll', ok: true }])
+  })
+
+  it('app/invoke 失败时也记录审计日志', async () => {
+    const { AppService } = await import('../electron/core/app-service')
+    const svc = new AppService()
+    const configFile = path.join(dataDir, 'agent-mcp-config.json')
+    loadConfig({ configFile })
+    const calls: { tool: string; ok: boolean; error?: string }[] = []
+    const server = new McpServer({
+      configFile,
+      dataDir,
+      appService: svc,
+      onCall: (c) => calls.push({ tool: c.tool, ok: c.ok, error: c.error }),
+    })
+    await rpc(server, { jsonrpc: '2.0', id: 1, method: 'initialize' })
+    const resp = await rpc(server, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'app/invoke',
+      params: { channel: 'task:getAll', args: [] },
+    })
+    expect(resp?.error?.code).toBe(-32000)
+    expect(calls).toMatchObject([
+      { tool: 'ctx.app:task:getAll', ok: false, error: expect.stringContaining('未知通道') },
+    ])
   })
 
   it('app/invoke 无 appService 时返回错误', async () => {

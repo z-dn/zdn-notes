@@ -5,7 +5,8 @@ import { randomUUID } from 'crypto'
 // ===================================================================
 // MCP 调用日志（主进程 GUI 端点与独立 MCP 进程共享）。
 //
-// 记录智能体对 MCP 的每一次 tools/call：时间、工具名、截断参数、
+// 记录智能体对 MCP 的每一次 tools/call 与插件 ctx.app 的 app/invoke 委托
+// 调用（tool 名记为 `ctx.app:<channel>`）：时间、工具名/通道、截断参数、
 // 耗时、成功/失败。以 JSONL 追加写入 <数据目录>/call-logs.jsonl，
 // 跨会话保留，超出上限后自动修剪最近 MAX_LOG_ENTRIES 条。
 //

@@ -215,11 +215,28 @@ export class McpServer {
           if (!p.channel || typeof p.channel !== 'string') {
             return this.error(-32602, 'app/invoke 需要 channel 参数', id)
           }
-          const result = await this.appService.invoke(
-            p.channel,
-            ...(Array.isArray(p.args) ? p.args : []),
-          )
-          return this.result(id, result)
+          const invokeArgs = Array.isArray(p.args) ? p.args : []
+          const startedAt = Date.now()
+          try {
+            const result = await this.appService.invoke(p.channel, ...invokeArgs)
+            // 审计：ctx.app 写入（如 tool:set 改草稿）与读取均落 call-logs，便于溯源
+            this.logCall(
+              `ctx.app:${p.channel}`,
+              { channel: p.channel, args: invokeArgs },
+              startedAt,
+              true,
+            )
+            return this.result(id, result)
+          } catch (e) {
+            this.logCall(
+              `ctx.app:${p.channel}`,
+              { channel: p.channel, args: invokeArgs },
+              startedAt,
+              false,
+              e instanceof Error ? e.message : String(e),
+            )
+            throw e
+          }
         }
         case 'tools/list': {
           return {
