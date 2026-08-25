@@ -186,6 +186,17 @@ declare global {
       dshStart(opts?: { apiKey?: string; model?: string }): Promise<{ ok: boolean; port?: number; error?: string }>
       dshStop(): Promise<boolean>
       onDshStatusChanged(cb: (status: { running: boolean; port?: number }) => void): () => void
+      dshListPlugins(): Promise<{
+        ok: boolean
+        plugins?: Array<{ name: string; version: string; active?: boolean }>
+        error?: string
+      }>
+      dshAddPlugin(spec: string): Promise<{ ok: boolean; error?: string }>
+      dshRemovePlugin(name: string): Promise<{ ok: boolean; error?: string }>
+      onDshPluginLog(cb: (chunk: string) => void): () => void
+      onDshPluginDone(
+        cb: (result: { action: 'add' | 'remove'; name: string; ok: boolean; error?: string }) => void,
+      ): () => void
     }
   }
 }

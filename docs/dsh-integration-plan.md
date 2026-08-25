@@ -22,6 +22,18 @@
 > - 就绪判定 = 输出解析端口（忽略占位 0）+ HTTP 探测通过，总超时 15s（`DshManager.start`）。
 > - 状态变化经 `dsh:statusChanged` 事件推送渲染层，无轮询；停止用 `taskkill /T /F` 清理整棵进程树。
 > - TUI 时代的一次性验证脚本（validate-dsh-pty/tty-electron/boot.mjs）已删除，仅保留 `validate-dsh-integ.mjs`。
+> - **应用内插件管理**：随包分发 pnpm standalone exe（`resources/dsh/bin/pnpm.exe`，v11 系列），
+>   主进程用自带 node.exe 跑 `bin.js plugin --profile web add/remove <spec>`（PATH 前置自带目录），
+>   日志经 `dsh:pluginLog`/`dsh:pluginDone` 流式推送；UI 入口在 DSH 空状态卡片「管理插件」。
+>   自动修复链：ERR_PNPM_UNEXPECTED_STORE（清 node_modules 重试）→
+>   ERR_PNPM_IGNORED_BUILDS（解析全部被拦包名，--allow-build 放行重试）→
+>   瞬时网络错误（原样重试一次）；无论成败操作后执行 `reconcileBundles()` 双向对账，
+>   app 启动时 `healProfile()` 自愈历史半成品状态，根治「装了没进加载层」。
+>
+> **Shell 访问说明**：DSH Web UI 内置 shell 工具栈——Windows 启用 `pwsh` 工具
+> （`dsh-tool-pwsh` + `dsh-pwsh-sandbox`），bash 工具在 win32 禁用；沙盒默认
+> `workspace-write` + 审批 `ask`（可用环境变量 `DSH_PERMISSION_MODE` 改部署默认，
+> 或直接在 Web UI 设置/`/permission` 命令里切换预设）。
 
 ## 1. 目标
 

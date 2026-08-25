@@ -131,4 +131,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('dsh:statusChanged', handler)
     return () => ipcRenderer.removeListener('dsh:statusChanged', handler)
   },
+  dshListPlugins: () => ipcRenderer.invoke('dsh:listPlugins'),
+  dshAddPlugin: (spec: string) => ipcRenderer.invoke('dsh:addPlugin', spec),
+  dshRemovePlugin: (name: string) => ipcRenderer.invoke('dsh:removePlugin', name),
+  onDshPluginLog: (cb: (chunk: string) => void) => {
+    const handler = (_e: unknown, chunk: string) => cb(chunk)
+    ipcRenderer.on('dsh:pluginLog', handler)
+    return () => ipcRenderer.removeListener('dsh:pluginLog', handler)
+  },
+  onDshPluginDone: (cb: (result: unknown) => void) => {
+    const handler = (_e: unknown, result: unknown) => cb(result)
+    ipcRenderer.on('dsh:pluginDone', handler)
+    return () => ipcRenderer.removeListener('dsh:pluginDone', handler)
+  },
 })

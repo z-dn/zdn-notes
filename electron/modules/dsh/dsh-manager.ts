@@ -1,7 +1,14 @@
 import { app } from 'electron'
-import { join } from 'path'
-import { existsSync, mkdirSync } from 'fs'
+import { delimiter, join } from 'path'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { spawn, spawnSync, type ChildProcess } from 'child_process'
+import {
+  computeBundleSync,
+  isValidPluginSpec,
+  parseIgnoredBuildPackages,
+  parseInstalledPlugins,
+  type DshPluginInfo,
+} from './plugin-spec'
 
 // ===================================================================
 // DshManager —— 主进程内管理 DSH Web UI 子进程的生命周期。
@@ -29,6 +36,16 @@ export interface DshReadyInfo {
 }
 
 type StatusListener = (status: DshStatus) => void
+type PluginLogListener = (chunk: string) => void
+
+export interface DshPluginDone {
+  action: 'add' | 'remove'
+  name: string
+  ok: boolean
+  error?: string
+}
+
+type PluginDoneListener = (result: DshPluginDone) => void
 
 interface ResolvedPaths {
   base: string
@@ -52,15 +69,36 @@ class DshManager {
   private port: number | null = null
   private dataDir = ''
   private listeners = new Set<StatusListener>()
+  private pluginLogListeners = new Set<PluginLogListener>()
+  private pluginDoneListeners = new Set<PluginDoneListener>()
+  private pluginPending:
+    | {
+        child: ChildProcess
+        action: 'add' | 'remove'
+        name: string
+        resolve: (r: { ok: boolean; error?: string }) => void
+      }
+    | null = null
 
   init(opts: { dataDir: string }): void {
     this.dataDir = opts.dataDir
+    this.healProfile()
   }
 
   /** 订阅状态变化（启动/停止/退出），返回取消订阅函数 */
   onChange(cb: StatusListener): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)
+  }
+
+  onPluginLog(cb: PluginLogListener): () => void {
+    this.pluginLogListeners.add(cb)
+    return () => this.pluginLogListeners.delete(cb)
+  }
+
+  onPluginDone(cb: PluginDoneListener): () => void {
+    this.pluginDoneListeners.add(cb)
+    return () => this.pluginDoneListeners.delete(cb)
   }
 
   private emit(): void {
@@ -70,6 +108,26 @@ class DshManager {
         l(s)
       } catch {
         /* 监听器异常不影响主流程 */
+      }
+    }
+  }
+
+  private emitPluginLog(chunk: string): void {
+    for (const l of this.pluginLogListeners) {
+      try {
+        l(chunk)
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
+  private emitPluginDone(result: DshPluginDone): void {
+    for (const l of this.pluginDoneListeners) {
+      try {
+        l(result)
+      } catch {
+        /* noop */
       }
     }
   }
@@ -128,6 +186,81 @@ class DshManager {
       return { ready: false, reason: `未找到 DSH 入口: ${dshBin}` }
     }
     return { ready: true }
+  }
+
+  /**
+   * 启动自愈（app 启动时执行，先于任何用户操作）：
+   * 1. store 清理：pnpm 大版本升级（v10→v11）后旧 store 链接的 node_modules 不兼容，
+   *    读 node_modules/.modules.yaml 的 packageManager 主版本，不同则清理
+   *    （package.json 保留，下次装插件时 pnpm 自动重建）。
+   * 2. bundle 对账：pnpm 失败导致 reconcile 未执行时，依赖已记录但 bundles 缺失，
+   *    双向同步补账（见 computeBundleSync）。
+   */
+  private healProfile(): void {
+    const nmDir = join(this.profileDir(), 'node_modules')
+    const modulesYaml = join(nmDir, '.modules.yaml')
+    if (existsSync(modulesYaml)) {
+      try {
+        const content = readFileSync(modulesYaml, 'utf8')
+        // packageManager: pnpm@10.12.1 → 提取主版本号
+        const match = content.match(/packageManager:\s*pnpm@(\d+)\./)
+        if (match && match[1] !== '11') {
+          rmSync(nmDir, { recursive: true, force: true })
+          console.log(`[dsh] 已清理不兼容的 node_modules（pnpm v${match[1]}→v11 store 格式升级）`)
+        }
+      } catch {
+        /* heal 失败不影响启动 */
+      }
+    }
+    this.reconcileBundles()
+  }
+
+  /** 与 DSH resolveBundleDir 同语义：两个锚点任一可解析出 dsh.bundle 声明即为合法层 */
+  private isResolvableBundle(name: string): boolean {
+    const anchors = [
+      join(this.profileDir(), 'node_modules', name, 'package.json'),
+      join(this.resolvePaths().base, 'node_modules', name, 'package.json'),
+    ]
+    for (const p of anchors) {
+      try {
+        if (!existsSync(p)) continue
+        const pkg = JSON.parse(readFileSync(p, 'utf8')) as {
+          dsh?: { bundle?: { patch?: unknown } }
+        }
+        if (pkg.dsh?.bundle?.patch !== undefined) return true
+      } catch {
+        /* 读坏文件视为不可解析 */
+      }
+    }
+    return false
+  }
+
+  /**
+   * 双向对齐 dependencies 与 dsh.profile.bundles（根治「pnpm 失败后 reconcile
+   * 未执行」的半成品状态）。幂等：无差异时不写盘。
+   */
+  private reconcileBundles(): void {
+    const pkgPath = join(this.profileDir(), 'package.json')
+    if (!existsSync(pkgPath)) return
+    try {
+      const manifest = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
+        dependencies?: Record<string, string>
+        dsh?: { profile?: { bundles?: string[] } }
+      }
+      const deps = manifest.dependencies ?? {}
+      if (Object.keys(deps).length === 0) return
+      const { bundles, changed } = computeBundleSync(
+        manifest.dsh?.profile?.bundles ?? [],
+        deps,
+        (name) => this.isResolvableBundle(name),
+      )
+      if (!changed) return
+      manifest.dsh = { ...manifest.dsh, profile: { ...manifest.dsh?.profile, bundles } }
+      writeFileSync(pkgPath, JSON.stringify(manifest, null, 2))
+      console.log(`[dsh] bundles 已自愈同步: ${bundles.join(', ')}`)
+    } catch {
+      /* 对账失败不影响主流程 */
+    }
   }
 
   /** 从子进程输出里解析 loopback 监听端口（--port 0 时 OS 会回显真实端口；忽略占位 0） */
@@ -223,8 +356,18 @@ class DshManager {
   /**
    * 停止并清理整棵进程树。Windows 下 DSH 可能派生孙进程，
    * 用 taskkill /T 连带终止；其他平台退回 child.kill()。
+   * 同时终止进行中的插件操作子进程。
    */
   async stop(): Promise<void> {
+    const pending = this.pluginPending
+    if (pending) {
+      try {
+        pending.child.kill()
+      } catch {
+        /* noop */
+      }
+      this.finishPlugin(pending, false, '操作已取消（DSH 正在停止）')
+    }
     const child = this.child
     if (!child) return
     this.child = null
@@ -251,6 +394,160 @@ class DshManager {
 
   status(): DshStatus {
     return { running: !!this.child, port: this.child ? this.port ?? undefined : undefined }
+  }
+
+  // -----------------------------------------------------------------
+  // 插件管理：`dsh plugin` 本质是 pnpm 转发器（硬编码 spawnSync("pnpm")），
+  // 因此把自带 pnpm.exe / node.exe 所在目录前置进子进程 PATH 即可离系统依赖运行。
+  // 对账逻辑保证「用户装的插件 = profile package.json 的 dependencies」，
+  // 列表读取无需解析 dsh.profile（YAML）。
+  // -----------------------------------------------------------------
+
+  private profileDir(): string {
+    return join(this.resolvePaths().home, 'profiles', 'web')
+  }
+
+  /** 子进程环境：DSH_HOME + NODE_PATH + 自带 bin/node 前置的 PATH */
+  private childEnv(): Record<string, string> {
+    const { home, base } = this.resolvePaths()
+    return {
+      ...(process.env as Record<string, string>),
+      DSH_HOME: home,
+      NODE_PATH: join(base, 'node_modules'),
+      PATH: `${join(base, 'bin')}${delimiter}${base}${delimiter}${process.env.PATH ?? ''}`,
+      // pnpm ≥11 默认开启 24 小时 minimumReleaseAge 供应链策略，
+      // 会拒绝刚发布的包；插件市场已自带处理，但 CLI 直装场景仍需关掉。
+      npm_config_minimum_release_age: '0',
+    }
+  }
+
+  async listPlugins(): Promise<{
+    ok: boolean
+    plugins?: Array<DshPluginInfo & { active?: boolean }>
+    error?: string
+  }> {
+    const ready = this.isReady()
+    if (!ready.ready) return { ok: false, error: ready.reason }
+    const pkgPath = join(this.profileDir(), 'package.json')
+    if (!existsSync(pkgPath)) return { ok: true, plugins: [] } // 尚未初始化/未装过
+    try {
+      const manifest = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
+        dependencies?: Record<string, string>
+        dsh?: { profile?: { bundles?: string[] } }
+      }
+      const bundles = new Set(manifest.dsh?.profile?.bundles ?? [])
+      const plugins = parseInstalledPlugins(readFileSync(pkgPath, 'utf8')).map((p) => ({
+        ...p,
+        // 未进 bundles = 安装中断（reconcile 未执行），DSH 不会加载
+        active: bundles.has(p.name),
+      }))
+      return { ok: true, plugins }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  /**
+   * 安装/卸载插件。spec 作为单个 argv 元素原样转发（已过 isValidPluginSpec 校验）。
+   * 首次调用时 CLI 会自动从随包模板初始化 web profile。
+   * 自动修复链（按序尝试，任一成功即止）：
+   * 1. ERR_PNPM_UNEXPECTED_STORE → 清理旧 store 的 node_modules 后重试
+   * 2. ERR_PNPM_IGNORED_BUILDS → 解析全部被拦截包名，--allow-build 放行后重试
+   * 3. 瞬时网络错误 → 原样重试一次
+   * 无论成败，结束后 reconcileBundles() 补账（根治「依赖已记录但 bundle 层缺失」）。
+   */
+  async pluginAction(action: 'add' | 'remove', spec: string): Promise<{ ok: boolean; error?: string }> {
+    if (this.pluginPending) return { ok: false, error: '已有插件操作进行中，请稍候' }
+    const ready = this.isReady()
+    if (!ready.ready) return { ok: false, error: ready.reason }
+    if (!isValidPluginSpec(spec)) return { ok: false, error: `非法的插件标识: ${spec}` }
+
+    const { nodeBin, dshBin, home } = this.resolvePaths()
+    mkdirSync(home, { recursive: true })
+    console.log(`[dsh] plugin ${action}:`, spec)
+
+    const runOnce = (extraArgs: string[]): Promise<{ ok: boolean; error?: string }> =>
+      new Promise((resolve) => {
+        const child = spawn(
+          nodeBin,
+          [dshBin, 'plugin', '--profile', 'web', action, spec, ...extraArgs],
+          { cwd: home, env: this.childEnv(), stdio: ['ignore', 'pipe', 'pipe'] },
+        )
+        const pending = { child, action, name: spec, resolve }
+        this.pluginPending = pending
+        let stderrTail = ''
+        child.stdout?.on('data', (d) => this.emitPluginLog(d.toString()))
+        child.stderr?.on('data', (d) => {
+          const s = d.toString()
+          stderrTail = (stderrTail + s).slice(-2000)
+          this.emitPluginLog(s)
+        })
+        child.on('error', (e) => {
+          if (this.pluginPending !== pending) return
+          this.finishPlugin(pending, false, e.message)
+        })
+        child.on('exit', (code) => {
+          if (this.pluginPending !== pending) return // 已被 stop() 接管
+          const ok = code === 0
+          const error = ok
+            ? undefined
+            : `pnpm 退出码 ${code}${stderrTail.trim() ? `：${stderrTail.trim()}` : ''}`
+          this.finishPlugin(pending, ok, error)
+        })
+      })
+
+    try {
+      // 首次尝试
+      let last = await runOnce([])
+      if (last.ok) return last
+
+      // 1) ERR_PNPM_UNEXPECTED_STORE：旧 store（v10）链接的 node_modules 与 v11 不兼容，
+      //    删除 node_modules 后重试（package.json 保留，pnpm 会重建）。
+      if (last.error?.includes('ERR_PNPM_UNEXPECTED_STORE')) {
+        const nmDir = join(this.profileDir(), 'node_modules')
+        if (existsSync(nmDir)) {
+          console.log('[dsh] 检测到 pnpm store 格式升级，清理 node_modules 后重试')
+          this.emitPluginLog('\n[dsh] 检测到 pnpm store 格式升级，清理 node_modules 后重试\n')
+          rmSync(nmDir, { recursive: true, force: true })
+          last = await runOnce([])
+          if (last.ok) return last
+        }
+      }
+
+      // 2) ERR_PNPM_IGNORED_BUILDS：解析全部被拦截包名，一次放行后重试
+      const pkgs = parseIgnoredBuildPackages(last.error ?? '')
+      if (pkgs.length > 0) {
+        console.log(`[dsh] pnpm 拦截了 build scripts，自动放行并重试: ${pkgs.join(', ')}`)
+        this.emitPluginLog(`\n[dsh] 自动重试：放行 build scripts ${pkgs.join(', ')}\n`)
+        last = await runOnce(pkgs.map((p) => `--allow-build=${p}`))
+        if (last.ok) return last
+      }
+
+      // 3) 瞬时网络错误：原样重试一次
+      if (/timeout|ETIMEDOUT|ECONNRESET|EAI_AGAIN|FetchError|error \(\d+\)/i.test(last.error ?? '')) {
+        console.log('[dsh] 检测到瞬时网络错误，自动重试一次')
+        this.emitPluginLog('\n[dsh] 自动重试（瞬时网络错误）\n')
+        last = await runOnce([])
+        if (last.ok) return last
+      }
+
+      return last
+    } finally {
+      // 根治半成品状态：pnpm 失败时官方 reconcile 不执行，这里无论成败都补账
+      this.reconcileBundles()
+    }
+  }
+
+  private finishPlugin(
+    pending: NonNullable<DshManager['pluginPending']>,
+    ok: boolean,
+    error?: string,
+  ): void {
+    if (this.pluginPending !== pending) return
+    this.pluginPending = null
+    if (!ok) console.error(`[dsh] plugin ${pending.action} ${pending.name} 失败:`, error)
+    this.emitPluginDone({ action: pending.action, name: pending.name, ok, error })
+    pending.resolve(ok ? { ok: true } : { ok: false, error })
   }
 }
 

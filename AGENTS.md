@@ -25,7 +25,7 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 - **预加载**：通过 `contextBridge.exposeInMainWorld('electronAPI', ...)` 暴露安全 API
 - **渲染进程**：React + Tailwind CSS + Zustand
 - **平台核心（core/）**：`schema.ts`（SQL 单一来源）、`app-service.ts`（统一业务层，UI 与插件共用）、`tool-registry.ts`（统一 MCP 工具注册表）、`module-registry.ts`（模块装配器）、`feature-flags.ts`、`plugin-loader.ts`（第三方插件运行时，全权 Node 加载）
-- **内置模块（modules/）**：每域一个 `FeatureModule`（app/window/tasks/categories/settings/images/backup/data-location/inbox/toolbox/updater/mcp），声明 `appService`/`registerIpc`/`onStart`/`agentTools`/`renderer.view`
+- **内置模块（modules/）**：每域一个 `FeatureModule`（app/window/tasks/categories/settings/images/backup/data-location/inbox/toolbox/updater/mcp/dsh），声明 `appService`/`registerIpc`/`onStart`/`agentTools`/`renderer.view`
 - **统一业务层（AppService）**：各模块把纯业务通道注册进 `AppService`（`electron/core/app-service.ts`），app-shell 自动为每个通道生成 `ipcMain.handle`；UI 经 IPC 与插件 `ctx.app`（经 GUI-IPC 委托）访问同一张表。对话框/窗口类 UI 专属通道留在模块 `registerIpc`
 
 ### 平台模块与功能开关
@@ -68,6 +68,8 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 | `mcp:getConfig/setConfig/getCatalog` | MCP 配置/目录 | `modules/mcp` |
 | `mcp:listPlugins/installPlugin/uninstallPlugin/getPluginsDir` | 插件管理 | `modules/mcp` |
 | `app:getVersion/getFeatures` | 版本/功能开关 | `modules/app` |
+| `dsh:isReady/getStatus/start/stop` | DSH（DeepSeek Harness）Web UI 子进程就绪/状态/启停；状态经 `dsh:statusChanged` 事件推送 | `modules/dsh` |
+| `dsh:listPlugins/addPlugin/removePlugin` | DSH profile 插件管理（自带 pnpm 转发执行）；日志/完成经 `dsh:pluginLog`/`dsh:pluginDone` 事件推送 | `modules/dsh` |
 | `data:changed`（事件） | 数据被外部写者（MCP 智能体经 GUI-IPC 委托）修改，主进程通知渲染层刷新 | — |
 
 > 渲染进程通过 `window.electronAPI` 调用，类型定义在 `src/types/electron.d.ts`。

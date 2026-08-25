@@ -22,6 +22,17 @@ function registerIpc(ctx: MainModuleContext): void {
     await dshManager.stop()
     return true
   })
+
+  // ---- 插件管理（自带 pnpm 转发，见 dsh-manager.pluginAction）----
+  ipcMain.handle('dsh:listPlugins', () => dshManager.listPlugins())
+  ipcMain.handle('dsh:addPlugin', (_e, spec: unknown) =>
+    dshManager.pluginAction('add', typeof spec === 'string' ? spec : ''),
+  )
+  ipcMain.handle('dsh:removePlugin', (_e, name: unknown) =>
+    dshManager.pluginAction('remove', typeof name === 'string' ? name : ''),
+  )
+  dshManager.onPluginLog((chunk) => ctx.send('dsh:pluginLog', chunk))
+  dshManager.onPluginDone((result) => ctx.send('dsh:pluginDone', result))
 }
 
 function onShutdown(_ctx: MainModuleContext): void {

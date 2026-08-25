@@ -4,20 +4,24 @@
 //   - 自带 console-subsystem node.exe（与系统 Node 隔离）
 //   - 用 pnpm --node-linker=hoisted 安装 @deepseek-ai/dsh（真实文件，便于打包）
 //   - `dsh web` 是普通 HTTP 服务，无需 profile 初始化（不同于 TUI 方案）
+//   - 自带 pnpm standalone exe（bin/pnpm.exe）：供运行期 `dsh plugin`
+//     安装/卸载 profile 插件用（dsh plugin 是 pnpm 转发器，依赖 PATH）
 //
 // 用法: npm run build:dsh
 //   DSH_NODE_VERSION 可覆盖 node 版本（默认 24）
+//   DSH_PNPM_VERSION 可覆盖 pnpm 版本（默认 11.23.0）
 //   DSH_FORCE 设为 1 强制重装
 // ===================================================================
 
 import { spawnSync } from 'child_process'
-import { existsSync, mkdirSync, rmSync, copyFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, copyFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 
 const appPath = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const DSH_DIR = join(appPath, 'resources', 'dsh')
 const NODE_VERSION = process.env.DSH_NODE_VERSION || '24'
+const PNPM_VERSION = process.env.DSH_PNPM_VERSION || '11.23.0'
 const FORCE = process.env.DSH_FORCE === '1'
 
 function run(cmd, args, opts) {
@@ -81,6 +85,7 @@ function installDsh() {
   const nodeModules = join(DSH_DIR, 'node_modules')
   if (existsSync(nodeModules) && !FORCE) {
     console.log('[build-dsh] node_modules 已存在，跳过安装（DSH_FORCE=1 可强制）')
+    ensurePkgJsonTypeModule()
     return
   }
   const pnpm = findPnpm()
@@ -92,7 +97,11 @@ function installDsh() {
   rmSync(nodeModules, { recursive: true, force: true })
   const pkgJson = join(DSH_DIR, 'package.json')
   if (!existsSync(pkgJson)) {
-    run('cmd', ['/c', `echo {"name":"dsh-runtime","private":true} > "${pkgJson}"`])
+    // type:module 消除 pnpm worker.js 的 MODULE_TYPELESS_PACKAGE_JSON 警告
+    writeFileSync(
+      pkgJson,
+      JSON.stringify({ name: 'dsh-runtime', private: true, type: 'module' }, null, 2),
+    )
   }
   // node-linker=hoisted：产生真实文件而非 symlink，便于 electron-builder 收集
   run(pnpm, ['add', '@deepseek-ai/dsh', '--node-linker=hoisted'], {
@@ -102,11 +111,59 @@ function installDsh() {
   console.log('[build-dsh] DSH 安装完成')
 }
 
+/** 已存在的 package.json 只补 type 字段（不动 pnpm add 记录的 dependencies） */
+function ensurePkgJsonTypeModule() {
+  const pkgJson = join(DSH_DIR, 'package.json')
+  if (!existsSync(pkgJson)) return
+  try {
+    const pkg = JSON.parse(readFileSync(pkgJson, 'utf8'))
+    if (pkg.type !== 'module') {
+      pkg.type = 'module'
+      writeFileSync(pkgJson, JSON.stringify(pkg, null, 2))
+    }
+  } catch {
+    /* 解析失败时保留原文件 */
+  }
+}
+
+function downloadPnpm() {
+  const binDir = join(DSH_DIR, 'bin')
+  const dest = join(binDir, 'pnpm.exe')
+  if (existsSync(dest) && !FORCE) {
+    console.log('[build-dsh] pnpm.exe 已存在，跳过下载')
+    return
+  }
+  // pnpm ≥11 的 release 资产是 zip（包含 pnpm.exe + dist/ + node_modules/），
+  // pnpm.exe 启动时需要 dist/pnpm.mjs，需整体解压到 bin/ 目录。
+  const url = `https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-win32-x64.zip`
+  const tmpZip = join(binDir, 'pnpm.zip')
+  console.log(`[build-dsh] 下载 pnpm v${PNPM_VERSION}: ${url}`)
+  mkdirSync(binDir, { recursive: true })
+  run('powershell', [
+    '-NoProfile',
+    '-Command',
+    `Invoke-WebRequest -Uri "${url}" -OutFile "${tmpZip}"`,
+  ])
+  console.log('[build-dsh] 解压 pnpm.zip ...')
+  run('powershell', [
+    '-NoProfile',
+    '-Command',
+    `Expand-Archive -Force -Path "${tmpZip}" -DestinationPath "${binDir}"`,
+  ])
+  rmSync(tmpZip, { force: true })
+  if (!existsSync(dest)) {
+    console.error(`[build-dsh] 解压后未找到 pnpm.exe: ${dest}`)
+    process.exit(1)
+  }
+  console.log('[build-dsh] pnpm.exe 就绪')
+}
+
 function main() {
   mkdirSync(DSH_DIR, { recursive: true })
   downloadNode()
   installDsh()
-  console.log('\n[build-dsh] 完成。resources/dsh 已就绪（自包含 Web UI 运行时）。')
+  downloadPnpm()
+  console.log('\n[build-dsh] 完成。resources/dsh 已就绪（自包含 Web UI 运行时 + pnpm）。')
 }
 
 main()

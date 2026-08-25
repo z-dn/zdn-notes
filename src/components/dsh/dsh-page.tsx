@@ -1,7 +1,8 @@
 import { createElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Play, Square, Bot, Minus } from 'lucide-react'
+import { Play, Square, Bot, Minus, Puzzle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
+import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
 
 // ===================================================================
 // DshPage —— DSH 主区域，双形态：
@@ -58,6 +59,7 @@ export function DshPage() {
   const [running, setRunning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notReadyReason, setNotReadyReason] = useState('')
+  const [pluginsOpen, setPluginsOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -219,6 +221,7 @@ export function DshPage() {
           >
             <span className="size-2 animate-pulse rounded-full bg-green-500" />
           </div>
+          <DshPluginDialog open={pluginsOpen} onClose={() => setPluginsOpen(false)} running={running} />
         </div>
       )
     }
@@ -253,6 +256,15 @@ export function DshPage() {
           <Button
             size="sm"
             variant="ghost"
+            className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => setPluginsOpen(true)}
+            title="管理插件"
+          >
+            <Puzzle className="size-3" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
             className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
             onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
             title="收起为小圆点"
@@ -269,6 +281,7 @@ export function DshPage() {
             <Square className="size-3" />
           </Button>
         </div>
+        <DshPluginDialog open={pluginsOpen} onClose={() => setPluginsOpen(false)} running={running} />
       </div>
     )
   }
@@ -293,20 +306,31 @@ export function DshPage() {
             )}
           </p>
         </div>
-        <Button size="sm" onClick={handleStart} disabled={busy || !!notReadyReason}>
-          {busy ? (
-            <>
-              <LoaderSpinner />
-              正在启动…
-            </>
-          ) : (
-            <>
-              <Play className="size-3.5" />
-              启动
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleStart} disabled={busy || !!notReadyReason}>
+            {busy ? (
+              <>
+                <LoaderSpinner />
+                正在启动…
+              </>
+            ) : (
+              <>
+                <Play className="size-3.5" />
+                启动
+              </>
+            )}
+          </Button>
+        </div>
+        <button
+          onClick={() => setPluginsOpen(true)}
+          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          title="管理 DSH 插件（安装 / 卸载）"
+        >
+          <Puzzle className="size-3" />
+          管理插件
+        </button>
       </div>
+      <DshPluginDialog open={pluginsOpen} onClose={() => setPluginsOpen(false)} running={running} />
     </div>
   )
 }
