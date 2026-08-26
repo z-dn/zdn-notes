@@ -255,9 +255,13 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 - 每次修复后：`git push main` → `git tag -d v1.1.1` → `git push origin --delete v1.1.1` → `git tag v1.1.1` → `git push origin v1.1.1`
 - 新的 tag 必须指向包含修复的 commit
 
+### 4. 打包产物可能静默丢失 DSH 运行时（v1.8.1 事故）
+- electron-builder 的 `createFilter`（app-builder-lib `util/filter.js`）会丢弃复制源根级的 `node_modules`，extraResources 方式曾致 v1.8.1 发布包静默缺失 DSH 入口（源树冒烟测试通过、产物缺失）
+- **做法**：`resources/dsh` 改由 `afterPack` 钩子（`scripts/copy-dsh-runtime.cjs`，白名单拷贝）进入产物；`pack`/`dist`/`dist:ci` 串联 `build:dsh` + `scripts/check-dsh-package.mjs` 校验产物；release.yml 上传前另有安装包体积下限断言（<190MB 禁止发布）。改动打包流程时保持这三道门禁
+
 ### 检查清单
 - [ ] `dist:ci` script 包含 `--publish=never`
 - [ ] 不要加 `--win.sign=false`
-- [ ] 打包前已生成 DSH 运行时：本地先跑 `npm run build:dsh`（release.yml 已内置该步骤与冒烟测试）
+- [ ] 打包前已生成 DSH 运行时：`build:dsh` 已串联进 pack/dist/dist:ci（release.yml 另有独立步骤与冒烟测试）
 - [ ] tag 重新推送后等待 Actions 完成
 - [ ] Actions 完成后检查 Release 页面是否有 artifact

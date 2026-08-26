@@ -162,7 +162,8 @@ export function DshPluginDialog({ open, onClose, running }: DshPluginDialogProps
           {runtimeMissing ? (
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               DSH 运行时不可用：{notReadyReason}
-              <br />请先运行 <code>npm run build:dsh</code>。
+              <br />
+              请重新安装完整的 ZDNotes 安装包（开发环境可运行 <code>npm run build:dsh</code>）。
             </p>
           ) : (
             <>
@@ -192,8 +193,8 @@ export function DshPluginDialog({ open, onClose, running }: DshPluginDialogProps
               </div>
               <p className="text-[11px] leading-relaxed text-muted-foreground/60">
                 如 dsh-better-sidebar（npm）、github:owner/repo（GitHub）、
-                github:owner/repo#path:/packages/sub（GitHub 子包）。
-                官方 @deepseek-ai 插件建议固定版本号，如 @scope/name@0.1.0。
+                github:owner/repo#path:/packages/sub（GitHub 子包）。 官方 @deepseek-ai
+                插件建议固定版本号，如 @scope/name@0.1.0。
               </p>
 
               <div className="space-y-1">

@@ -14,6 +14,7 @@ export default tseslint.config(
       'resources/agent-tools/**', // 内置插件同样为独立 CommonJS
       'resources/dsh/**', // 应用自带的 DSH 运行时（node.exe + DSH 依赖 + profile），由 build:dsh 生成，第三方代码不参与 lint
       'scripts/validate-dsh-integ.mjs', // DSH 集成冒烟脚本（独立运行，非应用代码）
+      'scripts/copy-dsh-runtime.cjs', // electron-builder afterPack 钩子（CommonJS，独立运行）
     ],
   },
   js.configs.recommended,

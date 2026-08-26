@@ -30,6 +30,18 @@ jobs:
 
       - run: npm run dist:ci
 
+      # 兜底门禁（防产物级丢失）：electron-builder 曾过滤掉根级 node_modules 致
+      # v1.8.1 坏包仅 166MB；完整包 = 基线 116MB + node.exe/pnpm 约 50MB + node_modules 约 55MB+
+      - name: Assert installer size floor
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release/ZDNotes-Setup-*.exe | Select-Object -First 1
+          $floor = 190MB
+          if ($exe.Length -lt $floor) {
+            throw ("安装包 {0} 仅 {1:N0} bytes（下限 {2}），疑似缺少 DSH 运行时，禁止发布" -f $exe.Name, $exe.Length, $floor)
+          }
+          Write-Host ("OK: {0} = {1:N0} bytes" -f $exe.Name, $exe.Length)
+
       - uses: softprops/action-gh-release@v2
         with:
           files: |

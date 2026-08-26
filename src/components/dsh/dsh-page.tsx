@@ -45,8 +45,7 @@ function loadPillState(): PillState {
     if (!raw) return { pos: null, collapsed: false }
     const s = JSON.parse(raw) as { x?: unknown; y?: unknown; collapsed?: unknown }
     return {
-      pos:
-        typeof s.x === 'number' && typeof s.y === 'number' ? { x: s.x, y: s.y } : null,
+      pos: typeof s.x === 'number' && typeof s.y === 'number' ? { x: s.x, y: s.y } : null,
       collapsed: !!s.collapsed,
     }
   } catch {
@@ -81,7 +80,7 @@ export function DshPage() {
 
   function applyStatus(s: DshStatus) {
     setRunning(s.running)
-    setPort(s.running ? s.port ?? null : null)
+    setPort(s.running ? (s.port ?? null) : null)
   }
 
   async function handleStart() {
@@ -274,7 +273,11 @@ export function DshPage() {
           </div>
         )}
 
-        <DshPluginDialog open={pluginsOpen} onClose={() => setPluginsOpen(false)} running={running} />
+        <DshPluginDialog
+          open={pluginsOpen}
+          onClose={() => setPluginsOpen(false)}
+          running={running}
+        />
       </div>
     )
   }
@@ -292,7 +295,7 @@ export function DshPage() {
               <>
                 运行时不可用：{notReadyReason}
                 <br />
-                请先运行 <code>npm run build:dsh</code>
+                请重新安装完整的 ZDNotes 安装包（开发环境可运行 <code>npm run build:dsh</code>）
               </>
             ) : (
               '内嵌官方 AI 编程助手 Web UI，本地运行、开箱即用。'
