@@ -20,6 +20,14 @@ jobs:
 
       - run: npm ci
 
+      # resources/dsh 是 gitignore 的本地生成物（node.exe + pnpm.exe + dsh 依赖），
+      # 打包前必须生成，否则 extraResources 缺失、应用内 DSH 报「运行时不可用」
+      - name: Build DSH runtime
+        run: npm run build:dsh
+
+      - name: Smoke test DSH runtime
+        run: node scripts/validate-dsh-integ.mjs
+
       - run: npm run dist:ci
 
       - uses: softprops/action-gh-release@v2

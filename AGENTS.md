@@ -258,5 +258,6 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 ### 检查清单
 - [ ] `dist:ci` script 包含 `--publish=never`
 - [ ] 不要加 `--win.sign=false`
+- [ ] 打包前已生成 DSH 运行时：本地先跑 `npm run build:dsh`（release.yml 已内置该步骤与冒烟测试）
 - [ ] tag 重新推送后等待 Actions 完成
 - [ ] Actions 完成后检查 Release 页面是否有 artifact
