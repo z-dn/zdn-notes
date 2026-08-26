@@ -33,6 +33,12 @@ function run(cmd, args, opts) {
 }
 
 function findPnpm() {
+  // 首选自带 standalone exe：真 .exe 不受 Node 对 .cmd 的 spawn 封锁（EINVAL），
+  // 且 CI 无需预装 pnpm（downloadPnpm 已先行落位）
+  const bundled = join(DSH_DIR, 'bin', 'pnpm.exe')
+  if (process.platform === 'win32' && existsSync(bundled)) {
+    if (spawnSync(bundled, ['--version'], { stdio: 'ignore' }).status === 0) return bundled
+  }
   const sh = process.platform === 'win32' ? '.cmd' : ''
   const candidates = [`pnpm${sh}`, 'pnpm']
   for (const c of candidates) {
@@ -104,7 +110,8 @@ function installDsh() {
     )
   }
   // node-linker=hoisted：产生真实文件而非 symlink，便于 electron-builder 收集
-  run(pnpm, ['add', '@deepseek-ai/dsh', '--node-linker=hoisted'], {
+  // ignore-scripts：dsh 树为预构建产物，且规避 pnpm≥11 的 build-scripts 拦截门
+  run(pnpm, ['add', '@deepseek-ai/dsh', '--node-linker=hoisted', '--ignore-scripts'], {
     cwd: DSH_DIR,
     env: { ...process.env, npm_config_node_linker: 'hoisted' },
   })
@@ -161,8 +168,9 @@ function downloadPnpm() {
 function main() {
   mkdirSync(DSH_DIR, { recursive: true })
   downloadNode()
-  installDsh()
+  // pnpm.exe 必须先于 installDsh 落位：findPnpm 首选它，CI 无系统 pnpm 也能装
   downloadPnpm()
+  installDsh()
   console.log('\n[build-dsh] 完成。resources/dsh 已就绪（自包含 Web UI 运行时 + pnpm）。')
 }
 
