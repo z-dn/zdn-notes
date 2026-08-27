@@ -54,8 +54,8 @@ interface ResolvedPaths {
   home: string
 }
 
-/** 启动总超时：端口解析 + HTTP 就绪探测共用 */
-const START_TIMEOUT_MS = 15_000
+/** 启动总超时：端口解析 + HTTP 就绪探测共用（首次重建 web profile 需 pnpm 安装，留足余量） */
+const START_TIMEOUT_MS = 60_000
 const PROBE_TIMEOUT_MS = 2_000
 
 class DshManager {
@@ -282,7 +282,10 @@ class DshManager {
     }
   }
 
-  async start(opts?: { apiKey?: string; model?: string }): Promise<{ ok: boolean; port?: number; error?: string }> {
+  async start(
+    opts?: { apiKey?: string; model?: string },
+    repaired = false,
+  ): Promise<{ ok: boolean; port?: number; error?: string }> {
     if (this.child) return { ok: true, port: this.port ?? undefined }
     const { nodeBin, dshBin, home, base } = this.resolvePaths()
     if (!existsSync(nodeBin)) return { ok: false, error: `未找到 node.exe: ${nodeBin}` }
@@ -290,12 +293,17 @@ class DshManager {
     try {
       mkdirSync(home, { recursive: true })
       const nodeModules = join(base, 'node_modules')
-      const env: Record<string, string> = {
-        ...(process.env as Record<string, string>),
-        DSH_HOME: home,
-        TERM: 'xterm-256color',
-        NODE_PATH: nodeModules,
-      }
+      // 继承应用环境，但清掉 Electron 注入的运行期变量（NODE_OPTIONS / ELECTRON_* 等），
+      // 否则独立的 node.exe 会因 --require 等选项启动即退出。再显式设置 DSH 所需项。
+      const env: Record<string, string> = { ...(process.env as Record<string, string>) }
+      delete env.NODE_OPTIONS
+      delete env.ELECTRON_RUN_AS_NODE
+      for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
+      env.DSH_HOME = home
+      env.TERM = 'xterm-256color'
+      env.NODE_PATH = nodeModules
+      env.PATH = `${base}${delimiter}${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
+
       const apiKey = opts?.apiKey || process.env.DEEPSEEK_API_KEY || ''
       if (apiKey) env.DEEPSEEK_API_KEY = apiKey
       if (opts?.model) env.DSH_MODEL = opts.model
@@ -311,6 +319,7 @@ class DshManager {
       this.port = null
       this.emit()
 
+      let stderrBuf = ''
       child.on('error', (e) => {
         if (this.child === child) {
           this.child = null
@@ -320,9 +329,11 @@ class DshManager {
         console.error('[dsh] 启动失败:', e.message)
       })
       child.stderr?.on('data', (d) => {
-        const msg = d.toString().trim()
+        const msg = d.toString()
+        stderrBuf += msg
         this.parsePort(msg)
-        if (msg) console.error('[dsh:stderr]', msg)
+        const line = msg.trim()
+        if (line) console.error('[dsh:stderr]', line)
       })
       child.stdout?.on('data', (d) => this.parsePort(d.toString()))
       child.on('exit', (code, signal) => {
@@ -337,7 +348,24 @@ class DshManager {
       const deadline = Date.now() + START_TIMEOUT_MS
       while (Date.now() < deadline) {
         if (this.child !== child) {
-          return { ok: false, error: 'DSH Web UI 进程启动后立即退出（可能配置错误）' }
+          // 子进程在启动期内意外退出：多半是 web profile 损坏/不兼容
+          // （缺少核心 web 包 @deepseek-ai/dsh-web-app，webServer 服务未注册）。
+          // 仅当核心包确实缺失时才自动重建 web profile 并重试一次，避免误删用户插件。
+          const webApp = join(home, 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-app')
+          if (!repaired && !existsSync(webApp)) {
+            try {
+              rmSync(join(home, 'profiles', 'web'), { recursive: true, force: true })
+              console.warn('[dsh] web profile 缺少核心包 @deepseek-ai/dsh-web-app，已重建并自动重试')
+            } catch (e) {
+              console.error('[dsh] 清理损坏的 web profile 失败:', e)
+            }
+            return this.start(opts, true)
+          }
+          const detail = stderrBuf.trim().split('\n').slice(-12).join('\n')
+          return {
+            ok: false,
+            error: `DSH Web UI 进程启动后立即退出（可能 profile 配置错误）\n${detail}`,
+          }
         }
         if (this.port && (await this.probe(this.port))) {
           this.emit()
@@ -346,7 +374,11 @@ class DshManager {
         await new Promise((r) => setTimeout(r, 250))
       }
       await this.stop()
-      return { ok: false, error: `DSH 启动超时（${START_TIMEOUT_MS / 1000}s 未就绪）` }
+      const detail = stderrBuf.trim().split('\n').slice(-12).join('\n')
+      return {
+        ok: false,
+        error: `DSH 启动超时（${START_TIMEOUT_MS / 1000}s 未就绪）\n${detail}`,
+      }
     } catch (e) {
       await this.stop()
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
