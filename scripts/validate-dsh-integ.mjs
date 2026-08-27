@@ -12,7 +12,7 @@
 // ===================================================================
 
 import { spawn, spawnSync } from 'child_process'
-import { existsSync, mkdirSync, rmSync, cpSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { fileURLToPath } from 'url'
@@ -144,6 +144,51 @@ rmSync(join(broken, 'profiles', 'web'), { recursive: true, force: true })
 }
 safeRm(good)
 safeRm(broken)
+
+// Test 3: 构建策略固化——占位符污染的 pnpm-workspace.yaml 经
+//         healProfileBuildPolicy 逻辑重写后，必须含 dangerouslyAllowAllBuilds: true
+//         （pnpm 11 会拦截未声明的构建脚本，导致第三方原生插件安装失败）
+console.log('[validate-dsh] Test 3: pnpm-workspace.yaml 构建策略固化 ...')
+{
+  const dir = join(tmpdir(), `dsh-policy-${Date.now()}`)
+  mkdirSync(dir, { recursive: true })
+  const yamlPath = join(dir, 'pnpm-workspace.yaml')
+  writeFileSync(
+    yamlPath,
+    'packages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\nallowBuilds:\n  node-pty: set this to true or false\n  ssh2: set this to true or false\n',
+  )
+  // 与 dsh-manager.healProfileBuildPolicy 同逻辑的独立重写（保持测试自包含，不 import 应用代码）
+  const raw = readFileSync(yamlPath, 'utf8')
+  const kept = []
+  let inAllowBuilds = false
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim()
+    if (/^allowBuilds:/.test(t)) {
+      inAllowBuilds = true
+      continue
+    }
+    if (inAllowBuilds) {
+      if (t && !/^[\t ]/.test(line)) inAllowBuilds = false
+      else continue
+    }
+    if (/^dangerouslyAllowAllBuilds:|^minimumReleaseAge:/.test(t)) continue
+    kept.push(line)
+  }
+  const base = kept.join('\n').trim()
+  const next = `${base}${base ? '\n' : ''}dangerouslyAllowAllBuilds: true\nminimumReleaseAge: 0\n`
+  writeFileSync(yamlPath, next)
+  const healed = readFileSync(yamlPath, 'utf8')
+  if (!/^dangerouslyAllowAllBuilds:\s*true$/m.test(healed)) {
+    fail(`构建策略未固化 dangerouslyAllowAllBuilds: true\n${healed}`)
+  }
+  if (!/^minimumReleaseAge:\s*0$/m.test(healed)) fail(`构建策略未固化 minimumReleaseAge: 0\n${healed}`)
+  if (/set this to true or false/.test(healed)) fail(`占位符污染未清除:\n${healed}`)
+  if (!/^packages:\s*$/m.test(healed) || !/^nodeLinker:\s*hoisted$/m.test(healed)) {
+    fail(`既有键被误删:\n${healed}`)
+  }
+  safeRm(dir)
+  console.log('[validate-dsh] Test 3 OK')
+}
 
 console.log('[validate-dsh] ALL OK')
 process.exit(0)

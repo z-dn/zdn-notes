@@ -266,6 +266,13 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 - **做法**：`electron/modules/dsh/dsh-manager.ts` 的 `start()` 在子进程意外退出且 `profiles/web/node_modules/@deepseek-ai/dsh-web-app` 缺失时，自动删除 `profiles/web` 重建并重试一次（仅核心包确实缺失才触发，不擅自删用户插件）；构造子进程 env 时删除 `NODE_OPTIONS`/`ELECTRON_RUN_AS_NODE` 及所有 `ELECTRON_*` 前缀变量；错误信息附带 dsh 真实 stderr；启动超时 15s→60s（首次重建需 pnpm 安装）。
 - `scripts/validate-dsh-integ.mjs` 增加回归：好 profile → 删核心包 → 应失败；删整个 web profile 重建 → 应成功，固化自动修复路径。
 
+### 6. DSH 插件安装失败：pnpm 11 build-scripts 拦截门（v1.8.3 事故）
+- 现象：装带原生依赖的第三方 web 插件（如 `@linxin666/dsh-web-all`，含 `node-pty`/`ssh2`/`cpu-features`/`cloudflared`）时报 `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: ...`，随后 `dsh: pnpm failed in profile directory ...`；`profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 被 pnpm 写成占位符 `包名: set this to true or false`（非布尔，无效）。
+- 根因：pnpm 11 默认**不执行任何依赖的构建脚本**，未在 `allowBuilds` 声明即报错并自动往 `pnpm-workspace.yaml` 追加占位符；应用旧逻辑传 `--allow-build=<pkg>` 虽有效（会写 `true`），但遇到占位符污染/策略漂移时仍可能失败。
+- 次生坑：pnpm 11 不再读 `npm_config_*` 环境变量（只认 `pnpm_config_*`），旧代码 `npm_config_minimum_release_age: '0'` 实为无效——24h 发布龄门槛仍开着，会拒绝刚发布的插件。
+- **做法**：`electron/modules/dsh/dsh-manager.ts` 新增 `healProfileBuildPolicy()`，在 `healProfile()`（启动时）与 `pluginAction()` 首跑前把 `profiles/web/pnpm-workspace.yaml` 幂等重写为含 `dangerouslyAllowAllBuilds: true` + `minimumReleaseAge: 0`（保留 `packages`/`nodeLinker`/`autoInstallPeers`，移除失效的 `allowBuilds` 占位符块）；`childEnv()` 删除无效的 `npm_config_minimum_release_age`。`--allow-build` 重试保留为兜底，另加一步「再次固化策略后重试」。
+- **不要**试图靠 pnpm 的 `allowBuilds` 占位符自愈（值为字符串无效）；策略一律写进 yaml 的 `dangerouslyAllowAllBuilds`。
+
 ### 检查清单
 - [ ] `dist:ci` script 包含 `--publish=never`
 - [ ] 不要加 `--win.sign=false`

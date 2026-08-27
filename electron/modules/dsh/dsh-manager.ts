@@ -213,6 +213,45 @@ class DshManager {
       }
     }
     this.reconcileBundles()
+    this.healProfileBuildPolicy()
+  }
+
+  /**
+   * 固化 web profile 的 pnpm 构建策略（根治 pnpm 11 的 build-scripts 拦截门）：
+   * - dangerouslyAllowAllBuilds: true → 所有依赖的 preinstall/install/postinstall 自动执行，
+   *   不再报 ERR_PNPM_IGNORED_BUILDS，也不再被写进 allowBuilds 的占位符污染。
+   * - minimumReleaseAge: 0 → 关闭 24h 发布龄供应链门槛（pnpm 11 默认 1440 分钟，会拒绝刚发布的插件）。
+   * 幂等：保留其它键，仅移除 allowBuilds 块并追加这两个策略键。
+   */
+  private healProfileBuildPolicy(): void {
+    const yamlPath = join(this.profileDir(), 'pnpm-workspace.yaml')
+    if (!existsSync(yamlPath)) return
+    try {
+      const raw = readFileSync(yamlPath, 'utf8')
+      const kept: string[] = []
+      let inAllowBuilds = false
+      for (const line of raw.split(/\r?\n/)) {
+        const t = line.trim()
+        if (/^allowBuilds:/.test(t)) {
+          inAllowBuilds = true
+          continue
+        }
+        if (inAllowBuilds) {
+          if (t && !/^[\t ]/.test(line)) inAllowBuilds = false
+          else continue
+        }
+        if (/^dangerouslyAllowAllBuilds:|^minimumReleaseAge:/.test(t)) continue
+        kept.push(line)
+      }
+      const base = kept.join('\n').trim()
+      const next = `${base}${base ? '\n' : ''}dangerouslyAllowAllBuilds: true\nminimumReleaseAge: 0\n`
+      if (raw.trim() !== next.trim()) {
+        writeFileSync(yamlPath, next)
+        console.log(`[dsh] 已固化 pnpm 构建策略（dangerouslyAllowAllBuilds）: ${yamlPath}`)
+      }
+    } catch {
+      /* heal 失败不影响主流程 */
+    }
   }
 
   /** 与 DSH resolveBundleDir 同语义：两个锚点任一可解析出 dsh.bundle 声明即为合法层 */
@@ -447,9 +486,8 @@ class DshManager {
       DSH_HOME: home,
       NODE_PATH: join(base, 'node_modules'),
       PATH: `${join(base, 'bin')}${delimiter}${base}${delimiter}${process.env.PATH ?? ''}`,
-      // pnpm ≥11 默认开启 24 小时 minimumReleaseAge 供应链策略，
-      // 会拒绝刚发布的包；插件市场已自带处理，但 CLI 直装场景仍需关掉。
-      npm_config_minimum_release_age: '0',
+      // 注：pnpm 11 不再读取 npm_config_*，发布龄/构建策略统一由 healProfileBuildPolicy
+      // 写入 profile 的 pnpm-workspace.yaml（minimumReleaseAge: 0 + dangerouslyAllowAllBuilds: true）。
     }
   }
 
@@ -496,6 +534,8 @@ class DshManager {
 
     const { nodeBin, dshBin, home } = this.resolvePaths()
     mkdirSync(home, { recursive: true })
+    // profile 已存在时先固化 pnpm 构建策略，让首次尝试就不被 build-scripts 拦截
+    this.healProfileBuildPolicy()
     console.log(`[dsh] plugin ${action}:`, spec)
 
     const runOnce = (extraArgs: string[]): Promise<{ ok: boolean; error?: string }> =>
@@ -561,6 +601,15 @@ class DshManager {
         this.emitPluginLog('\n[dsh] 自动重试（瞬时网络错误）\n')
         last = await runOnce([])
         if (last.ok) return last
+      }
+
+      // 4) 以上均失败且仍带被拦截构建脚本时，再次固化策略后重试，
+      //    覆盖「占位符污染 yaml、--allow-build 又因策略漂移失效」的残余场景。
+      if (!last.ok && pkgs.length > 0) {
+        console.log('[dsh] 构建脚本仍被拦截，再次固化构建策略后重试')
+        this.emitPluginLog('\n[dsh] 自动重试：重新固化 pnpm 构建策略\n')
+        this.healProfileBuildPolicy()
+        last = await runOnce([])
       }
 
       return last
