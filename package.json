@@ -1,6 +1,6 @@
 {
   "name": "zdn-notes",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {
@@ -61,7 +61,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "resources/icon.svg"
+      "icon": "resources/icon.ico"
     },
     "nsis": {
       "oneClick": false,
