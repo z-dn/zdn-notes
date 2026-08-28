@@ -10,7 +10,8 @@
 // 用法: npm run build:dsh
 //   DSH_NODE_VERSION 可覆盖 node 版本（默认 24）
 //   DSH_PNPM_VERSION 可覆盖 pnpm 版本（默认 11.23.0）
-//   DSH_FORCE 设为 1 强制重装
+//   DSH_VERSION    可覆盖 @deepseek-ai/dsh 目标版本（默认 0.1.1-rc.2）
+//   DSH_FORCE      设为 1 强制重装
 // ===================================================================
 
 import { spawnSync } from 'child_process'
@@ -22,6 +23,8 @@ const appPath = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const DSH_DIR = join(appPath, 'resources', 'dsh')
 const NODE_VERSION = process.env.DSH_NODE_VERSION || '24'
 const PNPM_VERSION = process.env.DSH_PNPM_VERSION || '11.23.0'
+// 当前 npm latest/next 发布版；dsh-web-all@0.3.6 等插件要求 >=0.1.1-rc.1
+const DSH_VERSION = process.env.DSH_VERSION || '0.1.1-rc.2'
 const FORCE = process.env.DSH_FORCE === '1'
 
 function run(cmd, args, opts) {
@@ -87,50 +90,63 @@ function downloadNode() {
   console.log('[build-dsh] node.exe 就绪')
 }
 
+/** 读取已安装的 @deepseek-ai/dsh 版本；读不到返回 null */
+function installedDshVersion() {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(DSH_DIR, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'), 'utf8'),
+    )
+    return typeof pkg.version === 'string' ? pkg.version : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 安装/升级 DSH 运行时到目标版本。
+ * 版本比对而非「node_modules 存在即跳过」：否则既有运行时永远不会被升级
+ * （旧 package.json 钉死旧版本，npm run build:dsh 静默跳过）。
+ */
 function installDsh() {
   const nodeModules = join(DSH_DIR, 'node_modules')
-  if (existsSync(nodeModules) && !FORCE) {
-    console.log('[build-dsh] node_modules 已存在，跳过安装（DSH_FORCE=1 可强制）')
-    ensurePkgJsonTypeModule()
+  const installed = installedDshVersion()
+  if (!FORCE && installed === DSH_VERSION) {
+    console.log(`[build-dsh] DSH ${DSH_VERSION} 已安装，跳过`)
     return
+  }
+  if (installed && installed !== DSH_VERSION) {
+    console.log(`[build-dsh] DSH ${installed} → ${DSH_VERSION} 升级重装`)
   }
   const pnpm = findPnpm()
   if (!pnpm) {
     console.error('[build-dsh] 未找到 pnpm，请先安装: npm i -g pnpm')
     process.exit(1)
   }
-  console.log(`[build-dsh] 用 ${pnpm} 安装 @deepseek-ai/dsh (hoisted) ...`)
+  console.log(`[build-dsh] 用 ${pnpm} 安装 @deepseek-ai/dsh@${DSH_VERSION} (hoisted) ...`)
   rmSync(nodeModules, { recursive: true, force: true })
-  const pkgJson = join(DSH_DIR, 'package.json')
-  if (!existsSync(pkgJson)) {
-    // type:module 消除 pnpm worker.js 的 MODULE_TYPELESS_PACKAGE_JSON 警告
-    writeFileSync(
-      pkgJson,
-      JSON.stringify({ name: 'dsh-runtime', private: true, type: 'module' }, null, 2),
-    )
-  }
+  // 脚本全权拥有 package.json：显式钉住目标版本，清除历史残留依赖
+  // （如 TUI 时代的 @deepseek-harness-tui/dsh-tui）。type:module 消除
+  // pnpm worker.js 的 MODULE_TYPELESS_PACKAGE_JSON 警告。
+  writeFileSync(
+    join(DSH_DIR, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'zdn-dsh-runtime',
+        private: true,
+        type: 'module',
+        dependencies: { '@deepseek-ai/dsh': DSH_VERSION },
+      },
+      null,
+      2,
+    ),
+  )
   // node-linker=hoisted：产生真实文件而非 symlink，便于 electron-builder 收集
   // ignore-scripts：dsh 树为预构建产物，且规避 pnpm≥11 的 build-scripts 拦截门
-  run(pnpm, ['add', '@deepseek-ai/dsh', '--node-linker=hoisted', '--ignore-scripts'], {
+  run(pnpm, ['add', `@deepseek-ai/dsh@${DSH_VERSION}`, '--node-linker=hoisted', '--ignore-scripts'], {
     cwd: DSH_DIR,
     env: { ...process.env, npm_config_node_linker: 'hoisted' },
   })
-  console.log('[build-dsh] DSH 安装完成')
-}
-
-/** 已存在的 package.json 只补 type 字段（不动 pnpm add 记录的 dependencies） */
-function ensurePkgJsonTypeModule() {
-  const pkgJson = join(DSH_DIR, 'package.json')
-  if (!existsSync(pkgJson)) return
-  try {
-    const pkg = JSON.parse(readFileSync(pkgJson, 'utf8'))
-    if (pkg.type !== 'module') {
-      pkg.type = 'module'
-      writeFileSync(pkgJson, JSON.stringify(pkg, null, 2))
-    }
-  } catch {
-    /* 解析失败时保留原文件 */
-  }
+  console.log(`[build-dsh] DSH ${DSH_VERSION} 安装完成`)
 }
 
 function downloadPnpm() {
