@@ -9,6 +9,7 @@ import {
   parseInstalledPlugins,
   type DshPluginInfo,
 } from './plugin-spec'
+import { resolveSidebarShellOverride } from './shell-resolve'
 
 // ===================================================================
 // DshManager —— 主进程内管理 DSH Web UI 子进程的生命周期。
@@ -342,6 +343,17 @@ class DshManager {
       env.TERM = 'xterm-256color'
       env.NODE_PATH = nodeModules
       env.PATH = `${base}${delimiter}${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
+      // 兼容性加固：dsh-better-sidebar 的 defaultShell 会命中 Store 的
+      // WindowsApps pwsh 别名桩（0 字节 reparse point），node-pty 无法
+      // spawn，终端报 "File not found"。此处把它解析为确定可用的 shell。
+      // 用户显式 config.shell / 已设的 DSH_SIDEBAR_SHELL 优先级更高，不受影响。
+      if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
+        const sidebarShell = resolveSidebarShellOverride()
+        if (sidebarShell) {
+          env.DSH_SIDEBAR_SHELL = sidebarShell
+          console.log(`[dsh] DSH_SIDEBAR_SHELL=${sidebarShell}`)
+        }
+      }
 
       const apiKey = opts?.apiKey || process.env.DEEPSEEK_API_KEY || ''
       if (apiKey) env.DEEPSEEK_API_KEY = apiKey
@@ -481,7 +493,7 @@ class DshManager {
   /** 子进程环境：DSH_HOME + NODE_PATH + 自带 bin/node 前置的 PATH */
   private childEnv(): Record<string, string> {
     const { home, base } = this.resolvePaths()
-    return {
+    const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       DSH_HOME: home,
       NODE_PATH: join(base, 'node_modules'),
@@ -489,6 +501,11 @@ class DshManager {
       // 注：pnpm 11 不再读取 npm_config_*，发布龄/构建策略统一由 healProfileBuildPolicy
       // 写入 profile 的 pnpm-workspace.yaml（minimumReleaseAge: 0 + dangerouslyAllowAllBuilds: true）。
     }
+    if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
+      const sidebarShell = resolveSidebarShellOverride()
+      if (sidebarShell) env.DSH_SIDEBAR_SHELL = sidebarShell
+    }
+    return env
   }
 
   async listPlugins(): Promise<{
