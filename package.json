@@ -1,6 +1,6 @@
 {
   "name": "zdn-notes",
-  "version": "1.8.6",
+  "version": "1.8.7",
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {
@@ -47,6 +47,10 @@
       {
         "from": "resources/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "resources/icon.ico",
+        "to": "icon.ico"
       },
       {
         "from": "docs/plugin-spec.md",

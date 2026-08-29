@@ -91,6 +91,12 @@ app.on('window-all-closed', () => {
   // 真正退出只经托盘菜单「退出」（触发 before-quit 清理）。
 })
 
+// Windows 任务栏按 AppUserModelID 归组并显示应用图标；
+// 必须在窗口创建前设置，且不依赖 notifications 模块是否启用。
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.zdn.notes')
+}
+
 app.on('before-quit', () => {
   if (shell) shell.shutdown()
   closeDB()

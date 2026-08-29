@@ -12,10 +12,12 @@ let tray: Tray | null = null
 let quitting = false
 
 function trayIconPath(): string {
+  // Windows 上用 .ico（多分辨率，任务栏/窗口/托盘都能正确显示），其他平台用 .png
+  const ext = process.platform === 'win32' ? 'ico' : 'png'
   if (app.isPackaged) {
-    return join(process.resourcesPath, 'icon.png')
+    return join(process.resourcesPath, `icon.${ext}`)
   }
-  return join(__dirname, '../../resources/icon.png')
+  return join(__dirname, `../../resources/icon.${ext}`)
 }
 
 function showMainWindow(): void {
