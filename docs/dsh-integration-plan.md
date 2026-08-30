@@ -75,8 +75,11 @@ Electron 的 utility 进程支持该标志，loader 走 execArgv 分支成功。
 - **停止**：`stop()` 调 `child.kill()`——**会连带终止整棵进程树（含 node-pty 派生的 pwsh 孙进程，
   已实测）**，无需 taskkill；应用退出时 Electron 也会自动回收 utility 进程。
 - **env**：`buildEnv()` 统一构造——继承应用环境但删除 `NODE_OPTIONS`/`ELECTRON_RUN_AS_NODE`/
-  `ELECTRON_*`（避免污染纯 Node 运行时），设 `DSH_HOME`/`NODE_PATH`/PATH 前置 `bin/pnpm.exe`/
-  `DSH_SIDEBAR_SHELL`；server 额外加 `TERM`/`DEEPSEEK_API_KEY`/`DSH_MODEL`。
+  `ELECTRON_*`（避免污染纯 Node 运行时），设 `DSH_HOME`/`NODE_PATH`/PATH 前置 `node-bin`（node 垫片）
+  与 `bin/pnpm.exe`/`DSH_SIDEBAR_SHELL`；server 额外加 `TERM`/`DEEPSEEK_API_KEY`/`DSH_MODEL`。
+- **node 垫片**：pnpm 生命周期脚本需要 PATH 上的 `node`。`buildEnv()` 在 `<DSH_HOME>/node-bin/` 生成
+  `node.cmd`（`set ELECTRON_RUN_AS_NODE=1` + 运行 `process.execPath`），把 `node` 解析到 Electron 内置
+  Node——零额外二进制、ABI 与 DSH 运行时一致、GUI 子系统不开控制台窗口。
 
 ### 3.4 插件管理
 
@@ -110,7 +113,7 @@ PATH（`buildEnv`），在瞬态 utility 进程里跑 `bin.js plugin --profile w
 |------|------|
 | 直接 fork `bin.js`（黑盒 CLI），不建 launcher/MessagePort 桥 | DSH 是第三方 CLI，不响应 `parentPort`；包装会让 DSH 变孙进程，退出自动回收失效、树清理更复杂 |
 | HTTP 探测判就绪，不用日志行解析 | 探测确认真在服务；`--port 0`+正则解析已随独立 node.exe 一起废弃 |
-| 不用独立 node.exe | Electron 内置 Node 24 满足 DSH 版本要求；DSH 原生依赖（node-pty/ssh2 等）走 NAPI，ABI 稳定 |
+| 不用独立 node.exe | Electron 内置 Node 24 满足 DSH 版本要求；pnpm 生命周期脚本所需的 `node` 由 electron-as-node 垫片提供（零体积、ABI 一致） |
 | 不用 taskkill | `utilityProcess.kill()` 实测连带终止整棵进程树 |
 | 保留 `stdio:'pipe'` | 需要 `child.stderr` 做启动失败诊断 |
 

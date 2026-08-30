@@ -99,10 +99,18 @@ function reservePort() {
   })
 }
 
-/** 与 dsh-manager.start 相同的子进程 env 构造（不含独立 node.exe 的 PATH 前置） */
+/** 与 dsh-manager.buildEnv 相同的子进程 env 构造（含 electron-as-node 的 node 垫片 + pnpm bin 前置） */
+function ensureNodeShim(home) {
+  const dir = join(home, 'node-bin')
+  mkdirSync(dir, { recursive: true })
+  const shim = join(dir, 'node.cmd')
+  const content = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath.replace(/"/g, '""')}" %*\r\n`
+  writeFileSync(shim, content)
+  return dir
+}
 function childEnv(home) {
   const env = { ...process.env, DSH_HOME: home, TERM: 'xterm-256color', NODE_PATH: join(DSH_DIR, 'node_modules') }
-  env.PATH = `${join(DSH_DIR, 'bin')}${delimiter}${env.PATH ?? ''}`
+  env.PATH = `${ensureNodeShim(home)}${delimiter}${join(DSH_DIR, 'bin')}${delimiter}${env.PATH ?? ''}`
   delete env.NODE_OPTIONS
   delete env.ELECTRON_RUN_AS_NODE
   for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
@@ -267,6 +275,29 @@ async function run() {
     if (!/^packages:\s*$/m.test(healed) || !/^nodeLinker:\s*hoisted$/m.test(healed)) fail(`既有键被误删:\n${healed}`)
     safeRm(dir)
     console.log('[validate-dsh] Test 3 OK')
+  }
+
+  // Test 4: node 垫片（electron-as-node）——pnpm 生命周期脚本的 `node` 必须解析到
+  //         Electron 内置 Node（若垫片失效，原生插件安装会报 'node' 不是内部或外部命令）
+  console.log('[validate-dsh] Test 4: node shim (electron-as-node) ...')
+  {
+    const dir = join(tmpdir(), `dsh-utility-nodebin-${Date.now()}`)
+    const nodeBin = ensureNodeShim(dir)
+    const env = { ...process.env, PATH: `${nodeBin}${delimiter}${process.env.PATH ?? ''}` }
+    delete env.NODE_OPTIONS
+    delete env.ELECTRON_RUN_AS_NODE
+    for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
+    // 复刻 pnpm 生命周期调用方式：cmd /d /s /c "node ..."
+    const r = spawnSync('cmd', ['/d', '/s', '/c', 'node --version'], { env, encoding: 'utf8' })
+    const expected = `v${process.versions.node}`
+    if (r.status !== 0 || !r.stdout.trim().startsWith(expected)) {
+      fail(
+        `node 垫片未解析到 Electron node：exit=${r.status} stdout=${JSON.stringify(r.stdout)} ` +
+          `stderr=${JSON.stringify(r.stderr)}（期望 ${expected}，原生插件安装将失败）`,
+      )
+    }
+    safeRm(dir)
+    console.log('[validate-dsh] Test 4 OK')
   }
 
   console.log(failures === 0 ? '[validate-dsh] ALL OK' : `[validate-dsh] ${failures} FAILURE(S)`)

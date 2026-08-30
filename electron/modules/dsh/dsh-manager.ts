@@ -338,8 +338,11 @@ class DshManager {
     for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
     env.DSH_HOME = home
     env.NODE_PATH = join(base, 'node_modules')
-    // pnpm.exe 前置进 PATH：DSH 服务端/插件工具链可能内部调用 pnpm
-    env.PATH = `${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
+    // pnpm 生命周期脚本（node buildcheck.js / node-gyp rebuild 等）需要 PATH 上有 `node`：
+    // 用 electron-as-node 垫片充当（零额外二进制、ABI 与 DSH 运行时同为 Electron Node、GUI 子系统不开控制台窗口）。
+    // node-bin 前置、bin（pnpm.exe）次之。
+    const nodeBin = this.ensureNodeShim(home)
+    env.PATH = `${nodeBin}${delimiter}${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
     // 兼容性加固：dsh-better-sidebar 的 defaultShell 会命中 Store 的
     // WindowsApps pwsh 别名桩（0 字节 reparse point），node-pty 无法 spawn，
     // 终端报 "File not found"。此处把它解析为确定可用的 shell。
@@ -349,6 +352,24 @@ class DshManager {
       if (sidebarShell) env.DSH_SIDEBAR_SHELL = sidebarShell
     }
     return env
+  }
+
+  /**
+   * 确保 `node` 垫片存在：在 DSH home 下生成 node.cmd，把 `node` 解析到应用自身
+   * （process.execPath）以 ELECTRON_RUN_AS_NODE 模式充当纯 Node 运行。幂等：
+   * execPath 变化（dev/打包切换）时自动重写。
+   */
+  private ensureNodeShim(home: string): string {
+    const dir = join(home, 'node-bin')
+    mkdirSync(dir, { recursive: true })
+    const shim = join(dir, 'node.cmd')
+    const content = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath.replace(/"/g, '""')}" %*\r\n`
+    try {
+      if (readFileSync(shim, 'utf8') !== content) writeFileSync(shim, content)
+    } catch {
+      writeFileSync(shim, content) // 首次创建或文件损坏
+    }
+    return dir
   }
 
   /** 主进程预占一个空闲 loopback 端口（net 层完成，无 stdout 解析竞态） */
