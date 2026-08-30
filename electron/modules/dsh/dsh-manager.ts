@@ -1,7 +1,6 @@
 import { app, utilityProcess, type UtilityProcess } from 'electron'
 import { delimiter, join } from 'path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { spawnSync } from 'child_process'
 import { createServer, type AddressInfo } from 'net'
 import {
   computeBundleSync,
@@ -61,6 +60,21 @@ interface ResolvedPaths {
 /** 启动总超时：端口解析 + HTTP 就绪探测共用（首次重建 web profile 需 pnpm 安装，留足余量） */
 const START_TIMEOUT_MS = 60_000
 const PROBE_TIMEOUT_MS = 2_000
+
+/**
+ * 格式化 utilityProcess 的 'error' 事件参数（V8 FatalError 时可能带 Node diagnostic report）。
+ * Electron 类型对 'error' 只标了 'FatalError' 字面量，运行期 payload 为 { type, location, report }，
+ * 这里按 unknown 防御性提取。
+ */
+function formatUtilityError(d: unknown): string {
+  if (typeof d !== 'object' || d === null) return String(d)
+  const o = d as { type?: unknown; location?: unknown; report?: unknown }
+  const parts: string[] = []
+  if (typeof o.type === 'string' && o.type) parts.push(o.type)
+  if (typeof o.location === 'string' && o.location) parts.push(o.location)
+  if (typeof o.report === 'string' && o.report) parts.push(o.report)
+  return parts.join('\n') || '未知错误'
+}
 
 class DshManager {
   private static _inst: DshManager | null = null
@@ -138,8 +152,8 @@ class DshManager {
 
   /**
    * 定位 DSH 运行时根目录（含 node_modules/@deepseek-ai/dsh 与 bin/pnpm.exe）。
-   * 打包后固定为 resourcesPath/dsh；dev 下 app.getAppPath() 不指向仓库根，
-   * 故从多个锚点（app 路径 / cwd / 本模块目录）向上逐层搜索 resources/dsh。
+   * 打包后固定为 resourcesPath/dsh；dev 下 app.getAppPath()/cwd 已是仓库根直接命中，
+   * __dirname 在构建产物里（out/main/...）向上数层找 resources/dsh。
    */
   private findBase(): string {
     const env = process.env
@@ -148,14 +162,14 @@ class DshManager {
       return env.DSH_DEV_DIR
     }
 
-    const anchors = [app.getAppPath(), process.cwd(), __dirname]
-    const candidates: string[] = []
-    for (const a of anchors) {
-      let cur = a
-      for (let i = 0; i < 8 && cur && cur !== join(cur, '..'); i++) {
-        candidates.push(join(cur, 'resources', 'dsh'))
-        cur = join(cur, '..')
-      }
+    const candidates = [
+      join(app.getAppPath(), 'resources', 'dsh'),
+      join(process.cwd(), 'resources', 'dsh'),
+    ]
+    let cur = __dirname
+    for (let i = 0; i < 6 && cur && cur !== join(cur, '..'); i++) {
+      candidates.push(join(cur, 'resources', 'dsh'))
+      cur = join(cur, '..')
     }
     for (const c of candidates) {
       if (
@@ -168,7 +182,7 @@ class DshManager {
     for (const c of candidates) {
       if (existsSync(join(c, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) return c
     }
-    return candidates[0] ?? join(app.getAppPath(), 'resources', 'dsh')
+    return candidates[0]
   }
 
   /** 解析 DSH 运行时路径 */
@@ -311,6 +325,32 @@ class DshManager {
     }
   }
 
+  /**
+   * 构建 DSH 子进程环境：继承应用环境但清掉 Electron 注入的运行期变量
+   * （NODE_OPTIONS / ELECTRON_RUN_AS_NODE / ELECTRON_*），避免污染 utilityProcess
+   * 里的纯 Node 运行时；再设 DSH 所需项。extra 由调用方按用途追加（server/插件共用）。
+   */
+  private buildEnv(home: string, extra: Record<string, string> = {}): Record<string, string> {
+    const { base } = this.resolvePaths()
+    const env: Record<string, string> = { ...(process.env as Record<string, string>), ...extra }
+    delete env.NODE_OPTIONS
+    delete env.ELECTRON_RUN_AS_NODE
+    for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
+    env.DSH_HOME = home
+    env.NODE_PATH = join(base, 'node_modules')
+    // pnpm.exe 前置进 PATH：DSH 服务端/插件工具链可能内部调用 pnpm
+    env.PATH = `${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
+    // 兼容性加固：dsh-better-sidebar 的 defaultShell 会命中 Store 的
+    // WindowsApps pwsh 别名桩（0 字节 reparse point），node-pty 无法 spawn，
+    // 终端报 "File not found"。此处把它解析为确定可用的 shell。
+    // 用户显式 config.shell / 已设的 DSH_SIDEBAR_SHELL 优先级更高，不受影响。
+    if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
+      const sidebarShell = resolveSidebarShellOverride()
+      if (sidebarShell) env.DSH_SIDEBAR_SHELL = sidebarShell
+    }
+    return env
+  }
+
   /** 主进程预占一个空闲 loopback 端口（net 层完成，无 stdout 解析竞态） */
   private async reservePort(): Promise<number> {
     return await new Promise((resolve, reject) => {
@@ -340,37 +380,15 @@ class DshManager {
     portRetried = false,
   ): Promise<{ ok: boolean; port?: number; error?: string }> {
     if (this.child) return { ok: true, port: this.port ?? undefined }
-    const { dshBin, home, base } = this.resolvePaths()
+    const { dshBin, home } = this.resolvePaths()
     if (!existsSync(dshBin)) return { ok: false, error: `未找到 DSH 入口: ${dshBin}` }
     try {
       mkdirSync(home, { recursive: true })
-      const nodeModules = join(base, 'node_modules')
-      // 继承应用环境，但清掉 Electron 注入的运行期变量（NODE_OPTIONS / ELECTRON_* 等），
-      // 避免污染 utilityProcess 里的纯 Node 运行时。再显式设置 DSH 所需项。
-      const env: Record<string, string> = { ...(process.env as Record<string, string>) }
-      delete env.NODE_OPTIONS
-      delete env.ELECTRON_RUN_AS_NODE
-      for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
-      env.DSH_HOME = home
-      env.TERM = 'xterm-256color'
-      env.NODE_PATH = nodeModules
-      // pnpm.exe 前置进 PATH：DSH 服务端/插件工具链可能内部调用 pnpm
-      env.PATH = `${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
-      // 兼容性加固：dsh-better-sidebar 的 defaultShell 会命中 Store 的
-      // WindowsApps pwsh 别名桩（0 字节 reparse point），node-pty 无法
-      // spawn，终端报 "File not found"。此处把它解析为确定可用的 shell。
-      // 用户显式 config.shell / 已设的 DSH_SIDEBAR_SHELL 优先级更高，不受影响。
-      if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
-        const sidebarShell = resolveSidebarShellOverride()
-        if (sidebarShell) {
-          env.DSH_SIDEBAR_SHELL = sidebarShell
-          console.log(`[dsh] DSH_SIDEBAR_SHELL=${sidebarShell}`)
-        }
-      }
-
       const apiKey = opts?.apiKey || process.env.DEEPSEEK_API_KEY || ''
-      if (apiKey) env.DEEPSEEK_API_KEY = apiKey
-      if (opts?.model) env.DSH_MODEL = opts.model
+      const extra: Record<string, string> = { TERM: 'xterm-256color' }
+      if (apiKey) extra.DEEPSEEK_API_KEY = apiKey
+      if (opts?.model) extra.DSH_MODEL = opts.model
+      const env = this.buildEnv(home, extra)
 
       // 主进程预占空闲 loopback 端口，fork 后立即对已知端口探测，免去「等回显」往返
       const port = await this.reservePort()
@@ -395,12 +413,13 @@ class DshManager {
 
       let stderrBuf = ''
       child.on('error', (e) => {
+        stderrBuf += formatUtilityError(e) + '\n'
         if (this.child === child) {
           this.child = null
           this.port = null
           this.emit()
         }
-        console.error('[dsh] 启动失败:', String(e))
+        console.error('[dsh] 启动失败:', formatUtilityError(e))
       })
       child.stderr?.on('data', (d) => {
         const msg = d.toString()
@@ -414,6 +433,12 @@ class DshManager {
         this.port = null
         this.emit()
         if (code && code !== 0) console.warn(`[dsh] Web UI 退出 code=${code}`)
+      })
+
+      // 等真实 spawn 后再起超时窗口，避免 fork/模块加载前的空转计入
+      await new Promise<void>((resolve) => {
+        child.once('spawn', () => resolve())
+        child.once('exit', () => resolve())
       })
 
       // 等待「HTTP 探测通过」，总超时 START_TIMEOUT_MS
@@ -471,8 +496,8 @@ class DshManager {
   }
 
   /**
-   * 停止并清理整棵进程树。Windows 下 DSH 可能派生孙进程，
-   * 用 taskkill /T 连带终止；其他平台退回 child.kill()。
+   * 停止。utilityProcess.kill() 会连带终止整棵进程树（含 node-pty 派生的 pwsh 孙进程，
+   * 已实测），无需 taskkill；应用退出时 Electron 也会自动回收 utility 进程。
    * 同时终止进行中的插件操作子进程。
    */
   async stop(): Promise<void> {
@@ -490,22 +515,10 @@ class DshManager {
     this.child = null
     this.port = null
     this.emit()
-    const pid = child.pid
-    if (pid && process.platform === 'win32') {
-      try {
-        spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
-          stdio: 'ignore',
-          windowsHide: true,
-        })
-      } catch {
-        /* taskkill 失败时进程随主窗口退出由 OS 回收 */
-      }
-    } else {
-      try {
-        child.kill()
-      } catch {
-        /* noop */
-      }
+    try {
+      child.kill()
+    } catch {
+      /* noop */
     }
   }
 
@@ -522,27 +535,6 @@ class DshManager {
 
   private profileDir(): string {
     return join(this.resolvePaths().home, 'profiles', 'web')
-  }
-
-  /** 子进程环境：DSH_HOME + NODE_PATH + 自带 bin/pnpm 前置的 PATH（清掉 Electron 注入变量） */
-  private childEnv(): Record<string, string> {
-    const { home, base } = this.resolvePaths()
-    const env: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      DSH_HOME: home,
-      NODE_PATH: join(base, 'node_modules'),
-      PATH: `${join(base, 'bin')}${delimiter}${process.env.PATH ?? ''}`,
-      // 注：pnpm 11 不再读取 npm_config_*，发布龄/构建策略统一由 healProfileBuildPolicy
-      // 写入 profile 的 pnpm-workspace.yaml（minimumReleaseAge: 0 + dangerouslyAllowAllBuilds: true）。
-    }
-    delete env.NODE_OPTIONS
-    delete env.ELECTRON_RUN_AS_NODE
-    for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
-    if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
-      const sidebarShell = resolveSidebarShellOverride()
-      if (sidebarShell) env.DSH_SIDEBAR_SHELL = sidebarShell
-    }
-    return env
   }
 
   async listPlugins(): Promise<{
@@ -590,6 +582,8 @@ class DshManager {
     mkdirSync(home, { recursive: true })
     // profile 已存在时先固化 pnpm 构建策略，让首次尝试就不被 build-scripts 拦截
     this.healProfileBuildPolicy()
+    // 注：pnpm 11 不再读取 npm_config_*，发布龄/构建策略统一由 healProfileBuildPolicy
+    // 写入 profile 的 pnpm-workspace.yaml（minimumReleaseAge: 0 + dangerouslyAllowAllBuilds: true）。
     console.log(`[dsh] plugin ${action}:`, spec)
 
     const runOnce = (extraArgs: string[]): Promise<{ ok: boolean; error?: string }> =>
@@ -599,7 +593,7 @@ class DshManager {
           ['plugin', '--profile', 'web', action, spec, ...extraArgs],
           {
             cwd: home,
-            env: this.childEnv(),
+            env: this.buildEnv(home),
             stdio: 'pipe',
             serviceName: 'zdn-dsh-plugin',
             execArgv: ['--expose-internals'],
@@ -616,7 +610,7 @@ class DshManager {
         })
         child.on('error', (e) => {
           if (this.pluginPending !== pending) return
-          this.finishPlugin(pending, false, `utility 进程错误: ${String(e)}`)
+          this.finishPlugin(pending, false, `utility 进程错误: ${formatUtilityError(e)}`)
         })
         child.on('exit', (code) => {
           if (this.pluginPending !== pending) return // 已被 stop() 接管
