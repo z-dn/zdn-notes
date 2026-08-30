@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CORE_WEB_BUNDLE,
   computeBundleSync,
   isValidPluginSpec,
   parseIgnoredBuildPackages,
   parseInstalledPlugins,
+  shouldRebuildWebProfile,
 } from '../electron/modules/dsh/plugin-spec'
 
 describe('isValidPluginSpec', () => {
@@ -134,5 +136,28 @@ describe('computeBundleSync', () => {
       (n) => resolvable.has(n),
     )
     expect(changed).toBe(false)
+  })
+})
+
+describe('shouldRebuildWebProfile', () => {
+  it('healthy profile (bundles include core web app) must NOT be rebuilt', () => {
+    const raw = JSON.stringify({
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', CORE_WEB_BUNDLE] } },
+    })
+    expect(shouldRebuildWebProfile(raw)).toBe(false)
+  })
+
+  it('v1.8.2 corruption (core web app missing from bundles) must be rebuilt', () => {
+    const raw = JSON.stringify({
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'some-plugin'] } },
+    })
+    expect(shouldRebuildWebProfile(raw)).toBe(true)
+  })
+
+  it('bundles missing / unparseable / absent manifest must be rebuilt', () => {
+    expect(shouldRebuildWebProfile(JSON.stringify({ dsh: {} }))).toBe(true)
+    expect(shouldRebuildWebProfile(JSON.stringify({}))).toBe(true)
+    expect(shouldRebuildWebProfile('not json')).toBe(true)
+    expect(shouldRebuildWebProfile(null)).toBe(true)
   })
 })

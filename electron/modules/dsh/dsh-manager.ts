@@ -8,6 +8,7 @@ import {
   isValidPluginSpec,
   parseIgnoredBuildPackages,
   parseInstalledPlugins,
+  shouldRebuildWebProfile,
   type DshPluginInfo,
 } from './plugin-spec'
 import { resolveSidebarShellOverride } from './shell-resolve'
@@ -420,17 +421,25 @@ class DshManager {
       while (Date.now() < deadline) {
         if (this.child !== child) {
           // 子进程在启动期内意外退出：多半是 web profile 损坏/不兼容
-          // （缺少核心 web 包 @deepseek-ai/dsh-web-app，webServer 服务未注册）。
-          // 仅当核心包确实缺失时才自动重建 web profile 并重试一次，避免误删用户插件。
-          const webApp = join(home, 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-app')
-          if (!repaired && !existsSync(webApp)) {
+          // （bundles 缺少核心 web 包 @deepseek-ai/dsh-web-app → webServer 服务未注册）。
+          // 按 manifest 判定是否重建（物理 node_modules 路径在此部署下恒不存在，
+          // 按物理路径判断会误删用户插件）：仅 bundles 缺失核心包或 manifest 不可读时重建一次。
+          if (!repaired) {
+            let manifestRaw: string | null = null
             try {
-              rmSync(join(home, 'profiles', 'web'), { recursive: true, force: true })
-              console.warn('[dsh] web profile 缺少核心包 @deepseek-ai/dsh-web-app，已重建并自动重试')
-            } catch (e) {
-              console.error('[dsh] 清理损坏的 web profile 失败:', e)
+              manifestRaw = readFileSync(join(home, 'profiles', 'web', 'package.json'), 'utf8')
+            } catch {
+              /* 不存在/不可读 → 视为需要重建 */
             }
-            return this.start(opts, true)
+            if (shouldRebuildWebProfile(manifestRaw)) {
+              try {
+                rmSync(join(home, 'profiles', 'web'), { recursive: true, force: true })
+                console.warn('[dsh] web profile 缺少核心包 @deepseek-ai/dsh-web-app，已重建并自动重试')
+              } catch (e) {
+                console.error('[dsh] 清理损坏的 web profile 失败:', e)
+              }
+              return this.start(opts, true)
+            }
           }
           // 无核心包缺失但启动即退：多为预留端口被抢占（TOCTOU），换新端口重试一次
           if (!portRetried) {

@@ -263,7 +263,7 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 - 现象：应用能启动、打开 DSH 标签页不报「运行时不可用」，但点启动后 dsh 子进程「立即退出」，真实错误为 `plugin tree failed to load: N entries did not activate ... pending (waiting for service: webServer)`。
 - 根因：用户 `DSH_HOME/profiles/web/package.json` 被改坏（装第三方 web 插件后 `dsh.profile.bundles` 不再含核心包 `@deepseek-ai/dsh-web-app`），`webServer` 服务从未注册，所有依赖它的插件挂起 → 启动断言失败 → 进程退出。全新 profile 按默认 bundle（含 `@deepseek-ai/dsh-web-app`）初始化则正常。
 - 次生风险：dsh 子进程若整体继承 `process.env`，Electron 主进程注入的 `NODE_OPTIONS`/`ELECTRON_*` 会污染 utilityProcess 里的纯 Node 运行时（CI 的 `validate` 用干净 shell 跑所以查不出）。
-- **做法**：`electron/modules/dsh/dsh-manager.ts` 的 `start()` 在子进程意外退出且 `profiles/web/node_modules/@deepseek-ai/dsh-web-app` 缺失时，自动删除 `profiles/web` 重建并重试一次（仅核心包确实缺失才触发，不擅自删用户插件）；构造子进程 env 时删除 `NODE_OPTIONS`/`ELECTRON_RUN_AS_NODE` 及所有 `ELECTRON_*` 前缀变量；错误信息附带 dsh 真实 stderr；启动超时 15s→60s（首次重建需 pnpm 安装）。
+- **做法**：`electron/modules/dsh/dsh-manager.ts` 的 `start()` 在子进程意外退出时自动重建 web profile 并重试一次——**触发条件按 manifest 判定**（`profiles/web/package.json` 的 `dsh.profile.bundles` 缺失 `@deepseek-ai/dsh-web-app` 或不可读，见 `plugin-spec.ts` 的 `shouldRebuildWebProfile`），**绝不按物理 node_modules 路径判定**（utilityProcess 部署下核心包经 junction 回退层解析，`profiles/web/node_modules` 恒不存在，按物理路径判断会恒真误删用户插件）；构造子进程 env 时删除 `NODE_OPTIONS`/`ELECTRON_RUN_AS_NODE` 及所有 `ELECTRON_*` 前缀变量；错误信息附带 dsh 真实 stderr；启动超时 15s→60s（首次重建需 pnpm 安装）。
 - `scripts/validate-dsh-utility.mjs` 增加回归：好 profile → 删核心包 → 应失败；删整个 web profile 重建 → 应成功，固化自动修复路径。
 
 ### 6. DSH 插件安装失败：pnpm 11 build-scripts 拦截门（v1.8.3 事故）
