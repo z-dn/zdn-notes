@@ -10,14 +10,15 @@
 const { cpSync, existsSync, mkdirSync } = require('fs')
 const { join } = require('path')
 
-// 只携带运行必需项，排除本地开发残留（dsh-home/、install 日志等）
-const RUNTIME_ENTRIES = ['node.exe', 'bin', 'node_modules', 'package.json', 'pnpm-lock.yaml']
+// 只携带运行必需项，排除本地开发残留（dsh-home/、install 日志等）。
+// DSH 服务端由应用在 utilityProcess 里加载，无需随包分发独立 node.exe。
+const RUNTIME_ENTRIES = ['bin', 'node_modules', 'package.json', 'pnpm-lock.yaml']
 
 module.exports = async function afterPack(context) {
   const src = join(context.packager.projectDir, 'resources', 'dsh')
-  if (!existsSync(join(src, 'node.exe'))) {
+  if (!existsSync(join(src, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) {
     throw new Error(
-      `[copy-dsh-runtime] 未找到 ${join(src, 'node.exe')}，请先运行 npm run build:dsh 再打包`,
+      `[copy-dsh-runtime] 未找到 DSH 入口 ${join(src, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')}，请先运行 npm run build:dsh 再打包`,
     )
   }
   const dest = join(context.appOutDir, 'resources', 'dsh')

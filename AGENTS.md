@@ -257,14 +257,14 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 
 ### 4. 打包产物可能静默丢失 DSH 运行时（v1.8.1 事故）
 - electron-builder 的 `createFilter`（app-builder-lib `util/filter.js`）会丢弃复制源根级的 `node_modules`，extraResources 方式曾致 v1.8.1 发布包静默缺失 DSH 入口（源树冒烟测试通过、产物缺失）
-- **做法**：`resources/dsh` 改由 `afterPack` 钩子（`scripts/copy-dsh-runtime.cjs`，白名单拷贝）进入产物；`pack`/`dist`/`dist:ci` 串联 `build:dsh` + `scripts/check-dsh-package.mjs` 校验产物；release.yml 上传前另有安装包体积下限断言（<190MB 禁止发布）。改动打包流程时保持这三道门禁
+- **做法**：`resources/dsh` 改由 `afterPack` 钩子（`scripts/copy-dsh-runtime.cjs`，白名单拷贝）进入产物；`pack`/`dist`/`dist:ci` 串联 `build:dsh` + `scripts/check-dsh-package.mjs` 校验产物；release.yml 上传前另有安装包体积下限断言（utilityProcess 迁移后不再随包分发 node.exe，下限已调至 135MB，首次实际构建后需按实测重新校准）。改动打包流程时保持这三道门禁
 
 ### 5. DSH Web UI 启动失败：web profile 损坏 + 子进程环境泄漏（v1.8.2 事故）
 - 现象：应用能启动、打开 DSH 标签页不报「运行时不可用」，但点启动后 dsh 子进程「立即退出」，真实错误为 `plugin tree failed to load: N entries did not activate ... pending (waiting for service: webServer)`。
 - 根因：用户 `DSH_HOME/profiles/web/package.json` 被改坏（装第三方 web 插件后 `dsh.profile.bundles` 不再含核心包 `@deepseek-ai/dsh-web-app`），`webServer` 服务从未注册，所有依赖它的插件挂起 → 启动断言失败 → 进程退出。全新 profile 按默认 bundle（含 `@deepseek-ai/dsh-web-app`）初始化则正常。
-- 次生风险：dsh 子进程若整体继承 `process.env`，Electron 主进程注入的 `NODE_OPTIONS`/`ELECTRON_*` 会让独立 `node.exe` 启动即退出（CI 的 `validate` 用干净 shell 跑所以查不出）。
+- 次生风险：dsh 子进程若整体继承 `process.env`，Electron 主进程注入的 `NODE_OPTIONS`/`ELECTRON_*` 会污染 utilityProcess 里的纯 Node 运行时（CI 的 `validate` 用干净 shell 跑所以查不出）。
 - **做法**：`electron/modules/dsh/dsh-manager.ts` 的 `start()` 在子进程意外退出且 `profiles/web/node_modules/@deepseek-ai/dsh-web-app` 缺失时，自动删除 `profiles/web` 重建并重试一次（仅核心包确实缺失才触发，不擅自删用户插件）；构造子进程 env 时删除 `NODE_OPTIONS`/`ELECTRON_RUN_AS_NODE` 及所有 `ELECTRON_*` 前缀变量；错误信息附带 dsh 真实 stderr；启动超时 15s→60s（首次重建需 pnpm 安装）。
-- `scripts/validate-dsh-integ.mjs` 增加回归：好 profile → 删核心包 → 应失败；删整个 web profile 重建 → 应成功，固化自动修复路径。
+- `scripts/validate-dsh-utility.mjs` 增加回归：好 profile → 删核心包 → 应失败；删整个 web profile 重建 → 应成功，固化自动修复路径。
 
 ### 6. DSH 插件安装失败：pnpm 11 build-scripts 拦截门（v1.8.3 事故）
 - 现象：装带原生依赖的第三方 web 插件（如 `@linxin666/dsh-web-all`，含 `node-pty`/`ssh2`/`cpu-features`/`cloudflared`）时报 `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: ...`，随后 `dsh: pnpm failed in profile directory ...`；`profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 被 pnpm 写成占位符 `包名: set this to true or false`（非布尔，无效）。
@@ -272,6 +272,12 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 - 次生坑：pnpm 11 不再读 `npm_config_*` 环境变量（只认 `pnpm_config_*`），旧代码 `npm_config_minimum_release_age: '0'` 实为无效——24h 发布龄门槛仍开着，会拒绝刚发布的插件。
 - **做法**：`electron/modules/dsh/dsh-manager.ts` 新增 `healProfileBuildPolicy()`，在 `healProfile()`（启动时）与 `pluginAction()` 首跑前把 `profiles/web/pnpm-workspace.yaml` 幂等重写为含 `dangerouslyAllowAllBuilds: true` + `minimumReleaseAge: 0`（保留 `packages`/`nodeLinker`/`autoInstallPeers`，移除失效的 `allowBuilds` 占位符块）；`childEnv()` 删除无效的 `npm_config_minimum_release_age`。`--allow-build` 重试保留为兜底，另加一步「再次固化策略后重试」。
 - **不要**试图靠 pnpm 的 `allowBuilds` 占位符自愈（值为字符串无效）；策略一律写进 yaml 的 `dangerouslyAllowAllBuilds`。
+
+### 7. DSH 托管迁移到 utilityProcess + `--expose-internals`（v1.9+）
+- 背景：DSH 服务进程与插件操作改为 `utilityProcess.fork` 直接加载 `@deepseek-ai/dsh/lib/bin.js`（Electron 内置 Node 24 满足 DSH `^22.19 || >=24`），不再随包分发独立 `node.exe`（`build-dsh.mjs` 停下载、`copy-dsh-runtime.cjs` 白名单去掉、`validate-dsh-integ.mjs` 退役）；端口改由主进程 `net` 预占后以 `--port <p>` 传入（`utilityProcess` 无 stdout，`--port 0` + 正则解析已弃）。
+- **关键坑**：DSH 的 `cordis-plugin-loader` 需要访问 `internal/modules/esm/loader`。Electron 的 Node **不暴露** `node-addon-require-builtin` 依赖的 V8 符号（`GetAlignedPointerFromEmbedderData`），导致 HMR 服务报 `--expose-internals is required for HMR service`、启动即退。**解法**：fork 时传 `execArgv: ['--expose-internals']`（服务进程与插件操作两处都要），loader 走 execArgv 分支成功。Electron utility 进程里 `--expose-internals` 可用。
+- **dev 陷阱**：gitignored 的本地 `resources/dsh/node_modules` 是活的 pnpm 树，与共享 store 交互时可能被清空 `@deepseek-ai/*`（表现为 bin.js 消失、`ERR_MODULE_NOT_FOUND`）。打包产物是 `cpSync` 的真实文件，**生产不受影响**。`validate-dsh-utility.mjs` 检测到即跳过启动类测试并提示 `npm run build:dsh` 恢复，不误报失败。
+- `docs/dsh-integration-plan.md` 的 TUI 时代章节（node-pty/xterm、独立 node.exe）已被 Web UI + utilityProcess 方案取代。
 
 ### 检查清单
 - [ ] `dist:ci` script 包含 `--publish=never`

@@ -1,27 +1,26 @@
 // scripts/build-dsh.mjs
 // ===================================================================
 // 预装 DSH（DeepSeek Harness）官方 Web UI 运行时到 resources/dsh：
-//   - 自带 console-subsystem node.exe（与系统 Node 隔离）
 //   - 用 pnpm --node-linker=hoisted 安装 @deepseek-ai/dsh（真实文件，便于打包）
 //   - `dsh web` 是普通 HTTP 服务，无需 profile 初始化（不同于 TUI 方案）
 //   - 自带 pnpm standalone exe（bin/pnpm.exe）：供运行期 `dsh plugin`
 //     安装/卸载 profile 插件用（dsh plugin 是 pnpm 转发器，依赖 PATH）
+//   - DSH 服务端/插件操作由应用在 Electron utilityProcess 里加载 @deepseek-ai/dsh
+//     （Electron 内置 Node 24 满足 DSH `^22.19 || >=24`），不再随包分发独立 node.exe
 //
 // 用法: npm run build:dsh
-//   DSH_NODE_VERSION 可覆盖 node 版本（默认 24）
 //   DSH_PNPM_VERSION 可覆盖 pnpm 版本（默认 11.23.0）
 //   DSH_VERSION    可覆盖 @deepseek-ai/dsh 目标版本（默认 0.1.1-rc.2）
 //   DSH_FORCE      设为 1 强制重装
 // ===================================================================
 
 import { spawnSync } from 'child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, copyFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 
 const appPath = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const DSH_DIR = join(appPath, 'resources', 'dsh')
-const NODE_VERSION = process.env.DSH_NODE_VERSION || '24'
 const PNPM_VERSION = process.env.DSH_PNPM_VERSION || '11.23.0'
 // 当前 npm latest/next 发布版；dsh-web-all@0.3.6 等插件要求 >=0.1.1-rc.1
 const DSH_VERSION = process.env.DSH_VERSION || '0.1.1-rc.2'
@@ -48,46 +47,6 @@ function findPnpm() {
     if (spawnSync(c, ['--version'], { stdio: 'ignore' }).status === 0) return c
   }
   return null
-}
-
-function downloadNode() {
-  const nodeExe = join(DSH_DIR, 'node.exe')
-  if (existsSync(nodeExe) && !FORCE) {
-    console.log('[build-dsh] node.exe 已存在，跳过下载')
-    return
-  }
-  const arch = 'x64'
-  const url = `https://nodejs.org/dist/v${NODE_VERSION}.0.0/node-v${NODE_VERSION}.0.0-win-${arch}.zip`
-  console.log(`[build-dsh] 下载 Node v${NODE_VERSION}.0.0: ${url}`)
-  const tmpZip = join(DSH_DIR, 'node.zip')
-  if (process.platform === 'win32') {
-    run('powershell', [
-      '-NoProfile',
-      '-Command',
-      `Invoke-WebRequest -Uri "${url}" -OutFile "${tmpZip}"`,
-    ])
-    console.log('[build-dsh] 解压 node.zip ...')
-    const tmp = join(DSH_DIR, '_node_tmp')
-    if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true })
-    mkdirSync(tmp, { recursive: true })
-    run('powershell', [
-      '-NoProfile',
-      '-Command',
-      `Expand-Archive -Force -Path "${tmpZip}" -DestinationPath "${tmp}"`,
-    ])
-    const inner = join(tmp, `node-v${NODE_VERSION}.0.0-win-${arch}`)
-    copyFileSync(join(inner, 'node.exe'), nodeExe)
-    rmSync(tmp, { recursive: true, force: true })
-    rmSync(tmpZip, { force: true })
-  } else {
-    run('curl', ['-L', '-o', tmpZip, url])
-    run('unzip', ['-o', tmpZip, '-d', DSH_DIR])
-    const inner = join(DSH_DIR, `node-v${NODE_VERSION}.0.0-win-${arch}`)
-    copyFileSync(join(inner, 'node.exe'), nodeExe)
-    rmSync(inner, { recursive: true, force: true })
-    rmSync(tmpZip, { force: true })
-  }
-  console.log('[build-dsh] node.exe 就绪')
 }
 
 /** 读取已安装的 @deepseek-ai/dsh 版本；读不到返回 null */
@@ -183,7 +142,6 @@ function downloadPnpm() {
 
 function main() {
   mkdirSync(DSH_DIR, { recursive: true })
-  downloadNode()
   // pnpm.exe 必须先于 installDsh 落位：findPnpm 首选它，CI 无系统 pnpm 也能装
   downloadPnpm()
   installDsh()

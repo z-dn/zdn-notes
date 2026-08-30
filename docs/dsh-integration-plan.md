@@ -7,9 +7,13 @@
 > **关键修正**：
 > - DSH 官方以 **Web UI** 为主（`dsh --profile web`，默认 http://127.0.0.1:3080）；
 >   TUI 是社区插件，本项目采用官方 Web UI。
-> - 不能用 `electron.exe` 的 Node 跑 DSH 服务端（Electron 是 GUI 子系统，且无 CLI 入口）；
->   改为随包分发一个 console-subsystem 的 `node.exe` 来跑 `dsh --profile web` HTTP 服务，
->   渲染层用 `<webview>` 加载 loopback 地址。Web UI 是普通 HTTP 服务，**不需要 TTY/node-pty**。
+> - **方案变更（2026-08-30 第三次修订）**：DSH 服务端与插件操作统一迁移到 **Electron
+>   `utilityProcess`**（`utilityProcess.fork` 直接加载 `@deepseek-ai/dsh/lib/bin.js`，跑在
+>   Electron 内置 Node 24 上），**不再随包分发独立 console-subsystem `node.exe`**（省 ~30-88MB）。
+>   早期「electron.exe 的 Node 拿不到 TTY → 必须用 node.exe」的结论只对 TUI 成立；Web profile
+>   是普通 HTTP 服务，不需要 TTY，utilityProcess 完全可行。
+> - **关键坑**：DSH 的 `cordis-plugin-loader` 要访问 Node 内部模块，Electron 的 Node 不暴露
+>   `node-addon-require-builtin` 依赖的 V8 符号，必须 fork 时传 `execArgv: ['--expose-internals']`。
 
 > ⚠️ **方案变更（2026-08-21 二次修订）**：本文档第 2~5 节的「架构 / 依赖 / 构建 / 运行时流程 / 风险表」
 > 描述的是**早期的 TUI 原型**（xterm.js + node-pty），已被官方 Web UI 嵌入方案取代。
@@ -17,18 +21,24 @@
 > 关键差异：无 node-pty / xterm / TUI 插件；启动命令为 `dsh --profile web`；渲染用 `<webview>`。
 > 第 1 节目标、技术约束表（已更新）、P0 版本验证结论仍有效。
 >
-> **当前实现状态（2026-08-24）**：
+> **当前实现状态（2026-08-30）**：
 > - 模块默认启用（feature flag `module.dsh`，optional）；侧边栏 tab「DSH」经 `useFeature('dsh')` 控制。
-> - 就绪判定 = 输出解析端口（忽略占位 0）+ HTTP 探测通过，总超时 15s（`DshManager.start`）。
-> - 状态变化经 `dsh:statusChanged` 事件推送渲染层，无轮询；停止用 `taskkill /T /F` 清理整棵进程树。
-> - TUI 时代的一次性验证脚本（validate-dsh-pty/tty-electron/boot.mjs）已删除，仅保留 `validate-dsh-integ.mjs`。
+> - 服务端与插件操作经 `utilityProcess.fork(dshBin, [...], { execArgv: ['--expose-internals'] })` 托管
+>   （`DshManager.start` / `pluginAction`）；端口由主进程 `net` 预占 loopback 空闲端口后以 `--port <p>`
+>   传入，fork 后立即并发 HTTP 探测（不再解析 stdout）。
+> - 就绪判定 = HTTP 探测通过，总超时 60s（`DshManager.start`）。
+> - 状态变化经 `dsh:statusChanged` 事件推送渲染层，无轮询；停止用 `child.kill()` + `taskkill /T /F`
+>   清理整棵进程树（node-pty pwsh 孙进程）。
 > - **应用内插件管理**：随包分发 pnpm standalone exe（`resources/dsh/bin/pnpm.exe`，v11 系列），
->   主进程用自带 node.exe 跑 `bin.js plugin --profile web add/remove <spec>`（PATH 前置自带目录），
+>   utilityProcess 里跑 `bin.js plugin --profile web add/remove <spec>`（PATH 前置自带 bin 目录），
 >   日志经 `dsh:pluginLog`/`dsh:pluginDone` 流式推送；UI 入口在 DSH 空状态卡片「管理插件」。
 >   自动修复链：ERR_PNPM_UNEXPECTED_STORE（清 node_modules 重试）→
 >   ERR_PNPM_IGNORED_BUILDS（解析全部被拦包名，--allow-build 放行重试）→
 >   瞬时网络错误（原样重试一次）；无论成败操作后执行 `reconcileBundles()` 双向对账，
 >   app 启动时 `healProfile()` 自愈历史半成品状态，根治「装了没进加载层」。
+> - 冒烟测试：`npm run validate:dsh`（`scripts/validate-dsh-utility.mjs`，真实 Electron 运行时里
+>   utilityProcess 拉起 DSH → 探测 200 → 损坏 profile 重建回归 → pnpm 策略固化断言），
+>   取代退役的 `validate-dsh-integ.mjs`。
 >
 > **Shell 访问说明**：DSH Web UI 内置 shell 工具栈——Windows 启用 `pwsh` 工具
 > （`dsh-tool-pwsh` + `dsh-pwsh-sandbox`），bash 工具在 win32 禁用；沙盒默认
