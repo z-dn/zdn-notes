@@ -17,7 +17,7 @@
 
 import { app, utilityProcess } from 'electron'
 import { spawnSync } from 'child_process'
-import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync, readdirSync, lstatSync, unlinkSync } from 'fs'
 import { createServer } from 'net'
 import { delimiter, join } from 'path'
 import { tmpdir } from 'os'
@@ -54,9 +54,31 @@ function killTree(child) {
   }
 }
 
+/** 递归 unlink 目录树内所有 junction/symlink（只删 reparse point，不穿透目标） */
+function unlinkJunctions(dir) {
+  if (!existsSync(dir)) return
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name)
+    let st
+    try {
+      st = lstatSync(p)
+    } catch {
+      continue
+    }
+    if (st.isSymbolicLink()) unlinkSync(p)
+    else if (st.isDirectory()) unlinkJunctions(p)
+  }
+}
+
+/**
+ * junction-安全删除：Electron 的 fs.rmSync(recursive) 会穿透目录 junction 删除目标内容。
+ * DSH home 的 profiles/node_modules/@deepseek-ai/* 是指向 resources/dsh base 的 junction，
+ * 直接递归删除会清空 base（见 AGENTS.md dev 陷阱）。先 unlink 全部 junction 再删。
+ */
 function safeRm(dir) {
   for (let i = 0; i < 3; i++) {
     try {
+      unlinkJunctions(dir)
       rmSync(dir, { recursive: true, force: true })
       return
     } catch {

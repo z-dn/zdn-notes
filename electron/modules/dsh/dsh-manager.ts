@@ -182,7 +182,16 @@ class DshManager {
   isReady(): DshReadyInfo {
     const { dshBin } = this.resolvePaths()
     if (!existsSync(dshBin)) {
-      return { ready: false, reason: `未找到 DSH 入口: ${dshBin}` }
+      // 区分「base 目录存在但 @deepseek-ai 被清空」（DSH home 的 junction 被递归删除
+      // 会穿透清空 base，见 AGENTS.md dev 陷阱）与「从未 build 过」，给可操作提示
+      const dshPkgDir = join(join(this.findBase(), 'node_modules', '@deepseek-ai', 'dsh'))
+      if (existsSync(dshPkgDir)) {
+        return {
+          ready: false,
+          reason: `本地 DSH 运行时被清空（${dshPkgDir}），可能由递归删除 DSH home 穿透 junction 导致，请运行 npm run build:dsh 恢复`,
+        }
+      }
+      return { ready: false, reason: `未找到 DSH 入口: ${dshBin}（开发环境请运行 npm run build:dsh）` }
     }
     return { ready: true }
   }
