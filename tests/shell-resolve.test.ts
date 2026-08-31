@@ -31,8 +31,20 @@ describe('resolveSidebarShellOverride', () => {
     expect(resolveSidebarShellOverride({ platform: 'linux', env: {} })).toBeUndefined()
   })
 
-  it('returns undefined when no pwsh exists anywhere', () => {
-    expect(resolveSidebarShellOverride({ platform: 'win32', env: { PATH: 'C:\\no\\pwsh' } })).toBeUndefined()
+  it('returns inbox powershell full path when no pwsh exists but SystemRoot inbox exists', () => {
+    const systemRoot = makeDir()
+    const inbox = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    fs.mkdirSync(path.dirname(inbox), { recursive: true })
+    makeReal(inbox)
+    const env = { PATH: 'C:\\no\\pwsh', SystemRoot: systemRoot }
+    expect(resolveSidebarShellOverride({ platform: 'win32', env })).toBe(inbox)
+  })
+
+  it('never returns undefined on win32: bare powershell.exe as last resort', () => {
+    // 无任何 pwsh、收件箱也不存在 → 兜底裸名（node-pty 对裸名的解析由插件/系统完成，
+    // 但覆盖值始终非 undefined，避免插件默认解析再次退化）
+    const env = { PATH: 'C:\\no\\pwsh', SystemRoot: makeDir() }
+    expect(resolveSidebarShellOverride({ platform: 'win32', env })).toBe('powershell.exe')
   })
 
   it('returns the first REAL pwsh even when a Store alias stub comes first', () => {
