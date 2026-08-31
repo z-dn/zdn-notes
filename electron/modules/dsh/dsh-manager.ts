@@ -1,6 +1,7 @@
 import { app, utilityProcess, type UtilityProcess } from 'electron'
 import { delimiter, join } from 'path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { execFileSync } from 'child_process'
 import { createServer, type AddressInfo } from 'net'
 import {
   computeBundleSync,
@@ -11,6 +12,7 @@ import {
   type DshPluginInfo,
 } from './plugin-spec'
 import { resolveSidebarShellOverride } from './shell-resolve'
+import { expandPathVars, mergePathDirs } from './path-env'
 
 // ===================================================================
 // DshManager —— 主进程内管理 DSH Web UI 子进程的生命周期。
@@ -74,6 +76,36 @@ function formatUtilityError(d: unknown): string {
   if (typeof o.location === 'string' && o.location) parts.push(o.location)
   if (typeof o.report === 'string' && o.report) parts.push(o.report)
   return parts.join('\n') || '未知错误'
+}
+
+let cachedFullPath: string | null = null
+/**
+ * 从注册表读取系统+用户 PATH 并展开 %VAR%（进程内缓存）。
+ * 应用可能被裁剪 PATH 的环境启动（opencode 桌面子进程不含系统/用户 PATH），
+ * 导致 DSH server 缺 git / vfox 等工具目录；这里兜底补全。
+ */
+function fullUserPath(): string {
+  if (cachedFullPath !== null) return cachedFullPath
+  const parts: string[] = []
+  const keys = [
+    'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment',
+    'HKCU\\Environment',
+  ]
+  for (const key of keys) {
+    try {
+      const r = execFileSync('reg', ['query', key, '/v', 'Path'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 5000,
+      })
+      const m = r.match(/\bPath\s+REG_(?:EXPAND_)?SZ\s+(.+)/i)
+      if (m) parts.push(m[1])
+    } catch {
+      /* reg 不可用则跳过该段 */
+    }
+  }
+  cachedFullPath = expandPathVars(parts.join(';'), process.env as Record<string, string | undefined>)
+  return cachedFullPath
 }
 
 class DshManager {
@@ -340,9 +372,11 @@ class DshManager {
     env.NODE_PATH = join(base, 'node_modules')
     // pnpm 生命周期脚本（node buildcheck.js / node-gyp rebuild 等）需要 PATH 上有 `node`：
     // 用 electron-as-node 垫片充当（零额外二进制、ABI 与 DSH 运行时同为 Electron Node、GUI 子系统不开控制台窗口）。
-    // node-bin 前置、bin（pnpm.exe）次之。
+    // node-bin 前置、bin（pnpm.exe）次之；末尾合并系统+用户注册表 PATH，补全被启动上下文裁剪的工具目录
+    // （git / vfox 等，否则终端 vfox 报错、git 面板认不出仓库——已实测 opencode 子进程 PATH 缺这两者）。
     const nodeBin = this.ensureNodeShim(home)
-    env.PATH = `${nodeBin}${delimiter}${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
+    const merged = mergePathDirs(env.PATH ?? '', fullUserPath())
+    env.PATH = `${nodeBin}${delimiter}${join(base, 'bin')}${delimiter}${merged}`
     // 兼容性加固：dsh-better-sidebar 的 defaultShell 会命中 Store 的
     // WindowsApps pwsh 别名桩（0 字节 reparse point），node-pty 无法 spawn，
     // 终端报 "File not found"。此处把它解析为确定可用的 shell。
