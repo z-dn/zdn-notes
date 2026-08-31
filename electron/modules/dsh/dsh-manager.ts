@@ -419,6 +419,56 @@ class DshManager {
     })
   }
 
+  /** DSH server PID 锁文件（放在 home 里，随数据目录迁移）。 */
+  private pidLockFile(): string {
+    return join(this.resolvePaths().home, 'dsh-server.pid')
+  }
+
+  /**
+   * 启动前清理上次会话残留的 DSH server。应用被强制退出（crash/强杀）时，
+   * utility 进程可能孤儿化并继续持有 DSH 内部锁（如 dsh-client-ui-task-board 的
+   * ledger lock），新实例启动会报 "already owned by process <pid>" 而失败。
+   * 读锁文件里的 pid，进程仍存活则整树杀之。
+   */
+  private cleanupStaleServer(): void {
+    let pid: number
+    try {
+      pid = Number(readFileSync(this.pidLockFile(), 'utf8').trim())
+    } catch {
+      return // 无锁 / 不可读
+    }
+    if (!Number.isInteger(pid) || pid <= 0) return
+    try {
+      process.kill(pid, 0) // 探活：不存在抛 ESRCH
+    } catch {
+      return // 进程已退出，无需清理
+    }
+    try {
+      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
+      console.warn(`[dsh] 已清理上次会话残留的 DSH server (pid ${pid})`)
+    } catch {
+      /* 已退出或无权 */
+    }
+  }
+
+  /** 写/清 DSH server PID 锁（仅本实例 fork 出的 server 才写）。 */
+  private writePidLock(pid: number): void {
+    try {
+      writeFileSync(this.pidLockFile(), String(pid))
+    } catch {
+      /* 锁写入失败不影响运行 */
+    }
+  }
+  private clearPidLock(pid: number): void {
+    try {
+      if (readFileSync(this.pidLockFile(), 'utf8').trim() === String(pid)) {
+        rmSync(this.pidLockFile(), { force: true })
+      }
+    } catch {
+      /* noop */
+    }
+  }
+
   /** HTTP 探测：能建立连接并返回响应即视为服务就绪 */
   private async probe(port: number): Promise<boolean> {
     try {
@@ -439,6 +489,8 @@ class DshManager {
     if (!existsSync(dshBin)) return { ok: false, error: `未找到 DSH 入口: ${dshBin}` }
     try {
       mkdirSync(home, { recursive: true })
+      // 清理上次会话残留的 DSH server（应用强退可能留下孤儿进程占用 task-board 等锁）
+      this.cleanupStaleServer()
       const apiKey = opts?.apiKey || process.env.DEEPSEEK_API_KEY || ''
       const extra: Record<string, string> = { TERM: 'xterm-256color' }
       if (apiKey) extra.DEEPSEEK_API_KEY = apiKey
@@ -466,6 +518,7 @@ class DshManager {
       )
       this.child = child
 
+      let spawnedPid: number | undefined
       let stderrBuf = ''
       child.on('error', (e) => {
         stderrBuf += formatUtilityError(e) + '\n'
@@ -483,6 +536,7 @@ class DshManager {
         if (line) console.error('[dsh:stderr]', line)
       })
       child.on('exit', (code) => {
+        if (spawnedPid !== undefined) this.clearPidLock(spawnedPid)
         if (this.child !== child) return // 已被 stop() 主动接管
         this.child = null
         this.port = null
@@ -490,9 +544,13 @@ class DshManager {
         if (code && code !== 0) console.warn(`[dsh] Web UI 退出 code=${code}`)
       })
 
-      // 等真实 spawn 后再起超时窗口，避免 fork/模块加载前的空转计入
+      // 等真实 spawn 后写 PID 锁并起超时窗口，避免 fork/模块加载前的空转计入
       await new Promise<void>((resolve) => {
-        child.once('spawn', () => resolve())
+        child.once('spawn', () => {
+          spawnedPid = child.pid
+          if (spawnedPid !== undefined) this.writePidLock(spawnedPid)
+          resolve()
+        })
         child.once('exit', () => resolve())
       })
 
@@ -570,6 +628,7 @@ class DshManager {
     this.child = null
     this.port = null
     this.emit()
+    if (child.pid !== undefined) this.clearPidLock(child.pid)
     try {
       child.kill()
     } catch {
