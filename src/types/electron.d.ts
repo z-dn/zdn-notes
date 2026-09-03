@@ -165,6 +165,10 @@ declare global {
       ): () => void
       onDataChanged(cb: () => void): () => void
       onReminderOpen(cb: (taskId: string) => void): () => void
+      onReminderNotificationFailed(cb: (taskId: string) => void): () => void
+
+      checkNotificationPermission(): Promise<{ supported: boolean; granted: boolean }>
+      openNotificationSettings(): Promise<void>
 
       saveImageFromData(dataUri: string): Promise<string>
       pickAndSaveImage(): Promise<string | null>

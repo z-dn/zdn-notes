@@ -1,8 +1,9 @@
-import { app, Notification } from 'electron'
+import { app, Notification, shell } from 'electron'
 import { join } from 'path'
 import { getMainWindow } from '../../main/window-store'
 import { getAllSettings, setSetting } from '../../main/database/settings-dao'
 import { startReminderService } from '../../main/reminder-service'
+import { ipcMain } from 'electron'
 import type { FeatureModule, MainModuleContext } from '../../core/contracts'
 import type { Task } from '@/types/task'
 
@@ -47,6 +48,63 @@ function loadNotifiedMap(): Record<string, number> {
 }
 
 let service: ReturnType<typeof startReminderService> | null = null
+let lastNotificationFailed = false
+
+function registerIpc(_ctx: MainModuleContext): void {
+  ipcMain.handle('notification:checkPermission', async () => {
+    const supported = Notification.isSupported()
+    if (!supported) return { supported: false, granted: false }
+
+    // 基于最近一次真实通知的结果判断
+    if (lastNotificationFailed) {
+      return { supported: true, granted: false }
+    }
+
+    // 如果没有失败记录，发送测试通知检测
+    return new Promise<{ supported: boolean; granted: boolean }>((resolve) => {
+      let resolved = false
+      const test = new Notification({
+        title: '通知权限检测',
+        body: '如果看到此消息，说明通知权限正常',
+        silent: false,
+      })
+
+      test.on('failed', () => {
+        if (!resolved) {
+          resolved = true
+          lastNotificationFailed = true
+          resolve({ supported: true, granted: false })
+        }
+      })
+
+      test.on('show', () => {
+        // show 触发不代表成功，等 1秒看是否有 failed
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true
+            lastNotificationFailed = false
+            test.close()
+            resolve({ supported: true, granted: true })
+          }
+        }, 1000)
+      })
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          test.close()
+          resolve({ supported: true, granted: false })
+        }
+      }, 3000)
+
+      test.show()
+    })
+  })
+
+  ipcMain.handle('notification:openSettings', async () => {
+    shell.openExternal('ms-settings:notifications')
+  })
+}
 
 function onStart(ctx: MainModuleContext): void {
   app.setAppUserModelId(APP_USER_MODEL_ID)
@@ -57,12 +115,21 @@ function onStart(ctx: MainModuleContext): void {
     getNotifiedMap: loadNotifiedMap,
     setNotifiedMap: (map) => setSetting(NOTIFIED_SETTINGS_KEY, JSON.stringify(map)),
     onDue: (task) => {
+      console.log('[reminder] firing for task:', task.id, task.title, 'reminderTime:', task.reminderTime)
       const notification = new Notification({
         title: '待办提醒',
         body: formatBody(task),
         icon: iconPath(),
       })
+      notification.on('show', () => console.log('[reminder] notification shown for:', task.id))
+      notification.on('failed', (_e, error) => {
+        console.error('[reminder] notification failed for:', task.id, error)
+        lastNotificationFailed = true
+        ctx.send('reminder:notificationFailed', task.id)
+      })
       notification.on('click', () => {
+        console.log('[reminder] notification clicked for:', task.id)
+        notification.close()
         const win = getMainWindow()
         if (win) {
           if (win.isMinimized()) win.restore()
@@ -86,6 +153,7 @@ export const notificationsModule: FeatureModule = {
   name: '任务提醒通知',
   kind: 'optional',
   defaultEnabled: true,
+  registerIpc,
   onStart,
   onShutdown,
 }

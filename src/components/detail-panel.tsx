@@ -18,6 +18,16 @@ import type { Priority } from '@/types/task'
 
 const PRIORITY_OPTIONS: Priority[] = ['P0', 'P1', 'P2', 'P3']
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
+  value: String(i).padStart(2, '0'),
+  label: String(i).padStart(2, '0'),
+}))
+
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => {
+  const m = i * 5
+  return { value: String(m).padStart(2, '0'), label: String(m).padStart(2, '0') }
+})
+
 export function DetailPanel() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
   const updateTask = useTaskStore((s) => s.updateTask)
@@ -456,14 +466,28 @@ export function DetailPanel() {
               />
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs text-muted-foreground/60">时间</span>
-                <input
-                  type="time"
-                  value={reminderTime}
-                  onChange={(e) => {
-                    setReminderTime(e.target.value)
-                    applyReminder(reminderDate, e.target.value)
+                <Select
+                  value={reminderTime.split(':')[0] || '09'}
+                  onChange={(h) => {
+                    const m = reminderTime.split(':')[1] || '00'
+                    const t = `${h}:${m}`
+                    setReminderTime(t)
+                    applyReminder(reminderDate, t)
                   }}
-                  className="h-7 flex-1 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  options={HOUR_OPTIONS}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground">:</span>
+                <Select
+                  value={reminderTime.split(':')[1] || '00'}
+                  onChange={(m) => {
+                    const h = reminderTime.split(':')[0] || '09'
+                    const t = `${h}:${m}`
+                    setReminderTime(t)
+                    applyReminder(reminderDate, t)
+                  }}
+                  options={MINUTE_OPTIONS}
+                  className="flex-1"
                 />
               </div>
             </PopoverContent>

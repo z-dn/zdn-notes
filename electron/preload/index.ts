@@ -54,6 +54,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('reminder:open', handler)
     return () => ipcRenderer.removeListener('reminder:open', handler)
   },
+  onReminderNotificationFailed: (cb: (taskId: string) => void) => {
+    const handler = (_e: unknown, taskId: string) => cb(taskId)
+    ipcRenderer.on('reminder:notificationFailed', handler)
+    return () => ipcRenderer.removeListener('reminder:notificationFailed', handler)
+  },
+
+  checkNotificationPermission: () => ipcRenderer.invoke('notification:checkPermission'),
+  openNotificationSettings: () => ipcRenderer.invoke('notification:openSettings'),
   saveImageFromData: (dataUri: string) => ipcRenderer.invoke('image:saveFromData', dataUri),
   pickAndSaveImage: () => ipcRenderer.invoke('image:pickAndSave'),
   deleteImage: (url: string) => ipcRenderer.invoke('image:delete', url),

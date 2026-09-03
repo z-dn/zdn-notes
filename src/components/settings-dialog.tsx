@@ -34,6 +34,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   const [dataDir, setDataDir] = useState('')
   const [dataDirWarning, setDataDirWarning] = useState<string | null>(null)
   const [inboxDir, setInboxDir] = useState('')
+  const [notificationPermission, setNotificationPermission] = useState<{ supported: boolean; granted: boolean } | null>(null)
   const { contentRef, overlayRef, mounted, playClose } = useFlipDialog(open, onClose)
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
     window.electronAPI.getDataDir().then(setDataDir)
     window.electronAPI.getDataDirFallback().then(setDataDirWarning)
     window.electronAPI.getInboxDir().then(setInboxDir)
+    window.electronAPI.checkNotificationPermission().then(setNotificationPermission)
   }, [])
 
   useEffect(() => {
@@ -289,7 +291,30 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
                 className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <span className="text-xs font-medium text-muted-foreground">启用到期提醒</span>
+              <button
+                onClick={async () => {
+                  const result = await window.electronAPI.checkNotificationPermission()
+                  setNotificationPermission(result)
+                  if (result.granted) toast('通知权限正常')
+                }}
+                className="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                检测权限
+              </button>
             </label>
+            {notificationPermission && !notificationPermission.granted && (
+              <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2">
+                <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                  ⚠ 系统通知权限已禁用，提醒功能将无法正常工作
+                </p>
+                <button
+                  onClick={() => window.electronAPI.openNotificationSettings()}
+                  className="mt-1 text-xs text-primary hover:underline"
+                >
+                  打开 Windows 通知设置 →
+                </button>
+              </div>
+            )}
           </div>
 
           <div>
