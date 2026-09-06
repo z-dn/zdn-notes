@@ -60,16 +60,46 @@
 
   --animate-fade-slide-up: fade-slide-up var(--duration-base) var(--ease-out) both;
   --animate-fade-out: fade-out var(--duration-base) var(--ease-in) both;
+  --animate-panel-up: panel-up var(--duration-medium) var(--ease-out) both;
+  --animate-panel-down: panel-down var(--duration-medium) var(--ease-in) both;
 }
 
 @keyframes fade-slide-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes panel-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes panel-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

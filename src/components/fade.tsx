@@ -17,9 +17,18 @@ interface FadeBlockProps {
   children: ReactNode
   className?: string
   duration?: number
+  enterClass?: string
+  exitClass?: string
 }
 
-export function FadeBlock({ show, children, className, duration = 200 }: FadeBlockProps) {
+export function FadeBlock({
+  show,
+  children,
+  className,
+  duration = 200,
+  enterClass = 'animate-fade-slide-up',
+  exitClass = 'animate-fade-out',
+}: FadeBlockProps) {
   const suppress = useMotionSuppress()
   const mountSuppressRef = useRef(suppress)
   const [state, setState] = useState<'hidden' | 'shown' | 'leaving'>(show ? 'shown' : 'hidden')
@@ -48,7 +57,7 @@ export function FadeBlock({ show, children, className, duration = 200 }: FadeBlo
   const animateIn = !mountSuppressRef.current && state === 'shown'
 
   return (
-    <div className={cn(state === 'leaving' ? 'animate-fade-out' : animateIn ? 'animate-fade-slide-up' : '', className)}>
+    <div className={cn(state === 'leaving' ? exitClass : animateIn ? enterClass : '', className)}>
       {children}
     </div>
   )

@@ -11,8 +11,7 @@ function reloadCategories() {
 function cleanFilter(f: TaskFilter): TaskFilter | undefined {
   const out: TaskFilter = {}
   if (f.search) out.search = f.search
-  if (f.status) out.status = f.status
-  return out.search || out.status ? out : undefined
+  return out.search ? out : undefined
 }
 
 interface TaskStore {
@@ -23,6 +22,8 @@ interface TaskStore {
   expandedDescId: string | null
   expandedDescOrigin: { x: number; y: number; width: number; height: number } | null
   filters: TaskFilter
+  statusView: 'all' | 'todo' | 'done'
+  setStatusView: (view: 'all' | 'todo' | 'done') => void
   loadTasks: (silent?: boolean) => Promise<void>
   setFilter: (changes: Partial<TaskFilter>) => void
   createTask: (dto: CreateTaskDTO) => Promise<Task | null>
@@ -31,7 +32,12 @@ interface TaskStore {
   toggleDone: (id: string, currentStatus: string) => Promise<void>
   selectTask: (task: Task | null) => void
   toggleExpand: (id: string) => void
-  setExpandedDesc: (id: string | null, origin?: { x: number; y: number; width: number; height: number }) => void
+  expandAll: (ids: string[]) => void
+  collapseAll: () => void
+  setExpandedDesc: (
+    id: string | null,
+    origin?: { x: number; y: number; width: number; height: number },
+  ) => void
 }
 
 function api() {
@@ -46,6 +52,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   expandedDescId: null,
   expandedDescOrigin: null,
   filters: {},
+  statusView: 'all',
 
   loadTasks: async (silent = false) => {
     try {
@@ -64,6 +71,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set({ filters: next })
     get().loadTasks()
   },
+
+  setStatusView: (view) => set({ statusView: view }),
 
   createTask: async (dto) => {
     try {
@@ -90,8 +99,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const base = old ?? selectedTask
       if (!base) return
       const patched = { ...base, ...dto, updatedAt: Date.now() } as Task
-      const nextTasks =
-        idx !== -1 ? tasks.map((t) => (t.id === dto.id ? patched : t)) : tasks
+      const nextTasks = idx !== -1 ? tasks.map((t) => (t.id === dto.id ? patched : t)) : tasks
       const nextSelected = selectedTask?.id === dto.id ? patched : selectedTask
       set({ tasks: nextTasks, selectedTask: nextSelected })
       await api().taskUpdate(dto)
@@ -107,7 +115,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const { tasks } = get()
       const target = tasks.find((t) => t.id === id)
       if (!target) return
-      if (!(await showConfirm('确认删除', `确定要删除「${target.title}」及其所有子任务吗？`))) return
+      if (!(await showConfirm('确认删除', `确定要删除「${target.title}」及其所有子任务吗？`)))
+        return
       await api().taskDelete(id)
       reloadCategories()
       get().loadTasks()
@@ -137,5 +146,10 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set({ expandedIds: next })
   },
 
-  setExpandedDesc: (id, origin) => set({ expandedDescId: id, ...(origin ? { expandedDescOrigin: origin } : {}) }),
+  expandAll: (ids) => set({ expandedIds: new Set(ids) }),
+
+  collapseAll: () => set({ expandedIds: new Set() }),
+
+  setExpandedDesc: (id, origin) =>
+    set({ expandedDescId: id, ...(origin ? { expandedDescOrigin: origin } : {}) }),
 }))

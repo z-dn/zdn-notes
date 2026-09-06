@@ -1,22 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTaskStore } from '@/stores/task-store'
-import type { Status } from '@/types/task'
 
-const STATUS_OPTIONS: { label: string; value: Status | undefined }[] = [
-  { label: '全部', value: undefined },
+const STATUS_OPTIONS: { label: string; value: 'all' | 'todo' | 'done' }[] = [
+  { label: '全部', value: 'all' },
   { label: '待办', value: 'todo' },
   { label: '已完成', value: 'done' },
 ]
 
 export function FilterBar() {
   const filters = useTaskStore((s) => s.filters)
+  const statusView = useTaskStore((s) => s.statusView)
+  const setStatusView = useTaskStore((s) => s.setStatusView)
   const setFilter = useTaskStore((s) => s.setFilter)
   const [localSearch, setLocalSearch] = useState(filters.search ?? '')
   const [expanded, setExpanded] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const hasActiveFilter = !!filters.search || !!filters.status
+  const hasActiveFilter = !!filters.search || statusView !== 'all'
 
   useEffect(() => {
     setLocalSearch(filters.search ?? '')
@@ -44,7 +45,8 @@ export function FilterBar() {
 
   function handleClear() {
     setLocalSearch('')
-    setFilter({ search: undefined, status: undefined })
+    setFilter({ search: undefined })
+    setStatusView('all')
     setExpanded(false)
   }
 
@@ -65,7 +67,13 @@ export function FilterBar() {
         }`}
         title="筛选"
       >
-        <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.5}>
+        <svg
+          viewBox="0 0 16 16"
+          className="size-3.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+        >
           <circle cx="6.5" cy="6.5" r="4.5" />
           <line x1="10" y1="10" x2="14" y2="14" />
         </svg>
@@ -87,9 +95,9 @@ export function FilterBar() {
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.label}
-              onClick={() => setFilter({ status: opt.value })}
+              onClick={() => setStatusView(opt.value)}
               className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
-                (opt.value ?? undefined) === (filters.status ?? undefined)
+                opt.value === statusView
                   ? 'bg-accent text-foreground font-medium'
                   : 'text-muted-foreground hover:text-foreground'
               }`}

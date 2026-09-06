@@ -314,7 +314,7 @@ export default function App() {
                       className="absolute inset-0"
                       render={(catId) => (
                         <div
-                          className={`h-full overflow-y-auto p-3 transition-all duration-300 ease-in-out ${
+                          className={`h-full p-3 transition-all duration-300 ease-in-out ${
                             expandedDescId
                               ? 'opacity-0 -translate-y-1 pointer-events-none'
                               : 'opacity-100 translate-y-0'
