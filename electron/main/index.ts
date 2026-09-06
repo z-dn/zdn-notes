@@ -60,6 +60,11 @@ if (mcpArgs.includes('--zdn-mcp-stdio')) {
       app.exit(1)
     })
 } else {
+  // Windows 任务栏按 AppUserModelID 归组并显示应用图标；必须在窗口创建前设置
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.zdn.notes')
+  }
+
   const gotTheLock = app.requestSingleInstanceLock()
 
   if (!gotTheLock) {
@@ -90,12 +95,6 @@ app.on('window-all-closed', () => {
   // 托盘驻留：所有窗口关闭后应用继续在后台运行（MCP/收件夹/更新等）。
   // 真正退出只经托盘菜单「退出」（触发 before-quit 清理）。
 })
-
-// Windows 任务栏按 AppUserModelID 归组并显示应用图标；
-// 必须在窗口创建前设置，且不依赖 notifications 模块是否启用。
-if (process.platform === 'win32') {
-  app.setAppUserModelId('com.zdn.notes')
-}
 
 app.on('before-quit', () => {
   if (shell) shell.shutdown()

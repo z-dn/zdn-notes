@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
+import { readFileSync } from 'fs'
 import { getMainWindow, setMainWindow } from '../../main/window-store'
 import { getDataDir } from '../../main/data-location'
 import { loadConfig, configFileForDataDir } from '../../mcp/config'
@@ -11,13 +12,21 @@ import type { FeatureModule, MainModuleContext } from '../../core/contracts'
 let tray: Tray | null = null
 let quitting = false
 
-function trayIconPath(): string {
-  // Windows 上用 .ico（多分辨率，任务栏/窗口/托盘都能正确显示），其他平台用 .png
-  const ext = process.platform === 'win32' ? 'ico' : 'png'
+function iconBasePath(): string {
   if (app.isPackaged) {
-    return join(process.resourcesPath, `icon.${ext}`)
+    return process.resourcesPath
   }
-  return join(__dirname, `../../resources/icon.${ext}`)
+  return join(__dirname, '../../resources')
+}
+
+function trayIconPath(): string {
+  const ext = process.platform === 'win32' ? 'ico' : 'png'
+  return join(iconBasePath(), `icon.${ext}`)
+}
+
+/** 窗口/任务栏图标：统一用 .png（nativeImage 对 .ico 的 setIcon 在 Windows 上不可靠） */
+function windowIconPath(): string {
+  return join(iconBasePath(), 'icon.png')
 }
 
 function showMainWindow(): void {
@@ -89,13 +98,24 @@ export function createAppWindow(viewId?: string): BrowserWindow | null {
     minHeight: 600,
     show: false,
     frame: false,
-    icon: trayIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       sandbox: true,
       webviewTag: true,
     },
   })
+
+  // Windows 任务栏图标：frameless 窗口构造函数的 icon 可能不生效，
+  // 在 ready-to-show 时从 buffer 创建 nativeImage 并显式 setIcon
+  if (process.platform === 'win32') {
+    win.on('ready-to-show', () => {
+      try {
+        const buf = readFileSync(windowIconPath())
+        const img = nativeImage.createFromBuffer(buf)
+        if (!img.isEmpty()) win.setIcon(img)
+      } catch { /* icon load failed, ignore */ }
+    })
+  }
 
   // 关窗不退出（仅主窗口）：隐藏到托盘；真正退出走托盘菜单（quitting=true）放行 close
   win.on('close', (e) => {
