@@ -91,3 +91,26 @@ export function computeBundleSync(
   })
   return { bundles: kept, changed }
 }
+
+/** web profile 必须声明的核心 bundle（webServer 服务来源；缺失即 v1.8.2 损坏） */
+export const CORE_WEB_BUNDLE = '@deepseek-ai/dsh-web-app'
+
+/**
+ * 判定 web profile 是否需要「删掉重建」（自愈触发条件）。
+ *
+ * 只依据 manifest（package.json 的 dsh.profile.bundles），不查物理 node_modules：
+ * 在此部署下核心包经 junction 回退层解析，`profiles/web/node_modules` 永远不存在，
+ * 按物理路径判断会恒真误删用户插件。仅当 bundles 缺失核心 web 包（真·v1.8.2
+ * 损坏）或 manifest 不可读时才需要重建。
+ */
+export function shouldRebuildWebProfile(raw: string | null): boolean {
+  if (!raw) return true
+  try {
+    const manifest = JSON.parse(raw) as { dsh?: { profile?: { bundles?: string[] } } }
+    const bundles = manifest.dsh?.profile?.bundles
+    if (!Array.isArray(bundles)) return true
+    return !bundles.includes(CORE_WEB_BUNDLE)
+  } catch {
+    return true
+  }
+}

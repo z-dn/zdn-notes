@@ -257,14 +257,14 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 
 ### 4. 打包产物可能静默丢失 DSH 运行时（v1.8.1 事故）
 - electron-builder 的 `createFilter`（app-builder-lib `util/filter.js`）会丢弃复制源根级的 `node_modules`，extraResources 方式曾致 v1.8.1 发布包静默缺失 DSH 入口（源树冒烟测试通过、产物缺失）
-- **做法**：`resources/dsh` 改由 `afterPack` 钩子（`scripts/copy-dsh-runtime.cjs`，白名单拷贝）进入产物；`pack`/`dist`/`dist:ci` 串联 `build:dsh` + `scripts/check-dsh-package.mjs` 校验产物；release.yml 上传前另有安装包体积下限断言（<190MB 禁止发布）。改动打包流程时保持这三道门禁
+- **做法**：`resources/dsh` 改由 `afterPack` 钩子（`scripts/copy-dsh-runtime.cjs`，白名单拷贝）进入产物；`pack`/`dist`/`dist:ci` 串联 `build:dsh` + `scripts/check-dsh-package.mjs` 校验产物；release.yml 上传前另有安装包体积下限断言（utilityProcess 迁移后不再随包分发 node.exe，下限已调至 135MB，首次实际构建后需按实测重新校准）。改动打包流程时保持这三道门禁
 
 ### 5. DSH Web UI 启动失败：web profile 损坏 + 子进程环境泄漏（v1.8.2 事故）
 - 现象：应用能启动、打开 DSH 标签页不报「运行时不可用」，但点启动后 dsh 子进程「立即退出」，真实错误为 `plugin tree failed to load: N entries did not activate ... pending (waiting for service: webServer)`。
 - 根因：用户 `DSH_HOME/profiles/web/package.json` 被改坏（装第三方 web 插件后 `dsh.profile.bundles` 不再含核心包 `@deepseek-ai/dsh-web-app`），`webServer` 服务从未注册，所有依赖它的插件挂起 → 启动断言失败 → 进程退出。全新 profile 按默认 bundle（含 `@deepseek-ai/dsh-web-app`）初始化则正常。
-- 次生风险：dsh 子进程若整体继承 `process.env`，Electron 主进程注入的 `NODE_OPTIONS`/`ELECTRON_*` 会让独立 `node.exe` 启动即退出（CI 的 `validate` 用干净 shell 跑所以查不出）。
-- **做法**：`electron/modules/dsh/dsh-manager.ts` 的 `start()` 在子进程意外退出且 `profiles/web/node_modules/@deepseek-ai/dsh-web-app` 缺失时，自动删除 `profiles/web` 重建并重试一次（仅核心包确实缺失才触发，不擅自删用户插件）；构造子进程 env 时删除 `NODE_OPTIONS`/`ELECTRON_RUN_AS_NODE` 及所有 `ELECTRON_*` 前缀变量；错误信息附带 dsh 真实 stderr；启动超时 15s→60s（首次重建需 pnpm 安装）。
-- `scripts/validate-dsh-integ.mjs` 增加回归：好 profile → 删核心包 → 应失败；删整个 web profile 重建 → 应成功，固化自动修复路径。
+- 次生风险：dsh 子进程若整体继承 `process.env`，Electron 主进程注入的 `NODE_OPTIONS`/`ELECTRON_*` 会污染 utilityProcess 里的纯 Node 运行时（CI 的 `validate` 用干净 shell 跑所以查不出）。
+- **做法**：`electron/modules/dsh/dsh-manager.ts` 的 `start()` 在子进程意外退出时自动重建 web profile 并重试一次——**触发条件按 manifest 判定**（`profiles/web/package.json` 的 `dsh.profile.bundles` 缺失 `@deepseek-ai/dsh-web-app` 或不可读，见 `plugin-spec.ts` 的 `shouldRebuildWebProfile`），**绝不按物理 node_modules 路径判定**（utilityProcess 部署下核心包经 junction 回退层解析，`profiles/web/node_modules` 恒不存在，按物理路径判断会恒真误删用户插件）；构造子进程 env 时删除 `NODE_OPTIONS`/`ELECTRON_RUN_AS_NODE` 及所有 `ELECTRON_*` 前缀变量；错误信息附带 dsh 真实 stderr；启动超时 15s→60s（首次重建需 pnpm 安装）。
+- `scripts/validate-dsh-utility.mjs` 增加回归：好 profile → 删核心包 → 应失败；删整个 web profile 重建 → 应成功，固化自动修复路径。
 
 ### 6. DSH 插件安装失败：pnpm 11 build-scripts 拦截门（v1.8.3 事故）
 - 现象：装带原生依赖的第三方 web 插件（如 `@linxin666/dsh-web-all`，含 `node-pty`/`ssh2`/`cpu-features`/`cloudflared`）时报 `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: ...`，随后 `dsh: pnpm failed in profile directory ...`；`profiles/web/pnpm-workspace.yaml` 的 `allowBuilds` 被 pnpm 写成占位符 `包名: set this to true or false`（非布尔，无效）。
@@ -272,6 +272,19 @@ electron/mcp/           → 独立 MCP 进程（stdio/http/CLI）+ 文件锁 + G
 - 次生坑：pnpm 11 不再读 `npm_config_*` 环境变量（只认 `pnpm_config_*`），旧代码 `npm_config_minimum_release_age: '0'` 实为无效——24h 发布龄门槛仍开着，会拒绝刚发布的插件。
 - **做法**：`electron/modules/dsh/dsh-manager.ts` 新增 `healProfileBuildPolicy()`，在 `healProfile()`（启动时）与 `pluginAction()` 首跑前把 `profiles/web/pnpm-workspace.yaml` 幂等重写为含 `dangerouslyAllowAllBuilds: true` + `minimumReleaseAge: 0`（保留 `packages`/`nodeLinker`/`autoInstallPeers`，移除失效的 `allowBuilds` 占位符块）；`childEnv()` 删除无效的 `npm_config_minimum_release_age`。`--allow-build` 重试保留为兜底，另加一步「再次固化策略后重试」。
 - **不要**试图靠 pnpm 的 `allowBuilds` 占位符自愈（值为字符串无效）；策略一律写进 yaml 的 `dangerouslyAllowAllBuilds`。
+
+### 7. DSH 托管迁移到 utilityProcess + `--expose-internals`（v1.9+）
+- 背景：DSH 服务进程与插件操作改为 `utilityProcess.fork` 直接加载 `@deepseek-ai/dsh/lib/bin.js`（Electron 内置 Node 24 满足 DSH `^22.19 || >=24`），不再随包分发独立 `node.exe`（`build-dsh.mjs` 停下载、`copy-dsh-runtime.cjs` 白名单去掉、`validate-dsh-integ.mjs` 退役）；端口改由主进程 `net` 预占后以 `--port <p>` 传入（`utilityProcess` 无 stdout，`--port 0` + 正则解析已弃）。
+- **关键坑**：DSH 的 `cordis-plugin-loader` 需要访问 `internal/modules/esm/loader`。Electron 的 Node **不暴露** `node-addon-require-builtin` 依赖的 V8 符号（`GetAlignedPointerFromEmbedderData`），导致 HMR 服务报 `--expose-internals is required for HMR service`、启动即退。**解法**：fork 时传 `execArgv: ['--expose-internals']`（服务进程与插件操作两处都要），loader 走 execArgv 分支成功。Electron utility 进程里 `--expose-internals` 可用。
+- **dev 陷阱（关键）**：DSH 每次 boot 都会经 `healProfilesModuleFallback`（`@deepseek-ai/dsh-app-boot`）在 `DSH_HOME/profiles/node_modules/@deepseek-ai/*` 建 **junction → `resources/dsh/node_modules/@deepseek-ai/*`**（模块回退层）。**Electron 的 `fs.rmSync(recursive)` 会穿透 junction 删除目标内容**（系统 node 24.4+ 已修复、Electron 24.17 未修复，已实测）——对任何 DSH home（数据目录 `dsh`/临时 home）做递归删除都会**清空开发机 base 的 `@deepseek-ai/*`**，表现为 bin.js 消失、`ERR_MODULE_NOT_FOUND`、DSH tab 报「运行时不可用」。**禁止递归删除 DSH home**；清理必须先用 `unlinkSync` 逐条 unlink junction 再删（`validate-dsh-utility.mjs` 的 `safeRm` 即此模式）。打包产物 base 是 `cpSync` 真实文件、app 自身从不递归删 home，**生产不受影响**。`validate-dsh-utility.mjs` 检测到 base 被清空即跳过启动类测试并提示 `npm run build:dsh` 恢复，不误报失败。
+- `docs/dsh-integration-plan.md` 的 TUI 时代章节（node-pty/xterm、独立 node.exe）已被 Web UI + utilityProcess 方案取代。
+- **决策（已实测，勿"改进"回退）**：`stop()` 用 `utilityProcess.kill()` **连带终止整棵进程树**（含 node-pty 派生的 pwsh 孙进程），**无 taskkill**；就绪用主进程预留端口 + HTTP 探测，**不解析 stdout、不建 MessagePort 桥/launcher**（DSH 是第三方黑盒 CLI，包装会让 DSH 变孙进程、退出自动回收失效）；env 统一由 `buildEnv()` 构造。`child.on('error')` 的 `{type, location, report}`（V8 FatalError 诊断报告）会拼进错误信息。
+- **pnpm 生命周期脚本需要 `node`（门禁 A，已实测）**：装带原生依赖的插件（cpu-features/node-pty/cloudflared 等）时，pnpm 跑 `node buildcheck.js`/`node-gyp rebuild`，PATH 上必须有 `node`。移除独立 node.exe 后由 **electron-as-node 垫片**提供——`buildEnv()` 在 `<DSH_HOME>/node-bin/` 生成 `node.cmd`（`set ELECTRON_RUN_AS_NODE=1` + 运行 `process.execPath`），前置进 PATH；零额外二进制、ABI 与 DSH 运行时同为 Electron Node、GUI 子系统不开控制台窗口。实测 `@linxin666/dsh-web-all`（223 包 + 原生构建）装完且 DSH 能启动加载。**勿回退到重新分发 node.exe**。
+- **侧边栏终端 shell 必须是全路径（已实测）**：`resolveSidebarShellOverride()`（`shell-resolve.ts`）在 Windows 上**始终返回可 spawn 的全路径**（真实 pwsh → 收件箱 `powershell.exe` 兜底），绝不返回 undefined/裸名。否则 dsh-better-sidebar 默认解析落到裸 `powershell.exe`，node-pty 在 DSH 进程里解析不成全路径，终端报 `File not found: ws://.../sidebar/ws/terminal`（复现：DSH_SIDEBAR_SHELL=收件箱全路径则终端正常、裸名则失败）。
+- **启动上下文可能裁剪 PATH（已实测）**：opencode 桌面进程的子进程 PATH **不含系统/用户注册表 PATH**（缺 `C:\Program Files\vfox`、`E:\ServiceSoftware\Git\cmd` 等）→ DSH server 继承后终端 vfox 报错、git 面板"当前目录不是 git 仓库"（`git.exe rev-parse` ENOENT）。**做法**：`buildEnv()` 用 `fullUserPath()` 从注册表（HKLM/HKCU `...Environment\Path`）读系统+用户 PATH 合并补全（`path-env.ts` 的 `expandPathVars`/`mergePathDirs`，进程内缓存），`reg query` 用 `execFileSync(..., {windowsHide:true, timeout:5000})`。已实测合并后 git/vfox 全部可用。
+- **dev 噪音**：`electron/main/index.ts` GUI 分支加 `app.commandLine.appendSwitch('disable-logging')` 抑制 Chromium 的 `[pid:...:ERROR:...]`（webview mojo `blink.mojom.Widget`、`ssl_client_socket_impl handshake failed` 等）刷屏——经终端启动 dev 时控制台会被刷满。勿移除。
+- **第三方插件黑窗**：`@linxin666/dsh-doctor` 会在 `%LOCALAPPDATA%\DSH Doctor\supervisor.cmd` + 计划任务「DSH Doctor Supervisor」（ONLOGON）拉起一个 electron supervisor，每次启动闪一个 `C:\WINDOWS\SYSTEM32\cmd.exe` 黑窗。**`config.enabled:false` 的 patch 不生效**（doctor 的 settings 命名空间可能覆盖 loader config），须用 loader 级 `- id: doctor / disabled: true` 硬禁用（`applyEntryPatches` 把 `disabled` 写到目标行，loader 直接不加载）；**根治是移除 `@linxin666/dsh-doctor` 插件**。删任务/目录不持久（插件启动会重注册）。
+- **DSH 首次启动/终端冷启动慢（待优化，非 ZDNotes bug）**：用户侧"打开终端要 15s"≈ DSH server 冷启动（实测全新+dsh-web-all 约 6.4s，含加载 200+ 插件）+ webview 加载前端（1.1s）+ 前端可交互（约 2s）+ 首次 pty spawn。运行态下终端 WS 首数据仅 164ms、webview 1.1s、前端 2s——均快；慢的是冷启动总和。ZDNotes 侧无直接开销，属 DSH/dsh-web-all 运行时体积问题（可尝试让 webview 在端口预占后尽早创建以并行加载，收益有限）。
 
 ### 检查清单
 - [ ] `dist:ci` script 包含 `--publish=never`

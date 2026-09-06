@@ -60,6 +60,10 @@ if (mcpArgs.includes('--zdn-mcp-stdio')) {
       app.exit(1)
     })
 } else {
+  // 抑制 Chromium 的 `[pid:...:ERROR:...]` 噪音（webview mojo / SSL 握手失败等）刷屏，
+  // 否则经终端（opencode/IDE）启动 dev 时控制台被刷满。仅 GUI 模式；CLI/MCP 模式不适用。
+  app.commandLine.appendSwitch('disable-logging')
+
   // Windows 任务栏按 AppUserModelID 归组并显示应用图标；必须在窗口创建前设置
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.zdn.notes')

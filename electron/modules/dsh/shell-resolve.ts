@@ -54,9 +54,11 @@ function candidateDirs(env: NodeJS.ProcessEnv): string[] {
 }
 
 /**
- * 解析 DSH_SIDEBAR_SHELL 覆盖值；无需干预时返回 undefined。
- * 返回「第一个真实可用的 pwsh.exe」或「收件箱 powershell.exe」，二者均为
- * node-pty 可直接 spawn 的真实可执行文件。
+ * 解析 DSH_SIDEBAR_SHELL 覆盖值。Windows 上始终返回一个 node-pty 可直接 spawn 的
+ * **全路径**：第一个真实可用的 pwsh.exe，否则收件箱 powershell.exe（Windows 恒存在）。
+ * 绝不返回 undefined / 裸命令名——dsh-better-sidebar 的默认解析在无 pwsh 时落到裸
+ * "powershell.exe"，node-pty 在 DSH 进程里无法把它解析成全路径，终端报 "File not found"
+ * （已实测：DSH_SIDEBAR_SHELL 设为收件箱全路径则终端正常，裸名则失败）。
  */
 export function resolveSidebarShellOverride(opts: ShellResolveOptions = {}): string | undefined {
   const platform = opts.platform ?? process.platform
@@ -73,15 +75,10 @@ export function resolveSidebarShellOverride(opts: ShellResolveOptions = {}): str
     })
   if (platform !== 'win32') return undefined
 
-  let sawStub = false
   for (const dir of candidateDirs(env)) {
     const candidate = join(dir, 'pwsh.exe')
-    if (!exists(candidate)) continue
-    if (isReal(candidate)) return candidate
-    sawStub = true
+    if (exists(candidate) && isReal(candidate)) return candidate
   }
-  if (!sawStub) return undefined
-
   const systemRoot = env.SystemRoot !== undefined && env.SystemRoot.trim() !== '' ? env.SystemRoot : 'C:\\Windows'
   const inbox = join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
   return exists(inbox) ? inbox : 'powershell.exe'

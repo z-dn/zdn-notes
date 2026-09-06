@@ -32,7 +32,6 @@ function gte(a, b) {
 }
 
 const required = [
-  'node.exe',
   join('bin', 'pnpm.exe'),
   join('node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
 ]

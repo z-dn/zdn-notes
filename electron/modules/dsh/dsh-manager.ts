@@ -1,28 +1,33 @@
-import { app } from 'electron'
+import { app, utilityProcess, type UtilityProcess } from 'electron'
 import { delimiter, join } from 'path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { spawn, spawnSync, type ChildProcess } from 'child_process'
+import { execFileSync } from 'child_process'
+import { createServer, type AddressInfo } from 'net'
 import {
   computeBundleSync,
   isValidPluginSpec,
   parseIgnoredBuildPackages,
   parseInstalledPlugins,
+  shouldRebuildWebProfile,
   type DshPluginInfo,
 } from './plugin-spec'
 import { resolveSidebarShellOverride } from './shell-resolve'
+import { expandPathVars, mergePathDirs } from './path-env'
 
 // ===================================================================
 // DshManager —— 主进程内管理 DSH Web UI 子进程的生命周期。
 //
 // 关键架构（见 docs/dsh-integration-plan.md）：
 //   - DSH 官方是 Web UI：`dsh web` 在 loopback 起一个本地 HTTP 服务（默认 127.0.0.1:3080）。
-//   - 应用自带 console-subsystem 的 node.exe（resources/dsh）来跑 `dsh web` 服务端，
-//     与系统 Node 完全隔离；`dsh web` 是普通 HTTP 服务，**不需要 TTY**（区别于 TUI 方案）。
+//   - DSH 服务端跑在 Electron 的 utilityProcess 子进程里（utilityProcess.fork 直接加载
+//     @deepseek-ai/dsh 的 bin.js，Electron 内置 Node 24 与 DSH 要求 `^22.19 || >=24` 兼容），
+//     不再随包分发独立 node.exe；`dsh web` 是普通 HTTP 服务，**不需要 TTY**。
 //   - 渲染层用 <webview> 加载 http://127.0.0.1:<port> 展示官方 Web UI。
-//   - node.exe / node_modules / 配置（DSH_HOME）全部随包分发，零系统依赖。
+//   - node_modules / pnpm.exe / 配置（DSH_HOME）随包分发，零系统依赖。
+//   - 端口由主进程预占空闲 loopback 端口后以 --port 传入（不再解析 stdout），
+//     fork 后立即对已知端口做 HTTP 探测，省掉「等 DSH 回显端口」的往返。
 //
-// 就绪判定：stdout/stderr 解析端口（宽松匹配 + 忽略 0）后，
-// 再对 http://127.0.0.1:<port> 做 HTTP 探测确认真正可服务。
+// 就绪判定：对预留端口做 HTTP 探测确认真正可服务。
 // 状态变化通过 onChange 推给模块层（ctx.send → 'dsh:statusChanged'）。
 // ===================================================================
 
@@ -50,7 +55,6 @@ type PluginDoneListener = (result: DshPluginDone) => void
 
 interface ResolvedPaths {
   base: string
-  nodeBin: string
   dshBin: string
   home: string
 }
@@ -59,6 +63,51 @@ interface ResolvedPaths {
 const START_TIMEOUT_MS = 60_000
 const PROBE_TIMEOUT_MS = 2_000
 
+/**
+ * 格式化 utilityProcess 的 'error' 事件参数（V8 FatalError 时可能带 Node diagnostic report）。
+ * Electron 类型对 'error' 只标了 'FatalError' 字面量，运行期 payload 为 { type, location, report }，
+ * 这里按 unknown 防御性提取。
+ */
+function formatUtilityError(d: unknown): string {
+  if (typeof d !== 'object' || d === null) return String(d)
+  const o = d as { type?: unknown; location?: unknown; report?: unknown }
+  const parts: string[] = []
+  if (typeof o.type === 'string' && o.type) parts.push(o.type)
+  if (typeof o.location === 'string' && o.location) parts.push(o.location)
+  if (typeof o.report === 'string' && o.report) parts.push(o.report)
+  return parts.join('\n') || '未知错误'
+}
+
+let cachedFullPath: string | null = null
+/**
+ * 从注册表读取系统+用户 PATH 并展开 %VAR%（进程内缓存）。
+ * 应用可能被裁剪 PATH 的环境启动（opencode 桌面子进程不含系统/用户 PATH），
+ * 导致 DSH server 缺 git / vfox 等工具目录；这里兜底补全。
+ */
+function fullUserPath(): string {
+  if (cachedFullPath !== null) return cachedFullPath
+  const parts: string[] = []
+  const keys = [
+    'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment',
+    'HKCU\\Environment',
+  ]
+  for (const key of keys) {
+    try {
+      const r = execFileSync('reg', ['query', key, '/v', 'Path'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 5000,
+      })
+      const m = r.match(/\bPath\s+REG_(?:EXPAND_)?SZ\s+(.+)/i)
+      if (m) parts.push(m[1])
+    } catch {
+      /* reg 不可用则跳过该段 */
+    }
+  }
+  cachedFullPath = expandPathVars(parts.join(';'), process.env as Record<string, string | undefined>)
+  return cachedFullPath
+}
+
 class DshManager {
   private static _inst: DshManager | null = null
   static getInstance(): DshManager {
@@ -66,7 +115,7 @@ class DshManager {
     return this._inst
   }
 
-  private child: ChildProcess | null = null
+  private child: UtilityProcess | null = null
   private port: number | null = null
   private dataDir = ''
   private listeners = new Set<StatusListener>()
@@ -74,7 +123,7 @@ class DshManager {
   private pluginDoneListeners = new Set<PluginDoneListener>()
   private pluginPending:
     | {
-        child: ChildProcess
+        child: UtilityProcess
         action: 'add' | 'remove'
         name: string
         resolve: (r: { ok: boolean; error?: string }) => void
@@ -134,57 +183,62 @@ class DshManager {
   }
 
   /**
-   * 定位 DSH 运行时根目录（含 node.exe + node_modules/@deepseek-ai/dsh）。
-   * 打包后固定为 resourcesPath/dsh；dev 下 app.getAppPath() 不指向仓库根，
-   * 故从多个锚点（app 路径 / cwd / 本模块目录）向上逐层搜索 resources/dsh。
+   * 定位 DSH 运行时根目录（含 node_modules/@deepseek-ai/dsh 与 bin/pnpm.exe）。
+   * 打包后固定为 resourcesPath/dsh；dev 下 app.getAppPath()/cwd 已是仓库根直接命中，
+   * __dirname 在构建产物里（out/main/...）向上数层找 resources/dsh。
    */
   private findBase(): string {
     const env = process.env
     if (app.isPackaged) return join(process.resourcesPath, 'dsh')
-    if (env.DSH_DEV_DIR && existsSync(join(env.DSH_DEV_DIR, 'node.exe'))) {
+    if (env.DSH_DEV_DIR && existsSync(join(env.DSH_DEV_DIR, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) {
       return env.DSH_DEV_DIR
     }
 
-    const anchors = [app.getAppPath(), process.cwd(), __dirname]
-    const candidates: string[] = []
-    for (const a of anchors) {
-      let cur = a
-      for (let i = 0; i < 8 && cur && cur !== join(cur, '..'); i++) {
-        candidates.push(join(cur, 'resources', 'dsh'))
-        cur = join(cur, '..')
-      }
+    const candidates = [
+      join(app.getAppPath(), 'resources', 'dsh'),
+      join(process.cwd(), 'resources', 'dsh'),
+    ]
+    let cur = __dirname
+    for (let i = 0; i < 6 && cur && cur !== join(cur, '..'); i++) {
+      candidates.push(join(cur, 'resources', 'dsh'))
+      cur = join(cur, '..')
     }
     for (const c of candidates) {
       if (
-        existsSync(join(c, 'node.exe')) &&
+        existsSync(join(c, 'bin', 'pnpm.exe')) &&
         existsSync(join(c, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))
       ) {
         return c
       }
     }
     for (const c of candidates) {
-      if (existsSync(join(c, 'node.exe'))) return c
+      if (existsSync(join(c, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) return c
     }
-    return candidates[0] ?? join(app.getAppPath(), 'resources', 'dsh')
+    return candidates[0]
   }
 
   /** 解析 DSH 运行时路径 */
   private resolvePaths(): ResolvedPaths {
     const env = process.env
     const base = this.findBase()
-    const nodeBin = env.DSH_NODE_BIN ? env.DSH_NODE_BIN : join(base, 'node.exe')
     const dshBin = join(base, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
     const home = env.DSH_HOME ? env.DSH_HOME : join(this.dataDir, 'dsh')
-    return { base, nodeBin, dshBin, home }
+    return { base, dshBin, home }
   }
 
   isReady(): DshReadyInfo {
-    const { nodeBin, dshBin } = this.resolvePaths()
-    if (!existsSync(nodeBin)) {
-      return { ready: false, reason: `未找到 node.exe: ${nodeBin}` }
-    }
+    const { dshBin } = this.resolvePaths()
     if (!existsSync(dshBin)) {
-      return { ready: false, reason: `未找到 DSH 入口: ${dshBin}` }
+      // 区分「base 目录存在但 @deepseek-ai 被清空」（DSH home 的 junction 被递归删除
+      // 会穿透清空 base，见 AGENTS.md dev 陷阱）与「从未 build 过」，给可操作提示
+      const dshPkgDir = join(join(this.findBase(), 'node_modules', '@deepseek-ai', 'dsh'))
+      if (existsSync(dshPkgDir)) {
+        return {
+          ready: false,
+          reason: `本地 DSH 运行时被清空（${dshPkgDir}），可能由递归删除 DSH home 穿透 junction 导致，请运行 npm run build:dsh 恢复`,
+        }
+      }
+      return { ready: false, reason: `未找到 DSH 入口: ${dshBin}（开发环境请运行 npm run build:dsh）` }
     }
     return { ready: true }
   }
@@ -303,13 +357,116 @@ class DshManager {
     }
   }
 
-  /** 从子进程输出里解析 loopback 监听端口（--port 0 时 OS 会回显真实端口；忽略占位 0） */
-  private parsePort(chunk: string): void {
-    if (this.port) return
-    const m = chunk.match(/(?:127\.0\.0\.1|localhost):(\d+)/)
-    if (!m) return
-    const p = Number(m[1])
-    if (p > 0) this.port = p
+  /**
+   * 构建 DSH 子进程环境：继承应用环境但清掉 Electron 注入的运行期变量
+   * （NODE_OPTIONS / ELECTRON_RUN_AS_NODE / ELECTRON_*），避免污染 utilityProcess
+   * 里的纯 Node 运行时；再设 DSH 所需项。extra 由调用方按用途追加（server/插件共用）。
+   */
+  private buildEnv(home: string, extra: Record<string, string> = {}): Record<string, string> {
+    const { base } = this.resolvePaths()
+    const env: Record<string, string> = { ...(process.env as Record<string, string>), ...extra }
+    delete env.NODE_OPTIONS
+    delete env.ELECTRON_RUN_AS_NODE
+    for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
+    env.DSH_HOME = home
+    env.NODE_PATH = join(base, 'node_modules')
+    // pnpm 生命周期脚本（node buildcheck.js / node-gyp rebuild 等）需要 PATH 上有 `node`：
+    // 用 electron-as-node 垫片充当（零额外二进制、ABI 与 DSH 运行时同为 Electron Node、GUI 子系统不开控制台窗口）。
+    // node-bin 前置、bin（pnpm.exe）次之；末尾合并系统+用户注册表 PATH，补全被启动上下文裁剪的工具目录
+    // （git / vfox 等，否则终端 vfox 报错、git 面板认不出仓库——已实测 opencode 子进程 PATH 缺这两者）。
+    const nodeBin = this.ensureNodeShim(home)
+    const merged = mergePathDirs(env.PATH ?? '', fullUserPath())
+    env.PATH = `${nodeBin}${delimiter}${join(base, 'bin')}${delimiter}${merged}`
+    // 兼容性加固：dsh-better-sidebar 的 defaultShell 会命中 Store 的
+    // WindowsApps pwsh 别名桩（0 字节 reparse point），node-pty 无法 spawn，
+    // 终端报 "File not found"。此处把它解析为确定可用的 shell。
+    // 用户显式 config.shell / 已设的 DSH_SIDEBAR_SHELL 优先级更高，不受影响。
+    if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
+      const sidebarShell = resolveSidebarShellOverride()
+      if (sidebarShell) env.DSH_SIDEBAR_SHELL = sidebarShell
+    }
+    return env
+  }
+
+  /**
+   * 确保 `node` 垫片存在：在 DSH home 下生成 node.cmd，把 `node` 解析到应用自身
+   * （process.execPath）以 ELECTRON_RUN_AS_NODE 模式充当纯 Node 运行。幂等：
+   * execPath 变化（dev/打包切换）时自动重写。
+   */
+  private ensureNodeShim(home: string): string {
+    const dir = join(home, 'node-bin')
+    mkdirSync(dir, { recursive: true })
+    const shim = join(dir, 'node.cmd')
+    const content = `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath.replace(/"/g, '""')}" %*\r\n`
+    try {
+      if (readFileSync(shim, 'utf8') !== content) writeFileSync(shim, content)
+    } catch {
+      writeFileSync(shim, content) // 首次创建或文件损坏
+    }
+    return dir
+  }
+
+  /** 主进程预占一个空闲 loopback 端口（net 层完成，无 stdout 解析竞态） */
+  private async reservePort(): Promise<number> {
+    return await new Promise((resolve, reject) => {
+      const srv = createServer()
+      srv.unref()
+      srv.on('error', reject)
+      srv.listen(0, '127.0.0.1', () => {
+        const port = (srv.address() as AddressInfo).port
+        srv.close(() => resolve(port))
+      })
+    })
+  }
+
+  /** DSH server PID 锁文件（放在 home 里，随数据目录迁移）。 */
+  private pidLockFile(): string {
+    return join(this.resolvePaths().home, 'dsh-server.pid')
+  }
+
+  /**
+   * 启动前清理上次会话残留的 DSH server。应用被强制退出（crash/强杀）时，
+   * utility 进程可能孤儿化并继续持有 DSH 内部锁（如 dsh-client-ui-task-board 的
+   * ledger lock），新实例启动会报 "already owned by process <pid>" 而失败。
+   * 读锁文件里的 pid，进程仍存活则整树杀之。
+   */
+  private cleanupStaleServer(): void {
+    let pid: number
+    try {
+      pid = Number(readFileSync(this.pidLockFile(), 'utf8').trim())
+    } catch {
+      return // 无锁 / 不可读
+    }
+    if (!Number.isInteger(pid) || pid <= 0) return
+    try {
+      process.kill(pid, 0) // 探活：不存在抛 ESRCH
+    } catch {
+      return // 进程已退出，无需清理
+    }
+    try {
+      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
+      console.warn(`[dsh] 已清理上次会话残留的 DSH server (pid ${pid})`)
+    } catch {
+      /* 已退出或无权 */
+    }
+  }
+
+  /** 写/清 DSH server PID 锁（仅本实例 fork 出的 server 才写）。 */
+  private writePidLock(pid: number): void {
+    try {
+      writeFileSync(this.pidLockFile(), String(pid))
+    } catch {
+      /* 锁写入失败不影响运行 */
+    }
+  }
+  private clearPidLock(pid: number): void {
+    try {
+      if (readFileSync(this.pidLockFile(), 'utf8').trim() === String(pid)) {
+        rmSync(this.pidLockFile(), { force: true })
+      }
+    } catch {
+      /* noop */
+    }
   }
 
   /** HTTP 探测：能建立连接并返回响应即视为服务就绪 */
@@ -325,92 +482,107 @@ class DshManager {
   async start(
     opts?: { apiKey?: string; model?: string },
     repaired = false,
+    portRetried = false,
   ): Promise<{ ok: boolean; port?: number; error?: string }> {
     if (this.child) return { ok: true, port: this.port ?? undefined }
-    const { nodeBin, dshBin, home, base } = this.resolvePaths()
-    if (!existsSync(nodeBin)) return { ok: false, error: `未找到 node.exe: ${nodeBin}` }
+    const { dshBin, home } = this.resolvePaths()
     if (!existsSync(dshBin)) return { ok: false, error: `未找到 DSH 入口: ${dshBin}` }
     try {
       mkdirSync(home, { recursive: true })
-      const nodeModules = join(base, 'node_modules')
-      // 继承应用环境，但清掉 Electron 注入的运行期变量（NODE_OPTIONS / ELECTRON_* 等），
-      // 否则独立的 node.exe 会因 --require 等选项启动即退出。再显式设置 DSH 所需项。
-      const env: Record<string, string> = { ...(process.env as Record<string, string>) }
-      delete env.NODE_OPTIONS
-      delete env.ELECTRON_RUN_AS_NODE
-      for (const k of Object.keys(env)) if (k.startsWith('ELECTRON_')) delete env[k]
-      env.DSH_HOME = home
-      env.TERM = 'xterm-256color'
-      env.NODE_PATH = nodeModules
-      env.PATH = `${base}${delimiter}${join(base, 'bin')}${delimiter}${env.PATH ?? ''}`
-      // 兼容性加固：dsh-better-sidebar 的 defaultShell 会命中 Store 的
-      // WindowsApps pwsh 别名桩（0 字节 reparse point），node-pty 无法
-      // spawn，终端报 "File not found"。此处把它解析为确定可用的 shell。
-      // 用户显式 config.shell / 已设的 DSH_SIDEBAR_SHELL 优先级更高，不受影响。
-      if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
-        const sidebarShell = resolveSidebarShellOverride()
-        if (sidebarShell) {
-          env.DSH_SIDEBAR_SHELL = sidebarShell
-          console.log(`[dsh] DSH_SIDEBAR_SHELL=${sidebarShell}`)
-        }
-      }
-
+      // 清理上次会话残留的 DSH server（应用强退可能留下孤儿进程占用 task-board 等锁）
+      this.cleanupStaleServer()
       const apiKey = opts?.apiKey || process.env.DEEPSEEK_API_KEY || ''
-      if (apiKey) env.DEEPSEEK_API_KEY = apiKey
-      if (opts?.model) env.DSH_MODEL = opts.model
+      const extra: Record<string, string> = { TERM: 'xterm-256color' }
+      if (apiKey) extra.DEEPSEEK_API_KEY = apiKey
+      if (opts?.model) extra.DSH_MODEL = opts.model
+      const env = this.buildEnv(home, extra)
 
-      // 让 OS 选一个空闲端口（--port 0），再从输出解析真实端口，避免冲突。
-      console.log('[dsh] 启动:', nodeBin, dshBin, '--profile web --no-open --port 0')
-      const child = spawn(
-        nodeBin,
-        [dshBin, '--profile', 'web', '--no-open', '--port', '0'],
-        { cwd: home, env, stdio: ['ignore', 'pipe', 'pipe'] },
+      // 主进程预占空闲 loopback 端口，fork 后立即对已知端口探测，免去「等回显」往返
+      const port = await this.reservePort()
+      this.port = port
+      this.emit()
+      console.log('[dsh] 启动: utilityProcess', dshBin, `--profile web --no-open --port ${port}`)
+      const child = utilityProcess.fork(
+        dshBin,
+        ['--profile', 'web', '--no-open', '--port', String(port)],
+        {
+          cwd: home,
+          env,
+          stdio: 'pipe',
+          serviceName: 'zdn-dsh',
+          // DSH 的 cordis-plugin-loader 需要访问 Node 内部模块（internal/modules/esm/loader）。
+          // Electron 的 Node 不暴露 node-addon-require-builtin 依赖的 V8 符号，必须显式
+          // 传入 --expose-internals 走 loader 的 execArgv 分支。
+          execArgv: ['--expose-internals'],
+        },
       )
       this.child = child
-      this.port = null
-      this.emit()
 
+      let spawnedPid: number | undefined
       let stderrBuf = ''
       child.on('error', (e) => {
+        stderrBuf += formatUtilityError(e) + '\n'
         if (this.child === child) {
           this.child = null
           this.port = null
           this.emit()
         }
-        console.error('[dsh] 启动失败:', e.message)
+        console.error('[dsh] 启动失败:', formatUtilityError(e))
       })
       child.stderr?.on('data', (d) => {
         const msg = d.toString()
         stderrBuf += msg
-        this.parsePort(msg)
         const line = msg.trim()
         if (line) console.error('[dsh:stderr]', line)
       })
-      child.stdout?.on('data', (d) => this.parsePort(d.toString()))
-      child.on('exit', (code, signal) => {
+      child.on('exit', (code) => {
+        if (spawnedPid !== undefined) this.clearPidLock(spawnedPid)
         if (this.child !== child) return // 已被 stop() 主动接管
         this.child = null
         this.port = null
         this.emit()
-        if (code && code !== 0) console.warn(`[dsh] Web UI 退出 code=${code} signal=${signal}`)
+        if (code && code !== 0) console.warn(`[dsh] Web UI 退出 code=${code}`)
       })
 
-      // 等待「端口解析成功 + HTTP 探测通过」，总超时 START_TIMEOUT_MS
+      // 等真实 spawn 后写 PID 锁并起超时窗口，避免 fork/模块加载前的空转计入
+      await new Promise<void>((resolve) => {
+        child.once('spawn', () => {
+          spawnedPid = child.pid
+          if (spawnedPid !== undefined) this.writePidLock(spawnedPid)
+          resolve()
+        })
+        child.once('exit', () => resolve())
+      })
+
+      // 等待「HTTP 探测通过」，总超时 START_TIMEOUT_MS
       const deadline = Date.now() + START_TIMEOUT_MS
       while (Date.now() < deadline) {
         if (this.child !== child) {
           // 子进程在启动期内意外退出：多半是 web profile 损坏/不兼容
-          // （缺少核心 web 包 @deepseek-ai/dsh-web-app，webServer 服务未注册）。
-          // 仅当核心包确实缺失时才自动重建 web profile 并重试一次，避免误删用户插件。
-          const webApp = join(home, 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-web-app')
-          if (!repaired && !existsSync(webApp)) {
+          // （bundles 缺少核心 web 包 @deepseek-ai/dsh-web-app → webServer 服务未注册）。
+          // 按 manifest 判定是否重建（物理 node_modules 路径在此部署下恒不存在，
+          // 按物理路径判断会误删用户插件）：仅 bundles 缺失核心包或 manifest 不可读时重建一次。
+          if (!repaired) {
+            let manifestRaw: string | null = null
             try {
-              rmSync(join(home, 'profiles', 'web'), { recursive: true, force: true })
-              console.warn('[dsh] web profile 缺少核心包 @deepseek-ai/dsh-web-app，已重建并自动重试')
-            } catch (e) {
-              console.error('[dsh] 清理损坏的 web profile 失败:', e)
+              manifestRaw = readFileSync(join(home, 'profiles', 'web', 'package.json'), 'utf8')
+            } catch {
+              /* 不存在/不可读 → 视为需要重建 */
             }
-            return this.start(opts, true)
+            if (shouldRebuildWebProfile(manifestRaw)) {
+              try {
+                rmSync(join(home, 'profiles', 'web'), { recursive: true, force: true })
+                console.warn('[dsh] web profile 缺少核心包 @deepseek-ai/dsh-web-app，已重建并自动重试')
+              } catch (e) {
+                console.error('[dsh] 清理损坏的 web profile 失败:', e)
+              }
+              return this.start(opts, true)
+            }
+          }
+          // 无核心包缺失但启动即退：多为预留端口被抢占（TOCTOU），换新端口重试一次
+          if (!portRetried) {
+            console.warn('[dsh] 启动后立即退出，换端口重试一次')
+            return this.start(opts, false, true)
           }
           const detail = stderrBuf.trim().split('\n').slice(-12).join('\n')
           return {
@@ -437,8 +609,8 @@ class DshManager {
   }
 
   /**
-   * 停止并清理整棵进程树。Windows 下 DSH 可能派生孙进程，
-   * 用 taskkill /T 连带终止；其他平台退回 child.kill()。
+   * 停止。utilityProcess.kill() 会连带终止整棵进程树（含 node-pty 派生的 pwsh 孙进程，
+   * 已实测），无需 taskkill；应用退出时 Electron 也会自动回收 utility 进程。
    * 同时终止进行中的插件操作子进程。
    */
   async stop(): Promise<void> {
@@ -456,22 +628,11 @@ class DshManager {
     this.child = null
     this.port = null
     this.emit()
-    const pid = child.pid
-    if (pid && process.platform === 'win32') {
-      try {
-        spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
-          stdio: 'ignore',
-          windowsHide: true,
-        })
-      } catch {
-        /* taskkill 失败时进程随主窗口退出由 OS 回收 */
-      }
-    } else {
-      try {
-        child.kill()
-      } catch {
-        /* noop */
-      }
+    if (child.pid !== undefined) this.clearPidLock(child.pid)
+    try {
+      child.kill()
+    } catch {
+      /* noop */
     }
   }
 
@@ -481,31 +642,13 @@ class DshManager {
 
   // -----------------------------------------------------------------
   // 插件管理：`dsh plugin` 本质是 pnpm 转发器（硬编码 spawnSync("pnpm")），
-  // 因此把自带 pnpm.exe / node.exe 所在目录前置进子进程 PATH 即可离系统依赖运行。
+  // 因此把自带 pnpm.exe 所在目录前置进子进程 PATH 即可离系统依赖运行。
   // 对账逻辑保证「用户装的插件 = profile package.json 的 dependencies」，
   // 列表读取无需解析 dsh.profile（YAML）。
   // -----------------------------------------------------------------
 
   private profileDir(): string {
     return join(this.resolvePaths().home, 'profiles', 'web')
-  }
-
-  /** 子进程环境：DSH_HOME + NODE_PATH + 自带 bin/node 前置的 PATH */
-  private childEnv(): Record<string, string> {
-    const { home, base } = this.resolvePaths()
-    const env: Record<string, string> = {
-      ...(process.env as Record<string, string>),
-      DSH_HOME: home,
-      NODE_PATH: join(base, 'node_modules'),
-      PATH: `${join(base, 'bin')}${delimiter}${base}${delimiter}${process.env.PATH ?? ''}`,
-      // 注：pnpm 11 不再读取 npm_config_*，发布龄/构建策略统一由 healProfileBuildPolicy
-      // 写入 profile 的 pnpm-workspace.yaml（minimumReleaseAge: 0 + dangerouslyAllowAllBuilds: true）。
-    }
-    if (!(env.DSH_SIDEBAR_SHELL && env.DSH_SIDEBAR_SHELL.trim())) {
-      const sidebarShell = resolveSidebarShellOverride()
-      if (sidebarShell) env.DSH_SIDEBAR_SHELL = sidebarShell
-    }
-    return env
   }
 
   async listPlugins(): Promise<{
@@ -549,18 +692,26 @@ class DshManager {
     if (!ready.ready) return { ok: false, error: ready.reason }
     if (!isValidPluginSpec(spec)) return { ok: false, error: `非法的插件标识: ${spec}` }
 
-    const { nodeBin, dshBin, home } = this.resolvePaths()
+    const { dshBin, home } = this.resolvePaths()
     mkdirSync(home, { recursive: true })
     // profile 已存在时先固化 pnpm 构建策略，让首次尝试就不被 build-scripts 拦截
     this.healProfileBuildPolicy()
+    // 注：pnpm 11 不再读取 npm_config_*，发布龄/构建策略统一由 healProfileBuildPolicy
+    // 写入 profile 的 pnpm-workspace.yaml（minimumReleaseAge: 0 + dangerouslyAllowAllBuilds: true）。
     console.log(`[dsh] plugin ${action}:`, spec)
 
     const runOnce = (extraArgs: string[]): Promise<{ ok: boolean; error?: string }> =>
       new Promise((resolve) => {
-        const child = spawn(
-          nodeBin,
-          [dshBin, 'plugin', '--profile', 'web', action, spec, ...extraArgs],
-          { cwd: home, env: this.childEnv(), stdio: ['ignore', 'pipe', 'pipe'] },
+        const child = utilityProcess.fork(
+          dshBin,
+          ['plugin', '--profile', 'web', action, spec, ...extraArgs],
+          {
+            cwd: home,
+            env: this.buildEnv(home),
+            stdio: 'pipe',
+            serviceName: 'zdn-dsh-plugin',
+            execArgv: ['--expose-internals'],
+          },
         )
         const pending = { child, action, name: spec, resolve }
         this.pluginPending = pending
@@ -573,7 +724,7 @@ class DshManager {
         })
         child.on('error', (e) => {
           if (this.pluginPending !== pending) return
-          this.finishPlugin(pending, false, e.message)
+          this.finishPlugin(pending, false, `utility 进程错误: ${formatUtilityError(e)}`)
         })
         child.on('exit', (code) => {
           if (this.pluginPending !== pending) return // 已被 stop() 接管

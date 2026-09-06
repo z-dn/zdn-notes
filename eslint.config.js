@@ -12,8 +12,8 @@ export default tseslint.config(
       'coverage/**',
       'examples/**', // 示例插件为独立 CommonJS（运行于 VM 沙箱），不参与应用 lint
       'resources/agent-tools/**', // 内置插件同样为独立 CommonJS
-      'resources/dsh/**', // 应用自带的 DSH 运行时（node.exe + DSH 依赖 + profile），由 build:dsh 生成，第三方代码不参与 lint
-      'scripts/validate-dsh-integ.mjs', // DSH 集成冒烟脚本（独立运行，非应用代码）
+      'resources/dsh/**', // 应用自带的 DSH 运行时（DSH 依赖 + pnpm + profile），由 build:dsh 生成，第三方代码不参与 lint
+      'scripts/validate-dsh-utility.mjs', // DSH 集成冒烟脚本（Electron 独立运行，非应用代码）
       'scripts/copy-dsh-runtime.cjs', // electron-builder afterPack 钩子（CommonJS，独立运行）
     ],
   },

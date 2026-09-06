@@ -8,6 +8,7 @@
     "build": "npm run build:mcp && electron-vite build",
     "build:mcp": "node scripts/build-mcp.mjs",
     "build:dsh": "node scripts/build-dsh.mjs",
+    "validate:dsh": "electron scripts/validate-dsh-utility.mjs",
     "postinstall": "electron-builder install-app-deps || echo \"[postinstall] node-pty 使用预编译二进制，跳过 electron 原生重编\"",
     "pack": "npm run build && npm run build:dsh && electron-builder --win --dir && node scripts/check-dsh-package.mjs",
     "dist": "npm run build && npm run build:dsh && electron-builder --win && node scripts/check-dsh-package.mjs",

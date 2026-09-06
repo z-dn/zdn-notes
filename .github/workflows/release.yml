@@ -20,23 +20,25 @@ jobs:
 
       - run: npm ci
 
-      # resources/dsh 是 gitignore 的本地生成物（node.exe + pnpm.exe + dsh 依赖），
+      # resources/dsh 是 gitignore 的本地生成物（pnpm.exe + dsh 依赖），
       # 打包前必须生成，否则 extraResources 缺失、应用内 DSH 报「运行时不可用」
       - name: Build DSH runtime
         run: npm run build:dsh
 
-      - name: Smoke test DSH runtime
-        run: node scripts/validate-dsh-integ.mjs
+      - name: Smoke test DSH runtime (utilityProcess hosting)
+        run: npm run validate:dsh
 
       - run: npm run dist:ci
 
       # 兜底门禁（防产物级丢失）：electron-builder 曾过滤掉根级 node_modules 致
-      # v1.8.1 坏包仅 166MB；完整包 = 基线 116MB + node.exe/pnpm 约 50MB + node_modules 约 55MB+
+      # v1.8.1 坏包仅 166MB。utilityProcess 迁移后不再随包分发独立 node.exe
+      # （约 88MB），下限相应下调；打包产物完整性以 check-dsh-package 为准，
+      # 此下限首次实际构建后需按实测压缩体积重新校准。
       - name: Assert installer size floor
         shell: pwsh
         run: |
           $exe = Get-ChildItem release/ZDNotes-Setup-*.exe | Select-Object -First 1
-          $floor = 190MB
+          $floor = 135MB
           if ($exe.Length -lt $floor) {
             throw ("安装包 {0} 仅 {1:N0} bytes（下限 {2}），疑似缺少 DSH 运行时，禁止发布" -f $exe.Name, $exe.Length, $floor)
           }
