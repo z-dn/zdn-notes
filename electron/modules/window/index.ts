@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, nativeTheme, Tray, Menu, nativeImage } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
-import { readFileSync } from 'fs'
 import { getMainWindow, setMainWindow } from '../../main/window-store'
 import { getDataDir } from '../../main/data-location'
 import { loadConfig, configFileForDataDir } from '../../mcp/config'
@@ -19,14 +18,16 @@ function iconBasePath(): string {
   return join(__dirname, '../../resources')
 }
 
-function trayIconPath(): string {
+/**
+ * 应用图标路径（托盘/窗口/任务栏共用）。Windows 必须走 .ico：构造 icon 与 setIcon
+ * 最终经 WM_SETICON 需 SM_CXSMICON/SM_CXICON 精确尺寸的 HICON；PNG 图只会产出单个
+ * 256×256 HICON（Electron 的 NativeImage::GetHICON 忽略 size 参数），尺寸不匹配时
+ * 任务栏按钮图标判定失效、回退 exe 默认图标（dev 下即 Electron logo）；.ico 路径经
+ * LoadImage 从多尺寸 ICO 按需取帧，16/32 帧齐备。
+ */
+function appIconPath(): string {
   const ext = process.platform === 'win32' ? 'ico' : 'png'
   return join(iconBasePath(), `icon.${ext}`)
-}
-
-/** 窗口/任务栏图标：统一用 .png（nativeImage 对 .ico 的 setIcon 在 Windows 上不可靠） */
-function windowIconPath(): string {
-  return join(iconBasePath(), 'icon.png')
 }
 
 function showMainWindow(): void {
@@ -39,7 +40,7 @@ function showMainWindow(): void {
 
 function createTray(): void {
   if (tray) return
-  const icon = nativeImage.createFromPath(trayIconPath())
+  const icon = nativeImage.createFromPath(appIconPath())
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon)
   tray.setToolTip(tooltipText())
   // 右键动态重建菜单：每次弹出时重读 MCP 配置，状态始终最新
@@ -98,6 +99,7 @@ export function createAppWindow(viewId?: string): BrowserWindow | null {
     minHeight: 600,
     show: false,
     frame: false,
+    icon: appIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       sandbox: true,
@@ -105,15 +107,17 @@ export function createAppWindow(viewId?: string): BrowserWindow | null {
     },
   })
 
-  // Windows 任务栏图标：frameless 窗口构造函数的 icon 可能不生效，
-  // 在 ready-to-show 时从 buffer 创建 nativeImage 并显式 setIcon
+  // 兜底：构造函数的 icon 在窗口创建时已应用（Electron 42 的 BaseWindow 构造即调用
+  // SetIconImpl，与 frameless 无关）；此处 ready-to-show 再 setIcon 一次，覆盖
+  // 图标文件在窗口创建后才就绪等边缘情况。失败不再静默，便于诊断。
   if (process.platform === 'win32') {
     win.on('ready-to-show', () => {
       try {
-        const buf = readFileSync(windowIconPath())
-        const img = nativeImage.createFromBuffer(buf)
+        const img = nativeImage.createFromPath(appIconPath())
         if (!img.isEmpty()) win.setIcon(img)
-      } catch { /* icon load failed, ignore */ }
+      } catch (e) {
+        console.warn('[window] setIcon failed:', e)
+      }
     })
   }
 
