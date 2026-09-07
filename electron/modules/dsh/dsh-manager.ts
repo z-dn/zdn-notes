@@ -1,4 +1,5 @@
-import { app, utilityProcess, type UtilityProcess } from 'electron'
+import { app } from 'electron'
+import { spawn, type ChildProcess } from 'child_process'
 import { delimiter, join } from 'path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { execFileSync } from 'child_process'
@@ -17,15 +18,19 @@ import { expandPathVars, mergePathDirs } from './path-env'
 // ===================================================================
 // DshManager —— 主进程内管理 DSH Web UI 子进程的生命周期。
 //
-// 关键架构（见 docs/dsh-integration-plan.md）：
+// 关键架构（见 docs/dsh-integration-plan.md、AGENTS.md 坑 #7）：
 //   - DSH 官方是 Web UI：`dsh web` 在 loopback 起一个本地 HTTP 服务（默认 127.0.0.1:3080）。
-//   - DSH 服务端跑在 Electron 的 utilityProcess 子进程里（utilityProcess.fork 直接加载
-//     @deepseek-ai/dsh 的 bin.js，Electron 内置 Node 24 与 DSH 要求 `^22.19 || >=24` 兼容），
-//     不再随包分发独立 node.exe；`dsh web` 是普通 HTTP 服务，**不需要 TTY**。
+//   - DSH 服务端以 **ELECTRON_RUN_AS_NODE spawn** 方式运行（process.execPath + --expose-internals
+//     直接加载 @deepseek-ai/dsh 的 bin.js，Electron 内置 Node 24 满足 DSH `^22.19 || >=24`），
+//     不随包分发独立 node.exe；`dsh web` 是普通 HTTP 服务，**不需要 TTY**。
+//     ⚠️ 不能用 utilityProcess.fork：打包版 Electron 的 utilityProcess 会静默吞掉
+//     --expose-internals 的效果（flag 在子进程 execArgv 里可见，但 node:internal/* 仍被
+//     拒绝 ERR_UNKNOWN_BUILTIN_MODULE），cordis-plugin-loader 拿不到 internal loader →
+//     插件树加载失败（dev 未打包无此问题）。run-as-node 模式不受打包限制（已实测）。
 //   - 渲染层用 <webview> 加载 http://127.0.0.1:<port> 展示官方 Web UI。
 //   - node_modules / pnpm.exe / 配置（DSH_HOME）随包分发，零系统依赖。
-//   - 端口由主进程预占空闲 loopback 端口后以 --port 传入（不再解析 stdout），
-//     fork 后立即对已知端口做 HTTP 探测，省掉「等 DSH 回显端口」的往返。
+//   - 端口由主进程预占空闲 loopback 端口后以 --port 传入，
+//     spawn 后立即对已知端口做 HTTP 探测，省掉「等 DSH 回显端口」的往返。
 //
 // 就绪判定：对预留端口做 HTTP 探测确认真正可服务。
 // 状态变化通过 onChange 推给模块层（ctx.send → 'dsh:statusChanged'）。
@@ -64,11 +69,10 @@ const START_TIMEOUT_MS = 60_000
 const PROBE_TIMEOUT_MS = 2_000
 
 /**
- * 格式化 utilityProcess 的 'error' 事件参数（V8 FatalError 时可能带 Node diagnostic report）。
- * Electron 类型对 'error' 只标了 'FatalError' 字面量，运行期 payload 为 { type, location, report }，
- * 这里按 unknown 防御性提取。
+ * 格式化 spawn 的 'error' 事件参数（spawn 失败 / V8 FatalError 诊断信息）。
  */
-function formatUtilityError(d: unknown): string {
+function formatChildError(d: unknown): string {
+  if (d instanceof Error) return d.message
   if (typeof d !== 'object' || d === null) return String(d)
   const o = d as { type?: unknown; location?: unknown; report?: unknown }
   const parts: string[] = []
@@ -76,6 +80,19 @@ function formatUtilityError(d: unknown): string {
   if (typeof o.location === 'string' && o.location) parts.push(o.location)
   if (typeof o.report === 'string' && o.report) parts.push(o.report)
   return parts.join('\n') || '未知错误'
+}
+
+/**
+ * 整树终止进程（Windows）：spawn 的 kill() 只杀直接子进程，DSH 派生的
+ * node-pty pwsh 孙进程会孤儿化，必须 taskkill /T 连带整棵树（已实测）。
+ */
+function killTree(pid: number | undefined): void {
+  if (pid === undefined) return
+  try {
+    execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
+  } catch {
+    /* 已退出或无权 */
+  }
 }
 
 let cachedFullPath: string | null = null
@@ -115,7 +132,7 @@ class DshManager {
     return this._inst
   }
 
-  private child: UtilityProcess | null = null
+  private child: ChildProcess | null = null
   private port: number | null = null
   private dataDir = ''
   private listeners = new Set<StatusListener>()
@@ -123,7 +140,7 @@ class DshManager {
   private pluginDoneListeners = new Set<PluginDoneListener>()
   private pluginPending:
     | {
-        child: UtilityProcess
+        child: ChildProcess
         action: 'add' | 'remove'
         name: string
         resolve: (r: { ok: boolean; error?: string }) => void
@@ -359,7 +376,7 @@ class DshManager {
 
   /**
    * 构建 DSH 子进程环境：继承应用环境但清掉 Electron 注入的运行期变量
-   * （NODE_OPTIONS / ELECTRON_RUN_AS_NODE / ELECTRON_*），避免污染 utilityProcess
+   * （NODE_OPTIONS / ELECTRON_RUN_AS_NODE / ELECTRON_*），避免污染 run-as-node 子进程
    * 里的纯 Node 运行时；再设 DSH 所需项。extra 由调用方按用途追加（server/插件共用）。
    */
   private buildEnv(home: string, extra: Record<string, string> = {}): Record<string, string> {
@@ -497,37 +514,46 @@ class DshManager {
       if (opts?.model) extra.DSH_MODEL = opts.model
       const env = this.buildEnv(home, extra)
 
-      // 主进程预占空闲 loopback 端口，fork 后立即对已知端口探测，免去「等回显」往返
+      // 主进程预占空闲 loopback 端口，spawn 后立即对已知端口探测，免去「等回显」往返
       const port = await this.reservePort()
       this.port = port
       this.emit()
-      console.log('[dsh] 启动: utilityProcess', dshBin, `--profile web --no-open --port ${port}`)
-      const child = utilityProcess.fork(
+      console.log(
+        '[dsh] 启动: run-as-node spawn',
         dshBin,
-        ['--profile', 'web', '--no-open', '--port', String(port)],
+        `--profile web --no-open --port ${port}`,
+      )
+      // ⚠️ 必须 ELECTRON_RUN_AS_NODE spawn + --expose-internals：打包版 Electron 的
+      // utilityProcess 会静默丢弃 --expose-internals 的效果（子进程 execArgv 可见该 flag，
+      // 但 node:internal/* 仍不可达），cordis-plugin-loader 因此解析不了 profile 插件、
+      // cordis-plugin-hmr 报 "--expose-internals is required for HMR service"，插件树加载
+      // 失败、进程退出。run-as-node 模式即纯 Node，flag 正常生效（打包/dev 均已实测）。
+      const child = spawn(
+        process.execPath,
+        ['--expose-internals', dshBin, '--profile', 'web', '--no-open', '--port', String(port)],
         {
           cwd: home,
-          env,
-          stdio: 'pipe',
-          serviceName: 'zdn-dsh',
-          // DSH 的 cordis-plugin-loader 需要访问 Node 内部模块（internal/modules/esm/loader）。
-          // Electron 的 Node 不暴露 node-addon-require-builtin 依赖的 V8 符号，必须显式
-          // 传入 --expose-internals 走 loader 的 execArgv 分支。
-          execArgv: ['--expose-internals'],
+          env: { ...env, ELECTRON_RUN_AS_NODE: '1' },
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
         },
       )
       this.child = child
 
-      let spawnedPid: number | undefined
       let stderrBuf = ''
       child.on('error', (e) => {
-        stderrBuf += formatUtilityError(e) + '\n'
+        stderrBuf += formatChildError(e) + '\n'
         if (this.child === child) {
           this.child = null
           this.port = null
           this.emit()
         }
-        console.error('[dsh] 启动失败:', formatUtilityError(e))
+        console.error('[dsh] 启动失败:', formatChildError(e))
+      })
+      child.stdout?.on('data', (d) => {
+        // 必须持续消费 stdout，否则管道缓冲写满会阻塞 DSH
+        const line = d.toString().trim()
+        if (line) console.log('[dsh:stdout]', line)
       })
       child.stderr?.on('data', (d) => {
         const msg = d.toString()
@@ -536,7 +562,7 @@ class DshManager {
         if (line) console.error('[dsh:stderr]', line)
       })
       child.on('exit', (code) => {
-        if (spawnedPid !== undefined) this.clearPidLock(spawnedPid)
+        if (child.pid !== undefined) this.clearPidLock(child.pid)
         if (this.child !== child) return // 已被 stop() 主动接管
         this.child = null
         this.port = null
@@ -544,11 +570,10 @@ class DshManager {
         if (code && code !== 0) console.warn(`[dsh] Web UI 退出 code=${code}`)
       })
 
-      // 等真实 spawn 后写 PID 锁并起超时窗口，避免 fork/模块加载前的空转计入
+      // 等 spawn 成功后写 PID 锁并起超时窗口，避免模块加载前的空转计入
       await new Promise<void>((resolve) => {
         child.once('spawn', () => {
-          spawnedPid = child.pid
-          if (spawnedPid !== undefined) this.writePidLock(spawnedPid)
+          if (child.pid !== undefined) this.writePidLock(child.pid)
           resolve()
         })
         child.once('exit', () => resolve())
@@ -609,18 +634,15 @@ class DshManager {
   }
 
   /**
-   * 停止。utilityProcess.kill() 会连带终止整棵进程树（含 node-pty 派生的 pwsh 孙进程，
-   * 已实测），无需 taskkill；应用退出时 Electron 也会自动回收 utility 进程。
+   * 停止。spawn 模式下 kill() 只杀直接子进程，这里用 taskkill /T /F 连带终止
+   * 整棵进程树（含 node-pty 派生的 pwsh 孙进程，已实测）。应用被强杀时子进程
+   * 会孤儿化，由 cleanupStaleServer（PID 锁）在下次启动时兜底清理。
    * 同时终止进行中的插件操作子进程。
    */
   async stop(): Promise<void> {
     const pending = this.pluginPending
     if (pending) {
-      try {
-        pending.child.kill()
-      } catch {
-        /* noop */
-      }
+      killTree(pending.child.pid)
       this.finishPlugin(pending, false, '操作已取消（DSH 正在停止）')
     }
     const child = this.child
@@ -629,11 +651,7 @@ class DshManager {
     this.port = null
     this.emit()
     if (child.pid !== undefined) this.clearPidLock(child.pid)
-    try {
-      child.kill()
-    } catch {
-      /* noop */
-    }
+    killTree(child.pid)
   }
 
   status(): DshStatus {
@@ -702,15 +720,16 @@ class DshManager {
 
     const runOnce = (extraArgs: string[]): Promise<{ ok: boolean; error?: string }> =>
       new Promise((resolve) => {
-        const child = utilityProcess.fork(
-          dshBin,
-          ['plugin', '--profile', 'web', action, spec, ...extraArgs],
+        // 与 server 同理：必须 run-as-node spawn（见 start() 内注释，打包版
+        // utilityProcess 吞 --expose-internals）
+        const child = spawn(
+          process.execPath,
+          ['--expose-internals', dshBin, 'plugin', '--profile', 'web', action, spec, ...extraArgs],
           {
             cwd: home,
-            env: this.buildEnv(home),
-            stdio: 'pipe',
-            serviceName: 'zdn-dsh-plugin',
-            execArgv: ['--expose-internals'],
+            env: { ...this.buildEnv(home), ELECTRON_RUN_AS_NODE: '1' },
+            stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true,
           },
         )
         const pending = { child, action, name: spec, resolve }
@@ -724,7 +743,7 @@ class DshManager {
         })
         child.on('error', (e) => {
           if (this.pluginPending !== pending) return
-          this.finishPlugin(pending, false, `utility 进程错误: ${formatUtilityError(e)}`)
+          this.finishPlugin(pending, false, `子进程错误: ${formatChildError(e)}`)
         })
         child.on('exit', (code) => {
           if (this.pluginPending !== pending) return // 已被 stop() 接管

@@ -1,7 +1,11 @@
 # DeepSeek Harness (DSH) 内嵌集成计划
 
-> 状态：**已实现（implementation）**。Web UI 嵌入方案已落地（2026-08-21），
-> 托管层于 2026-08-30 迁移到 Electron `utilityProcess`（见下文「架构」）。
+> 状态：**已实现（implementation）**。Web UI 嵌入方案已落地（2026-08-21）。
+>
+> ⚠️ **托管层已于 v1.8.9 后改回 run-as-node spawn**：打包版 Electron 的
+> `utilityProcess.fork` 会静默吞掉 `--expose-internals` 的效果（详见 AGENTS.md
+> 坑 #7），下文涉及 `utilityProcess` 的「架构 / 决策 / 验证脚本」段落以 AGENTS.md
+> 坑 #7 为准。端口预占、HTTP 探测、PID 锁、自愈等其余设计不变。
 
 ## 1. 目标
 
