@@ -41,6 +41,10 @@ declare global {
     tools: { key: string; name: string; label: string }[]
     dir: string
     builtin: boolean
+    /** 依赖声明（插件 id → semver 范围） */
+    dependencies?: Record<string, string>
+    /** 依赖此插件的其他插件 id（卸载保护提示用） */
+    dependents?: string[]
     error?: string
   }
 
@@ -99,7 +103,10 @@ declare global {
         name?: string
         error?: string
       }>
-      mcpUninstallPlugin(id: string): Promise<{ ok: boolean; removed?: boolean; error?: string }>
+      mcpUninstallPlugin(
+        id: string,
+        force?: boolean,
+      ): Promise<{ ok: boolean; removed?: boolean; error?: string }>
       mcpGetPluginsDir(): Promise<string>
       mcpGetPluginSpec(): Promise<{ ok: boolean; content?: string; error?: string }>
       mcpGetAgentGuide(): Promise<{ ok: boolean; content?: string; error?: string }>

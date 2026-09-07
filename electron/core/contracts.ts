@@ -101,6 +101,8 @@ export interface PluginManifest {
   entry?: string
   author?: string
   description?: string
+  /** 插件间依赖声明：插件 id → semver 版本范围（如 "^1.2.0"）；平台拓扑排序加载并校验满足性 */
+  dependencies?: Record<string, string>
   /** 内置插件标记（随应用分发，不可卸载） */
   builtin?: boolean
   /** 预留：市场元数据（本次不实现） */

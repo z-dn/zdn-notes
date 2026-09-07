@@ -82,10 +82,10 @@ function appService(svc: AppService, ctx: MainModuleContext): void {
   })
   // 已安装插件清单（内置聚合 + 第三方）
   svc.register('mcp:listPlugins', () => listPlugins(ctx.getDataDir(), currentToolRegistry))
-  // 卸载插件
-  svc.register('mcp:uninstallPlugin', (id: unknown) => {
+  // 卸载插件（有依赖方时默认阻止，force 越过——GUI 确认框已提示依赖方名单）
+  svc.register('mcp:uninstallPlugin', (id: unknown, force?: unknown) => {
     try {
-      const removed = uninstallPlugin(ctx.getDataDir(), String(id))
+      const removed = uninstallPlugin(ctx.getDataDir(), String(id), { force: force === true })
       return { ok: true, removed }
     } catch (e) {
       console.error('[mcp:uninstallPlugin]', e)

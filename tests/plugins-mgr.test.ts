@@ -182,3 +182,65 @@ describe('listPlugins / uninstallPlugin', () => {
     expect(plugins[0].builtin).toBe(true)
   })
 })
+
+describe('插件依赖：清单校验 / 卸载保护 / 列表展示', () => {
+  function writePluginDir(id: string, extra: Record<string, unknown> = {}): string {
+    const dir = path.join(pluginRoot(dataDir), id)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'ztool.json'),
+      JSON.stringify({ id, version: '1.0.0', apiVersion: 1, entry: 'index.js', ...extra }),
+      'utf-8',
+    )
+    fs.writeFileSync(path.join(dir, 'index.js'), 'module.exports = { tools: [] }', 'utf-8')
+    return dir
+  }
+
+  it('validateManifest 接受合法 dependencies', () => {
+    const m = validateManifest(
+      JSON.stringify({ ...VALID_MANIFEST, dependencies: { b: '^1.0.0' } }),
+      'test',
+    )
+    expect(m.dependencies).toEqual({ b: '^1.0.0' })
+  })
+
+  it('validateManifest 拒绝非法 dependencies', () => {
+    expect(() =>
+      validateManifest(JSON.stringify({ ...VALID_MANIFEST, dependencies: { http: '*' } }), 'test'),
+    ).toThrow(/不能依赖自己/)
+    expect(() =>
+      validateManifest(JSON.stringify({ ...VALID_MANIFEST, dependencies: { b: 'abc' } }), 'test'),
+    ).toThrow(/版本范围非法/)
+  })
+
+  it('卸载被依赖插件默认阻止并列出依赖方，force 可强制', () => {
+    writePluginDir('core')
+    writePluginDir('consumer', { dependencies: { core: '*' } })
+    expect(() => uninstallPlugin(dataDir, 'core')).toThrow(/consumer 依赖此插件/)
+    expect(fs.existsSync(path.join(pluginRoot(dataDir), 'core'))).toBe(true)
+    expect(uninstallPlugin(dataDir, 'core', { force: true })).toBe(true)
+    expect(fs.existsSync(path.join(pluginRoot(dataDir), 'core'))).toBe(false)
+  })
+
+  it('依赖方移除后可正常卸载被依赖插件', () => {
+    writePluginDir('core')
+    writePluginDir('consumer', { dependencies: { core: '*' } })
+    expect(uninstallPlugin(dataDir, 'consumer')).toBe(true)
+    expect(uninstallPlugin(dataDir, 'core')).toBe(true)
+  })
+
+  it('listPlugins 携带依赖/依赖方信息，缺依赖展示错误', () => {
+    writePluginDir('core', { version: '1.5.0' })
+    writePluginDir('consumer', { dependencies: { core: '^1.0.0' } })
+    writePluginDir('lonely', { dependencies: { ghost: '*' } })
+    const plugins = listPlugins(dataDir)
+    const core = plugins.find((p) => p.id === 'core')
+    const consumer = plugins.find((p) => p.id === 'consumer')
+    const lonely = plugins.find((p) => p.id === 'lonely')
+    expect(core?.dependencies).toBeUndefined()
+    expect(core?.dependents).toEqual(['consumer'])
+    expect(consumer?.dependencies).toEqual({ core: '^1.0.0' })
+    expect(consumer?.error).toBeUndefined()
+    expect(lonely?.error).toMatch(/缺少依赖: ghost/)
+  })
+})

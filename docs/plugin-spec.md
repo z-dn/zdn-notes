@@ -95,6 +95,9 @@ npx zdn-agent-tool list
   "entry": "index.js",     // 可选，入口文件；默认 "index.js"
   "author": "me@example.com",  // 可选
   "description": "描述插件做什么", // 可选
+  "dependencies": {         // 可选，插件间依赖（见第 7 节）
+    "otherplugin": "^1.2.0"
+  },
   "builtin": false         // 保留给平台内置插件，第三方不要设置
 }
 ```
@@ -106,7 +109,8 @@ npx zdn-agent-tool list
 | `id` | ✅ | `^[a-zA-Z0-9_-]{1,64}$`；目录名必须等于它；全局唯一 |
 | `apiVersion` | ✅ | 必须 `=== 1`（当前平台版本）；不符则整个插件拒绝加载 |
 | `entry` | 否 | 默认 `index.js`；必须是插件目录内的相对路径 |
-| `name`/`version`/`author`/`description` | 否 | 元信息，用于管理页展示 |
+| `dependencies` | 否 | 对象：插件 id → semver 范围（如 `"^1.2.0"` / `"~2.0.0"` / `">=1.0.0"` / `"*"`）；不能依赖自己；格式非法或依赖不满足则拒绝加载（见第 7 节） |
+| `name`/`version`/`author`/`description` | 否 | 元信息，用于管理页展示；`version` 是依赖版本校验的依据 |
 
 ---
 
@@ -203,7 +207,80 @@ UI 专属通道不在其中（如 `window:*`、`db:export`、`image:pickAndSave`
 
 ---
 
-## 7. 信任模型与安全边界
+## 7. 插件间依赖
+
+插件可以复用其他插件的代码与能力。平台提供**声明式依赖机制**：在 `ztool.json` 里声明
+`dependencies`（插件 id → semver 范围），平台负责校验满足性、拓扑排序加载、卸载保护与
+热重载失效链。
+
+### 7.1 声明与解析规则
+
+```jsonc
+{
+  "id": "myui",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "dependencies": { "weather": "^1.2.0" }
+}
+```
+
+- **满足条件**：被依赖插件已安装（目录存在且清单可读），且其 `version` 落在声明的
+  semver 范围内（`semver.satisfies`）。建议被依赖插件始终声明 `version`（缺省按 `0.0.0`，
+  除 `*` 外的范围都不满足）。
+- **加载顺序**：平台按依赖图**拓扑排序**——被依赖插件的入口先执行；声明只是契约，
+  加载顺序不替代你在代码里显式 `require`。
+- **拒载规则**（管理页红字展示，入口不执行、工具不进注册表）：
+  | 错误 | 含义 |
+  |------|------|
+  | `缺少依赖: <id>` | 声明的插件不存在 |
+  | `依赖版本不满足: <id> 需要 <范围>，实际 <版本>` | 被依赖插件版本不符 |
+  | `依赖不可用: <id>（清单损坏）` | 被依赖插件清单无法解析 |
+  | `循环依赖: a → b → a` | 依赖声明成环，**环上成员全部拒载**（不任选一边打破） |
+  | `依赖加载失败: <id>（原因）` | 上游被拒载时，下游连带拒载 |
+
+- **卸载保护**：卸载被依赖插件时，管理页会列出依赖方名单并要求确认；确认后强制卸载，
+  依赖方随后报「缺少依赖」。**先卸依赖方**才是干净流程。
+- 安装顺序不敏感：允许先装依赖方后装被依赖方——装上后热重载自动恢复。
+
+### 7.2 复用被依赖插件的代码
+
+插件是完整 Node 模块，直接 `require` 被依赖插件目录内的文件：
+
+```js
+// 相对路径（按文件位置解析，兄弟目录可行）
+const weather = require('../weather/lib.js')
+
+// 或绝对路径（ctx.dataDir 可用；相对路径已够用时不必如此）
+const path = require('path')
+const weather2 = require(path.join(ctx.dataDir, 'agent-tools', 'weather', 'lib.js'))
+```
+
+依赖的 `node_modules` **不需要**打进依赖方——`require` 被依赖插件的文件时，模块解析
+从被依赖插件目录出发，其自身依赖正常可用。
+
+### 7.3 避免代码级循环 require
+
+平台能拦截**声明环**（见上表），但拦不住代码里的循环 require——CommonJS 循环依赖
+拿到的是**半成品 exports**（对方模块未执行完，属性为 undefined），这是 Node 语言语义。
+
+```js
+// ❌ 反例：a/lib.js 与 b/lib.js 互相 require
+// a/lib.js
+const b = require('../b/lib.js') // b 还没执行完 → b.xxx undefined
+
+// ✅ 正解：共享逻辑抽到无依赖的叶子模块，双方都 require 它
+// shared/lib.js —— 不 require 任何插件模块
+// a/index.js 与 b/index.js 都 require('../shared/lib.js')
+```
+
+### 7.4 热重载失效链
+
+任一插件目录变化触发热重载时，平台清空**整个插件根目录**的 require 缓存并按拓扑序
+重新执行全部入口——被依赖方更新后，依赖方自动拿到新模块，不会持有旧实例。
+
+---
+
+## 8. 信任模型与安全边界
 
 **插件入口以完整 Node 模块直接加载（无 vm 沙箱、无 require 白名单、无能力门控）。**
 
@@ -220,7 +297,7 @@ UI 专属通道不在其中（如 `window:*`、`db:export`、`image:pickAndSave`
 
 ---
 
-## 8. 打包与发布
+## 9. 打包与发布
 
 ```bash
 # 校验清单 + 打包（zip 格式，内含 ztool.json + 入口 + node_modules + 资源）
@@ -237,7 +314,7 @@ npx zdn-agent-tool install ./myplugin.ztool
 
 ---
 
-## 9. 常见「平台不认」原因排查
+## 10. 常见「平台不认」原因排查
 
 | 现象 | 原因 |
 |------|------|
@@ -248,13 +325,17 @@ npx zdn-agent-tool install ./myplugin.ztool
 | 加载失败：入口不存在 | `entry` 指向的文件缺失 |
 | 加载失败：工具 key 冲突 | 两个工具 `key` 相同（含与其他插件冲突） |
 | 加载失败：Cannot find module | 插件依赖未安装——在插件目录运行 `npm install` 后重启应用；`ztool build` 会自动安装生产依赖 |
+| 加载失败：缺少依赖 \<id\> | `dependencies` 声明的插件不存在（未安装，或其目录名/清单 id 不符） |
+| 加载失败：依赖版本不满足 | 被依赖插件的 `version` 不在声明的 semver 范围内 |
+| 加载失败：循环依赖 a → b → a | 依赖声明成环，环上成员全部拒载；调整声明或升级版本打破环 |
+| 卸载失败：xxx 依赖此插件 | 被依赖插件受卸载保护；确认强制卸载（依赖方随后报缺依赖），或先卸载依赖方 |
 | 工具不显示在 `tools/list` | 白名单未授权（AGENT 工具页勾选「授权智能体使用」）；或 MCP 总开关关闭 |
 | 智能体调用报错 | 插件 `run` 抛异常；返回值不可 JSON 序列化 |
 | `ctx.app` 调用报错 | GUI 未在运行（应用未启动）——`ctx.app` 仅在 GUI 运行时可用，可改用 Node 原生能力 |
 
 ---
 
-## 10. 完整示例：一个能连数据库的插件
+## 11. 完整示例：一个能连数据库的插件
 
 插件是完整 Node 模块，连接任何外部数据库只需 `require` 对应驱动（如 `mysql2`），
 **平台一行代码都不用写**。下面演示同时使用 Node 依赖、HTTP 请求与 `ctx.app`。
@@ -376,6 +457,7 @@ module.exports = {
 - [ ] 每个工具含 `name`、`description`、`inputSchema`、`run`
 - [ ] 工具 `key` 全局唯一
 - [ ] 有 npm 依赖时：`ztool build` 自动安装生产依赖（`--omit=dev`），`node_modules` 随 `.ztool` 分发
+- [ ] 声明 `dependencies` 时确保被依赖插件已存在且 `version` 满足范围；避免依赖成环
 - [ ] `run` 返回可 JSON 序列化的值
 - [ ] 用 `ctx.log` 记日志（避免 `console.log` 污染 MCP 协议流）
 - [ ] `ztool build` 通过，装到本机能被 `ztool list` 识别

@@ -168,12 +168,14 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
   }
 
   async function handleUninstall(plugin: McpPluginInfo) {
-    const ok = await showConfirm(
-      '卸载插件',
-      `确定卸载「${plugin.name}」吗？插件目录将被删除，其工具将不再提供给智能体。`,
-    )
+    const dependents = plugin.dependents ?? []
+    const message =
+      dependents.length > 0
+        ? `「${dependents.join('、')}」依赖此插件，卸载后这些插件将无法加载。仍要强制卸载「${plugin.name}」吗？`
+        : `确定卸载「${plugin.name}」吗？插件目录将被删除，其工具将不再提供给智能体。`
+    const ok = await showConfirm('卸载插件', message)
     if (!ok) return
-    const res = await window.electronAPI.mcpUninstallPlugin(plugin.id)
+    const res = await window.electronAPI.mcpUninstallPlugin(plugin.id, dependents.length > 0)
     if (res.ok) {
       toast(`已卸载: ${plugin.name}`)
       await refresh()
@@ -237,6 +239,25 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
             )}
             {plugin.author && (
               <p className="mt-0.5 text-[11px] text-muted-foreground/60">作者: {plugin.author}</p>
+            )}
+            {plugin.dependencies && Object.keys(plugin.dependencies).length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                <span className="text-[11px] text-muted-foreground/60">依赖:</span>
+                {Object.entries(plugin.dependencies).map(([depId, range]) => (
+                  <span
+                    key={depId}
+                    className="rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                    title={`依赖插件 ${depId}（semver 范围 ${range}）`}
+                  >
+                    {depId} {range}
+                  </span>
+                ))}
+              </div>
+            )}
+            {plugin.dependents && plugin.dependents.length > 0 && (
+              <p className="mt-1 text-[11px] text-muted-foreground/60">
+                被依赖: {plugin.dependents.join('、')}
+              </p>
             )}
           </div>
           {!plugin.builtin && (

@@ -7,6 +7,8 @@ import {
   discoverPluginDirs,
   loadPlugin,
   loadPluginsIntoRegistry,
+  parseDependencies,
+  planPluginLoad,
   pluginRoot,
 } from '../electron/core/plugin-loader'
 import { createPluginStorage } from '../electron/core/plugin-storage'
@@ -60,6 +62,20 @@ function writePlugin(dir: string, manifest = VALID_MANIFEST, entry = VALID_ENTRY
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'ztool.json'), JSON.stringify(manifest), 'utf-8')
   fs.writeFileSync(path.join(dir, 'index.js'), entry, 'utf-8')
+}
+
+/** 任意文件集写入插件目录（多文件/子目录场景） */
+function writeFiles(dir: string, files: Record<string, string>) {
+  fs.mkdirSync(dir, { recursive: true })
+  for (const [name, content] of Object.entries(files)) {
+    const target = path.join(dir, name)
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(target, content, 'utf-8')
+  }
+}
+
+function manifestOf(id: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return { id, version: '1.0.0', apiVersion: 1, entry: 'index.js', ...extra }
 }
 
 describe('plugin discovery', () => {
@@ -155,6 +171,181 @@ describe('plugin tools in registry + execution ctx', () => {
 describe('pluginRoot', () => {
   it('resolves under data dir', () => {
     expect(pluginRoot(dataDir)).toBe(path.join(dataDir, 'agent-tools'))
+  })
+})
+
+describe('parseDependencies', () => {
+  it('接受合法声明并原样保留范围', () => {
+    expect(parseDependencies({ b: '^1.2.0', c: '~2.0.0' }, 'a')).toEqual({
+      b: '^1.2.0',
+      c: '~2.0.0',
+    })
+  })
+
+  it('空声明返回 undefined', () => {
+    expect(parseDependencies({}, 'a')).toBeUndefined()
+    expect(parseDependencies(undefined, 'a')).toBeUndefined()
+    expect(parseDependencies(null, 'a')).toBeUndefined()
+  })
+
+  it('拒绝非法 id / 自依赖 / 非法范围 / 非对象', () => {
+    expect(() => parseDependencies({ '../x': '*' }, 'a')).toThrow(/依赖 id 非法/)
+    expect(() => parseDependencies({ 'a b': '*' }, 'a')).toThrow(/依赖 id 非法/)
+    expect(() => parseDependencies({ a: '*' }, 'a')).toThrow(/不能依赖自己/)
+    expect(() => parseDependencies({ b: 'latest' }, 'a')).toThrow(/版本范围非法/)
+    expect(() => parseDependencies({ b: '' }, 'a')).toThrow(/版本范围非法/)
+    expect(() => parseDependencies(['b'], 'a')).toThrow(/必须是对象/)
+  })
+})
+
+describe('插件依赖机制：planPluginLoad / loadPluginsIntoRegistry', () => {
+  const root = () => path.join(dataDir, 'agent-tools')
+
+  it('拓扑排序：被依赖插件先加载（目录字母序依赖方在前）', () => {
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { b: '*' } })),
+      'index.js': `module.exports = { tools: [{ key: 'a:t', name: 'a_t', description: 'x', inputSchema: {}, run: () => 1 }] }`,
+    })
+    writeFiles(path.join(root(), 'b'), {
+      'ztool.json': JSON.stringify(manifestOf('b')),
+      'index.js': `module.exports = { tools: [{ key: 'b:t', name: 'b_t', description: 'x', inputSchema: {}, run: () => 1 }] }`,
+    })
+    const reg = new ToolRegistry()
+    const loaded = loadPluginsIntoRegistry(reg, dataDir)
+    expect(loaded.map((p) => p.manifest.id)).toEqual(['b', 'a'])
+    expect(planPluginLoad(dataDir).errors).toHaveLength(0)
+  })
+
+  it('缺依赖：拒载并报错', () => {
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { ghost: '*' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    const plan = planPluginLoad(dataDir)
+    expect(plan.order).toHaveLength(0)
+    expect(plan.errors).toEqual([
+      expect.objectContaining({ id: 'a', error: expect.stringContaining('缺少依赖: ghost') }),
+    ])
+    expect(loadPluginsIntoRegistry(new ToolRegistry(), dataDir)).toHaveLength(0)
+  })
+
+  it('依赖版本不满足：拒载并报范围与实际版本', () => {
+    writeFiles(path.join(root(), 'b'), {
+      'ztool.json': JSON.stringify(manifestOf('b', { version: '1.0.0' })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { b: '^2.0.0' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    const plan = planPluginLoad(dataDir)
+    // b 自身无依赖，正常加载；仅拒载版本不满足的 a
+    expect(plan.order.map((e) => e.manifest.id)).toEqual(['b'])
+    expect(plan.errors).toHaveLength(1)
+    expect(plan.errors[0]).toMatchObject({ id: 'a' })
+    expect(plan.errors[0].error).toBe('依赖版本不满足: b 需要 ^2.0.0，实际 1.0.0')
+  })
+
+  it('版本满足：正常加载且依赖先执行', () => {
+    writeFiles(path.join(root(), 'b'), {
+      'ztool.json': JSON.stringify(manifestOf('b', { version: '1.2.3' })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { b: '^1.0.0' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    const plan = planPluginLoad(dataDir)
+    expect(plan.order.map((e) => e.manifest.id)).toEqual(['b', 'a'])
+    expect(plan.errors).toHaveLength(0)
+  })
+
+  it('循环依赖：环成员全部拒载并报环路径', () => {
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { b: '*' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    writeFiles(path.join(root(), 'b'), {
+      'ztool.json': JSON.stringify(manifestOf('b', { dependencies: { a: '*' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    const plan = planPluginLoad(dataDir)
+    expect(plan.order).toHaveLength(0)
+    const byId = new Map(plan.errors.map((e) => [e.id, e.error]))
+    expect(byId.get('a')).toBe('循环依赖: a → b → a')
+    expect(byId.get('b')).toBe('循环依赖: a → b → a')
+    expect(loadPluginsIntoRegistry(new ToolRegistry(), dataDir)).toHaveLength(0)
+  })
+
+  it('环下游传播：依赖环成员的插件以「依赖加载失败」拒载', () => {
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { b: '*' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    writeFiles(path.join(root(), 'b'), {
+      'ztool.json': JSON.stringify(manifestOf('b', { dependencies: { c: '*' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    writeFiles(path.join(root(), 'c'), {
+      'ztool.json': JSON.stringify(manifestOf('c', { dependencies: { b: '*' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    const plan = planPluginLoad(dataDir)
+    const byId = new Map(plan.errors.map((e) => [e.id, e.error]))
+    expect(byId.get('b')).toMatch(/循环依赖: b → c → b/)
+    expect(byId.get('c')).toMatch(/循环依赖/)
+    expect(byId.get('a')).toBe('依赖加载失败: b（循环依赖: b → c → b）')
+  })
+
+  it('依赖清单损坏：报依赖不可用', () => {
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { b: '*' } })),
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    writeFiles(path.join(root(), 'b'), { 'ztool.json': 'not json', 'index.js': 'x' })
+    const plan = planPluginLoad(dataDir)
+    expect(plan.errors.map((e) => e.error)).toContain('依赖不可用: b（清单损坏）')
+  })
+
+  it('热重载失效链：被依赖方更新后重建注册表，依赖方拿到新模块', async () => {
+    writeFiles(path.join(root(), 'b'), {
+      'ztool.json': JSON.stringify(manifestOf('b')),
+      'lib.js': 'module.exports = { v: 1 }',
+      'index.js': `module.exports = { tools: [] }`,
+    })
+    writeFiles(path.join(root(), 'a'), {
+      'ztool.json': JSON.stringify(manifestOf('a', { dependencies: { b: '^1.0.0' } })),
+      'index.js': `
+        const bLib = require('../b/lib.js')
+        module.exports = {
+          tools: [{
+            key: 'a:check', name: 'a_check', description: 'x', inputSchema: {},
+            run: () => ({ v: bLib.v }),
+          }],
+        }`,
+    })
+    async function checkVersion(): Promise<number> {
+      const reg = new ToolRegistry()
+      loadPluginsIntoRegistry(reg, dataDir)
+      const tool = reg
+        .buildMcpTools({ enabled: true, permissions: {} })
+        .find((t) => t.name === 'a_check')
+      expect(tool).toBeDefined()
+      const r = await tool!.run(
+        {
+          kind: 'plugin',
+          dataDir,
+          pluginId: 'a',
+          storage: createPluginStorage(dataDir, 'a'),
+          log: () => {},
+        },
+        {},
+      )
+      return (r as { v: number }).v
+    }
+    expect(await checkVersion()).toBe(1)
+    fs.writeFileSync(path.join(root(), 'b', 'lib.js'), 'module.exports = { v: 2 }', 'utf-8')
+    expect(await checkVersion()).toBe(2)
   })
 })
 

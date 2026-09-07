@@ -73,7 +73,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcpGetCatalog: () => ipcRenderer.invoke('mcp:getCatalog'),
   mcpListPlugins: () => ipcRenderer.invoke('mcp:listPlugins'),
   mcpInstallPlugin: () => ipcRenderer.invoke('mcp:installPlugin'),
-  mcpUninstallPlugin: (id: string) => ipcRenderer.invoke('mcp:uninstallPlugin', id),
+  mcpUninstallPlugin: (id: string, force?: boolean) =>
+    ipcRenderer.invoke('mcp:uninstallPlugin', id, force),
   mcpGetPluginsDir: () => ipcRenderer.invoke('mcp:getPluginsDir'),
   mcpGetPluginSpec: () => ipcRenderer.invoke('mcp:getPluginSpec'),
   mcpGetAgentGuide: () => ipcRenderer.invoke('mcp:getAgentGuide'),
