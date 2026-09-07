@@ -1,5 +1,6 @@
 import { app, Notification, shell } from 'electron'
 import { join } from 'path'
+import { APP_USER_MODEL_ID } from '../../main/app-id'
 import { getMainWindow } from '../../main/window-store'
 import { getAllSettings, setSetting } from '../../main/database/settings-dao'
 import { startReminderService } from '../../main/reminder-service'
@@ -13,7 +14,6 @@ import type { Task } from '@/types/task'
 // 开关读取 settings 表 reminderEnabled（每 tick 实时生效）。
 // ===================================================================
 
-const APP_USER_MODEL_ID = 'com.zdn.notes'
 const NOTIFIED_SETTINGS_KEY = 'reminder.notified'
 
 function iconPath(): string {

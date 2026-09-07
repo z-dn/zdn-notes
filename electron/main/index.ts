@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
 import { closeDB } from './database'
 import { getDataDir } from './data-location'
+import { APP_USER_MODEL_ID } from './app-id'
 import { releaseGuiLock } from '../mcp/lock'
 import { runCli } from '../mcp/cli'
 import { startAppShell, AppShell } from './app-shell'
@@ -66,7 +67,7 @@ if (mcpArgs.includes('--zdn-mcp-stdio')) {
 
   // Windows 任务栏按 AppUserModelID 归组并显示应用图标；必须在窗口创建前设置
   if (process.platform === 'win32') {
-    app.setAppUserModelId('com.zdn.notes')
+    app.setAppUserModelId(APP_USER_MODEL_ID)
   }
 
   const gotTheLock = app.requestSingleInstanceLock()
