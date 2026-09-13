@@ -10,7 +10,7 @@
 //
 // 用法: npm run build:dsh
 //   DSH_PNPM_VERSION 可覆盖 pnpm 版本（默认 11.23.0）
-//   DSH_VERSION    可覆盖 @deepseek-ai/dsh 目标版本（默认 0.1.1-rc.2）
+//   DSH_VERSION    可覆盖 @deepseek-ai/dsh 目标版本（默认 0.1.5-rc.2）
 //   DSH_FORCE      设为 1 强制重装
 // ===================================================================
 
@@ -22,8 +22,9 @@ import { fileURLToPath } from 'url'
 const appPath = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const DSH_DIR = join(appPath, 'resources', 'dsh')
 const PNPM_VERSION = process.env.DSH_PNPM_VERSION || '11.23.0'
-// 当前 npm latest/next 发布版；dsh-web-all@0.3.6 等插件要求 >=0.1.1-rc.1
-const DSH_VERSION = process.env.DSH_VERSION || '0.1.1-rc.2'
+// 当前 npm next 发布版；含 dsh-subprocess-local 的 windowsHide 修复（pwsh 工具不再闪黑窗）
+// dsh-web-all@0.3.6 等插件要求 >=0.1.1-rc.1
+const DSH_VERSION = process.env.DSH_VERSION || '0.1.5-rc.2'
 const FORCE = process.env.DSH_FORCE === '1'
 
 function run(cmd, args, opts) {

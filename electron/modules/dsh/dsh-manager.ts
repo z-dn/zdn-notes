@@ -39,6 +39,8 @@ import { expandPathVars, mergePathDirs } from './path-env'
 export interface DshStatus {
   running: boolean
   port?: number
+  /** 完整 Web UI 入口（含 ?token=；0.1.5 起 DSH web server 默认需要 token 鉴权） */
+  url?: string
 }
 
 export interface DshReadyInfo {
@@ -134,6 +136,10 @@ class DshManager {
 
   private child: ChildProcess | null = null
   private port: number | null = null
+  /** DSH stdout 打印的完整入口 URL（`dsh web: http://…/?token=…`），随 server 生命周期 */
+  private webUrl: string | null = null
+  /** webUrl 已随状态推送过（stdout 解析补发用，避免重复） */
+  private webUrlEmitted = false
   private dataDir = ''
   private listeners = new Set<StatusListener>()
   private pluginLogListeners = new Set<PluginLogListener>()
@@ -517,6 +523,8 @@ class DshManager {
       // 主进程预占空闲 loopback 端口，spawn 后立即对已知端口探测，免去「等回显」往返
       const port = await this.reservePort()
       this.port = port
+      this.webUrl = null
+      this.webUrlEmitted = false
       this.emit()
       console.log(
         '[dsh] 启动: run-as-node spawn',
@@ -554,6 +562,17 @@ class DshManager {
         // 必须持续消费 stdout，否则管道缓冲写满会阻塞 DSH
         const line = d.toString().trim()
         if (line) console.log('[dsh:stdout]', line)
+        // 0.1.5 起 web server 需要 token：从「dsh web: http://…/?token=…」行提取完整入口。
+        // token 行可能晚于 HTTP 探测通过（启动竞态），解析到后立即补发一次状态，
+        // 否则渲染层只拿到 port、webview 停在无 token 的 401 白页
+        const m = line.match(/^dsh web:\s+(https?:\/\/\S+)/)
+        if (m && !this.webUrl) {
+          this.webUrl = m[1]
+          if (this.child && !this.webUrlEmitted) {
+            this.webUrlEmitted = true
+            this.emit()
+          }
+        }
       })
       child.stderr?.on('data', (d) => {
         const msg = d.toString()
@@ -566,6 +585,7 @@ class DshManager {
         if (this.child !== child) return // 已被 stop() 主动接管
         this.child = null
         this.port = null
+        this.webUrl = null
         this.emit()
         if (code && code !== 0) console.warn(`[dsh] Web UI 退出 code=${code}`)
       })
@@ -616,6 +636,13 @@ class DshManager {
           }
         }
         if (this.port && (await this.probe(this.port))) {
+          // token 行可能晚于探测通过（stdout 竞态）：短暂等待 url 就位再返回，
+          // 给渲染层一个带完整入口的状态（最多 5s，超时不阻塞返回）
+          const waitDeadline = Date.now() + 5_000
+          while (!this.webUrl && Date.now() < waitDeadline) {
+            await new Promise((r) => setTimeout(r, 250))
+            if (this.child !== child) break
+          }
           this.emit()
           return { ok: true, port: this.port }
         }
@@ -649,13 +676,18 @@ class DshManager {
     if (!child) return
     this.child = null
     this.port = null
+    this.webUrl = null
     this.emit()
     if (child.pid !== undefined) this.clearPidLock(child.pid)
     killTree(child.pid)
   }
 
   status(): DshStatus {
-    return { running: !!this.child, port: this.child ? this.port ?? undefined : undefined }
+    return {
+      running: !!this.child,
+      port: this.child ? this.port ?? undefined : undefined,
+      url: this.child ? this.webUrl ?? undefined : undefined,
+    }
   }
 
   // -----------------------------------------------------------------

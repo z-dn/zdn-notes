@@ -2,11 +2,12 @@
 // ===================================================================
 // DSH Web UI 集成冒烟测试（真实 Electron 运行时）：
 //   1) 检查 resources/dsh/@deepseek-ai/dsh 入口存在（不依赖独立 node.exe）
-//   2) 主进程预占 loopback 端口，utilityProcess.fork 直接加载 DSH bin.js，
-//      拉起 `dsh --profile web --no-open --port <p>`（与 dsh-manager 同路径）
+//   2) 主进程预占 loopback 端口，ELECTRON_RUN_AS_NODE spawn 加载 DSH bin.js，
+//      拉起 `dsh --profile web --no-open --port <p>`（与 dsh-manager.start 同路径；
+//      utilityProcess 已被 v1.8.9 实测推翻——打包版会静默丢 --expose-internals 效果）
 //   3) 轮询 http://127.0.0.1:<p> 直到返回 200
 //   4) child.kill() + taskkill /T 清理进程树
-// 在真实 Electron 运行时验证「utilityProcess 托管 DSH Web UI」链路，
+// 在真实 Electron 运行时验证「run-as-node spawn 托管 DSH Web UI」链路，
 // 取代旧 validate-dsh-integ.mjs（独立 node.exe 冒烟，node.exe 已移除）。
 //
 // 回归测试：应用会在 web profile 损坏（缺核心包 @deepseek-ai/dsh-web-app）
@@ -15,8 +16,8 @@
 // 用法: npx electron scripts/validate-dsh-utility.mjs
 // ===================================================================
 
-import { app, utilityProcess } from 'electron'
-import { spawnSync } from 'child_process'
+import { app } from 'electron'
+import { spawn, spawnSync } from 'child_process'
 import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync, readdirSync, lstatSync, unlinkSync } from 'fs'
 import { createServer } from 'net'
 import { delimiter, join } from 'path'
@@ -119,14 +120,16 @@ function childEnv(home) {
 
 async function probe(port) {
   try {
-    const r = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(3000) })
-    return r.ok || r.status === 200
+    // 任何 HTTP 响应即视为就绪（与 dsh-manager.probe 一致）；
+    // 0.1.5 起 `/` 无 token 返回 401，但 webServer 已在服务
+    await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(3000) })
+    return true
   } catch {
     return false
   }
 }
 
-/** 用 utilityProcess 拉起 DSH web，探测就绪后清理进程树，返回 {ok, out} */
+/** 用 run-as-node spawn 拉起 DSH web，探测就绪后清理进程树，返回 {ok, out} */
 async function boot(home) {
   if (!existsSync(dshBin)) {
     baseCorrupted = true
@@ -136,22 +139,18 @@ async function boot(home) {
     return { ok: false, out: '' }
   }
   const port = await reservePort()
-  const child = utilityProcess.fork(
-    dshBin,
-    ['--profile', 'web', '--no-open', '--port', String(port)],
-    {
-      cwd: home,
-      env: childEnv(home),
-      stdio: 'pipe',
-      serviceName: 'zdn-dsh-test',
-      // DSH 的 cordis-plugin-loader 需要访问 Node 内部模块；Electron 的 Node
-      // 不暴露 node-addon-require-builtin 依赖的 V8 符号，必须走 execArgv 分支
-      execArgv: ['--expose-internals'],
-    },
-  )
+  // 与 dsh-manager.start 一致：ELECTRON_RUN_AS_NODE spawn（纯 Node，--expose-internals 生效）
+  const child = spawn(process.execPath, ['--expose-internals', dshBin, '--profile', 'web', '--no-open', '--port', String(port)], {
+    cwd: home,
+    env: { ...childEnv(home), ELECTRON_RUN_AS_NODE: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  })
   let out = ''
   let exited = false
   child.stderr?.on('data', (d) => (out += d.toString()))
+  // 持续消费 stdout，否则管道缓冲写满会阻塞 DSH
+  child.stdout?.on('data', () => {})
   child.on('exit', (code) => {
     exited = true
     out += `\n[exit code=${code}]`

@@ -23,6 +23,7 @@ import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
 interface DshStatus {
   running: boolean
   port?: number
+  url?: string
 }
 
 interface PillPos {
@@ -55,6 +56,7 @@ function loadPillState(): PillState {
 
 export function DshPage() {
   const [port, setPort] = useState<number | null>(null)
+  const [webUrl, setWebUrl] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notReadyReason, setNotReadyReason] = useState('')
@@ -81,6 +83,7 @@ export function DshPage() {
   function applyStatus(s: DshStatus) {
     setRunning(s.running)
     setPort(s.running ? (s.port ?? null) : null)
+    setWebUrl(s.running && s.url ? s.url : null)
   }
 
   async function handleStart() {
@@ -210,12 +213,14 @@ export function DshPage() {
     const posStyle = pill.pos ? { left: pill.pos.x, top: pill.pos.y } : undefined
     const posClass = pill.pos ? '' : 'bottom-3 right-3'
     const dragClass = dragging ? 'cursor-grabbing select-none' : 'cursor-grab'
+    // 0.1.5 起 DSH web server 需要 token，优先使用主进程回传的完整入口
+    const viewSrc = webUrl ?? `http://127.0.0.1:${port}`
 
     return (
       <div ref={containerRef} className="relative h-full w-full bg-panel">
         {createElement('webview', {
           key: port,
-          src: `http://127.0.0.1:${port}`,
+          src: viewSrc,
           className: 'h-full w-full',
           style: { width: '100%', height: '100%' },
           allowpopups: 'false',

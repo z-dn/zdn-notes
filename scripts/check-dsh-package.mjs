@@ -13,9 +13,12 @@ import { fileURLToPath } from 'url'
 const appPath = join(fileURLToPath(new URL('.', import.meta.url)), '..')
 const base = process.argv[2] ?? join(appPath, 'release', 'win-unpacked', 'resources', 'dsh')
 
-// 插件生态（如 @linxin666/dsh-web-all@0.3.6）要求 dsh >=0.1.1-rc.1，
-// 打包产物低于该版本即静默丢失终端等插件功能，必须阻断发布。
-const MIN_DSH_VERSION = '0.1.1-rc.1'
+// 硬性下限 0.1.5-rc.2：
+//   1) dsh-subprocess-local 在此版本为 spawn 补了 windowsHide（pwsh 工具不再闪黑窗）
+//   2) 0.1.5 起 web server 需要 ?token= 鉴权，GUI 已按完整 URL 访问，旧版降级会错配
+//   3) 插件生态（如 @linxin666/dsh-web-all@0.3.6）要求 >=0.1.1-rc.1，此下限自然覆盖
+// 打包产物低于该版本即缺失修复/功能，必须阻断发布。
+const MIN_DSH_VERSION = '0.1.5-rc.2'
 
 function verNum(v) {
   const m = String(v).match(/^(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/)
