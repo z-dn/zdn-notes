@@ -193,6 +193,7 @@ declare global {
 
       // ---- DeepSeek Harness（DSH）内嵌 Web UI ----
       dshIsReady(): Promise<{ ready: boolean; reason?: string }>
+      dshGetVersion(): Promise<string | null>
       dshGetStatus(): Promise<{ running: boolean; port?: number; url?: string }>
       dshStart(opts?: { apiKey?: string; model?: string }): Promise<{ ok: boolean; port?: number; error?: string }>
       dshStop(): Promise<boolean>

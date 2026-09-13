@@ -266,6 +266,24 @@ class DshManager {
     return { ready: true }
   }
 
+  /** DSH 运行时版本（读 vendored package.json，缓存；不可用返回 null） */
+  version(): string | null {
+    const cached = this.cachedVersion
+    if (cached !== undefined) return cached
+    const { dshBin } = this.resolvePaths()
+    if (!existsSync(dshBin)) return null
+    try {
+      const pkg = JSON.parse(
+        readFileSync(join(dshBin, '..', '..', 'package.json'), 'utf8'),
+      )
+      return (this.cachedVersion = typeof pkg.version === 'string' ? pkg.version : null)
+    } catch {
+      return (this.cachedVersion = null)
+    }
+  }
+
+  private cachedVersion: string | null | undefined
+
   /**
    * 启动自愈（app 启动时执行，先于任何用户操作）：
    * 1. store 清理：pnpm 大版本升级（v10→v11）后旧 store 链接的 node_modules 不兼容，

@@ -57,6 +57,7 @@ function loadPillState(): PillState {
 export function DshPage() {
   const [port, setPort] = useState<number | null>(null)
   const [webUrl, setWebUrl] = useState<string | null>(null)
+  const [version, setVersion] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notReadyReason, setNotReadyReason] = useState('')
@@ -66,6 +67,9 @@ export function DshPage() {
     let cancelled = false
     window.electronAPI.dshIsReady().then((r) => {
       if (!cancelled && !r.ready) setNotReadyReason(r.reason ?? '')
+    })
+    window.electronAPI.dshGetVersion().then((v) => {
+      if (!cancelled && v) setVersion(v)
     })
     window.electronAPI.dshGetStatus().then((s) => {
       if (cancelled) return
@@ -256,7 +260,7 @@ export function DshPage() {
           >
             <span
               className="flex select-none items-center gap-1.5"
-              title={`http://127.0.0.1:${port}`}
+              title={version ? `DeepSeek Harness v${version} · http://127.0.0.1:${port}` : `http://127.0.0.1:${port}`}
             >
               <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
               <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
@@ -310,6 +314,11 @@ export function DshPage() {
         </div>
         <div className="space-y-1">
           <h2 className="text-sm font-medium">DeepSeek Harness</h2>
+          {version && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              版本 {version}
+            </p>
+          )}
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             {notReadyReason ? (
               <>

@@ -132,6 +132,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ---- DeepSeek Harness（DSH）内嵌 Web UI ----
   dshIsReady: () => ipcRenderer.invoke('dsh:isReady'),
+  dshGetVersion: () => ipcRenderer.invoke('dsh:getVersion'),
   dshGetStatus: () => ipcRenderer.invoke('dsh:getStatus'),
   dshStart: (opts?: unknown) => ipcRenderer.invoke('dsh:start', opts),
   dshStop: () => ipcRenderer.invoke('dsh:stop'),

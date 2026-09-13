@@ -15,6 +15,7 @@ function registerIpc(ctx: MainModuleContext): void {
 
   ipcMain.handle('dsh:isReady', () => dshManager.isReady())
   ipcMain.handle('dsh:getStatus', () => dshManager.status())
+  ipcMain.handle('dsh:getVersion', () => dshManager.version())
   ipcMain.handle('dsh:start', (_e, opts: unknown) =>
     dshManager.start(opts as { apiKey?: string; model?: string } | undefined),
   )
