@@ -69,6 +69,7 @@ interface ResolvedPaths {
 /** 启动总超时：端口解析 + HTTP 就绪探测共用（首次重建 web profile 需 pnpm 安装，留足余量） */
 const START_TIMEOUT_MS = 60_000
 const PROBE_TIMEOUT_MS = 2_000
+const PROBE_INTERVAL_MS = 100
 
 /**
  * 格式化 spawn 的 'error' 事件参数（spawn 失败 / V8 FatalError 诊断信息）。
@@ -565,6 +566,9 @@ class DshManager {
         },
       )
       this.child = child
+      // 并行加载：spawn 成功即下发 running+port（此时 webUrl 未到，渲染层可先
+      // 建 WebContentsView 容器/占位），token 行到后再补发，不再等探测通过串行
+      this.emit()
 
       let stderrBuf = ''
       child.on('error', (e) => {
@@ -658,7 +662,7 @@ class DshManager {
           // 给渲染层一个带完整入口的状态（最多 5s，超时不阻塞返回）
           const waitDeadline = Date.now() + 5_000
           while (!this.webUrl && Date.now() < waitDeadline) {
-            await new Promise((r) => setTimeout(r, 250))
+        await new Promise((r) => setTimeout(r, PROBE_INTERVAL_MS))
             if (this.child !== child) break
           }
           this.emit()

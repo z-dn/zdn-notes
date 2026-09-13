@@ -197,6 +197,11 @@ declare global {
       dshGetStatus(): Promise<{ running: boolean; port?: number; url?: string }>
       dshStart(opts?: { apiKey?: string; model?: string }): Promise<{ ok: boolean; port?: number; error?: string }>
       dshStop(): Promise<boolean>
+      /** 上报 DSH WebContentsView 可见性 + 内容区矩形（DIP，getBoundingClientRect 坐标系） */
+      dshSetViewVisible(
+        visible: boolean,
+        rect: { x: number; y: number; width: number; height: number },
+      ): Promise<void>
       onDshStatusChanged(cb: (status: { running: boolean; port?: number; url?: string }) => void): () => void
       dshListPlugins(): Promise<{
         ok: boolean

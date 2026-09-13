@@ -136,6 +136,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dshGetStatus: () => ipcRenderer.invoke('dsh:getStatus'),
   dshStart: (opts?: unknown) => ipcRenderer.invoke('dsh:start', opts),
   dshStop: () => ipcRenderer.invoke('dsh:stop'),
+  dshSetViewVisible: (visible: boolean, rect: unknown) =>
+    ipcRenderer.invoke('dsh:setViewVisible', visible, rect),
   onDshStatusChanged: (cb: (status: unknown) => void) => {
     const handler = (_e: unknown, status: unknown) => cb(status)
     ipcRenderer.on('dsh:statusChanged', handler)

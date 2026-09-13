@@ -1,4 +1,4 @@
-import { createElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Power, Bot, Minus, Puzzle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
@@ -7,23 +7,29 @@ import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
 // ===================================================================
 // DshPage —— DSH 主区域，双形态：
 //   未启动：居中空状态卡片（图标 + 说明 + 电源启动钮 + 管理插件入口）；
-//   运行中：<webview> 全屏接管，右下角一枚可拖拽状态胶囊，
-//           可收起为小圆点、可在内容区内任意拖动（位置跨重启记忆）。
-// 状态来源：主进程 dsh:statusChanged 事件推送（挂载时拉一次初值）。
+//   运行中：内容由主进程 WebContentsView 承载（本页 DOM 之下不渲染它），
+//           底部一条胶囊控制条（状态点/插件/收起/关闭），可拖动（位置记忆）。
 //
-// 胶囊交互：
-//   - 拖拽：Pointer Events + setPointerCapture（沿用 mindmap-canvas 先例），
-//     实时 clamp 在内容区边界内；拖拽中禁用过渡动画。
-//   - 点击 vs 拖拽：位移 < DRAG_THRESHOLD_PX 视为点击（收缩态点击展开）；
-//     带 .js-nodrag 的按钮（插件/收起/关闭）不进入拖拽流程。
-//   - 持久化：{x, y, collapsed} 存 localStorage（渲染层本地 UI 偏好），
-//     恢复时按容器边界 clamp 校验。
+// 关键协作：WebContentsView 恒绘制在窗口 DOM 之上，因此
+//   - 内容区底部预留控制条（DOM 不被视图遮住）；
+//   - 视图可见性/矩形经 dshSetViewVisible 上报（DIP，getBoundingClientRect
+//     坐标系）；插件对话框打开时暂时隐藏视图（DOM 弹窗需要盖住 DSH 内容）。
+//   切走 tab 时组件卸载、effect 清理上报 visible=false，切回重新上报即可
+//   ——视图本体在主进程保活，无重载。
+// 状态来源：主进程 dsh:statusChanged 事件推送（挂载时拉一次初值）。
 // ===================================================================
 
 interface DshStatus {
   running: boolean
   port?: number
   url?: string
+}
+
+interface ViewRectFx {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 interface PillPos {
@@ -52,6 +58,11 @@ function loadPillState(): PillState {
   } catch {
     return { pos: null, collapsed: false }
   }
+}
+
+function rectOf(el: HTMLElement): ViewRectFx {
+  const r = el.getBoundingClientRect()
+  return { x: r.left, y: r.top, width: r.width, height: r.height }
 }
 
 export function DshPage() {
@@ -108,9 +119,41 @@ export function DshPage() {
     await window.electronAPI.dshStop()
   }
 
-  // ---- 胶囊：拖拽 + 收缩 + 持久化 ----
+  // ---- 视图可见性/矩形上报（决定 WebContentsView 的 bounds 与显隐）----
+  const contentRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = contentRef.current
+    const visible = running && !!webUrl
+    if (!visible || !el) {
+      window.electronAPI.dshSetViewVisible(false, { x: 0, y: 0, width: 0, height: 0 })
+      return
+    }
+    window.electronAPI.dshSetViewVisible(true, rectOf(el))
+    const ro = new ResizeObserver(() => {
+      window.electronAPI.dshSetViewVisible(true, rectOf(el))
+    })
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      // 卸载（切走 tab）或条件变化时隐藏视图
+      window.electronAPI.dshSetViewVisible(false, { x: 0, y: 0, width: 0, height: 0 })
+    }
+  }, [running, webUrl])
 
-  const containerRef = useRef<HTMLDivElement>(null)
+  // 插件对话框打开时暂时隐藏视图（DOM 弹窗无法盖在 WebContentsView 之上）
+  useEffect(() => {
+    if (!pluginsOpen) return
+    window.electronAPI.dshSetViewVisible(false, { x: 0, y: 0, width: 0, height: 0 })
+    return () => {
+      if (running && webUrl && contentRef.current) {
+        window.electronAPI.dshSetViewVisible(true, rectOf(contentRef.current))
+      }
+    }
+  }, [pluginsOpen, running, webUrl])
+
+  // ---- 胶囊：拖拽（限控制条内）+ 收缩 + 持久化 ----
+
+  const barRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLDivElement>(null)
   const [pill, setPill] = useState<PillState>(loadPillState)
   const [dragging, setDragging] = useState(false)
@@ -122,12 +165,12 @@ export function DshPage() {
     moved: boolean
   } | null>(null)
 
-  function clampToContainer(x: number, y: number): PillPos {
-    const c = containerRef.current
+  function clampToBar(x: number, y: number): PillPos {
+    const bar = barRef.current
     const el = pillRef.current
-    if (!c || !el) return { x, y }
-    const maxX = Math.max(PILL_MARGIN_PX, c.clientWidth - el.offsetWidth - PILL_MARGIN_PX)
-    const maxY = Math.max(PILL_MARGIN_PX, c.clientHeight - el.offsetHeight - PILL_MARGIN_PX)
+    if (!bar || !el) return { x, y }
+    const maxX = Math.max(PILL_MARGIN_PX, bar.clientWidth - el.offsetWidth - PILL_MARGIN_PX)
+    const maxY = Math.max(PILL_MARGIN_PX, bar.clientHeight - el.offsetHeight - PILL_MARGIN_PX)
     return {
       x: Math.min(Math.max(x, PILL_MARGIN_PX), maxX),
       y: Math.min(Math.max(y, PILL_MARGIN_PX), maxY),
@@ -139,11 +182,11 @@ export function DshPage() {
     // 按钮（插件/收起/关闭）自身处理点击，不进入拖拽流程
     if ((e.target as HTMLElement).closest('.js-nodrag')) return
     const el = pillRef.current
-    const c = containerRef.current
-    if (!el || !c) return
+    const bar = barRef.current
+    if (!el || !bar) return
     const r = el.getBoundingClientRect()
-    const cr = c.getBoundingClientRect()
-    const base = pill.pos ?? { x: r.left - cr.left, y: r.top - cr.top }
+    const br = bar.getBoundingClientRect()
+    const base = pill.pos ?? { x: r.left - br.left, y: r.top - br.top }
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -162,7 +205,7 @@ export function DshPage() {
     if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
     d.moved = true
     if (!dragging) setDragging(true)
-    setPill((p) => ({ ...p, pos: clampToContainer(d.baseX + dx, d.baseY + dy) }))
+    setPill((p) => ({ ...p, pos: clampToBar(d.baseX + dx, d.baseY + dy) }))
   }
 
   function onPointerUp() {
@@ -192,110 +235,106 @@ export function DshPage() {
   // 恢复的位置做一次边界校验（窗口尺寸可能已变）
   useLayoutEffect(() => {
     if (!pill.pos) return
-    const clamped = clampToContainer(pill.pos.x, pill.pos.y)
+    const clamped = clampToBar(pill.pos.x, pill.pos.y)
     if (clamped.x !== pill.pos.x || clamped.y !== pill.pos.y) {
       setPill((p) => ({ ...p, pos: clamped }))
     }
   }, [pill.pos?.x, pill.pos?.y])
 
-  // 容器尺寸变化（窗口缩放）时把胶囊 clamp 回边界内，避免被藏在容器外
-  useEffect(() => {
-    const c = containerRef.current
-    if (!c || !running || !port) return
-    const ro = new ResizeObserver(() => {
-      setPill((p) => {
-        if (!p.pos) return p
-        const clamped = clampToContainer(p.pos.x, p.pos.y)
-        return clamped.x === p.pos.x && clamped.y === p.pos.y ? p : { ...p, pos: clamped }
-      })
-    })
-    ro.observe(c)
-    return () => ro.disconnect()
-  }, [running, port])
-
   if (running && port) {
     const posStyle = pill.pos ? { left: pill.pos.x, top: pill.pos.y } : undefined
-    const posClass = pill.pos ? '' : 'bottom-3 right-3'
+    const posClass = pill.pos ? '' : 'right-3'
     const dragClass = dragging ? 'cursor-grabbing select-none' : 'cursor-grab'
-    // 0.1.5 起 DSH web server 需要 token，优先使用主进程回传的完整入口
-    const viewSrc = webUrl ?? `http://127.0.0.1:${port}`
 
     return (
-      <div ref={containerRef} className="relative h-full w-full bg-panel">
-        {createElement('webview', {
-          key: port,
-          src: viewSrc,
-          className: 'h-full w-full',
-          style: { width: '100%', height: '100%' },
-          allowpopups: 'false',
-        })}
+      <div className="relative flex h-full w-full flex-col bg-panel">
+        {/* WebContentsView 绘制区域（底部控制条之外的部分） */}
+        <div ref={contentRef} className="relative min-h-0 flex-1">
+          {/* 视图未就绪（等待 token）时的占位，视图弹出后即被其盖住 */}
+          {!webUrl && (
+            <div className="flex h-full w-full items-center justify-center gap-2 text-[11px] text-muted-foreground">
+              <LoaderSpinner />
+              <span>正在启动 DSH…</span>
+            </div>
+          )}
+        </div>
 
-        {pill.collapsed ? (
-          <div
-            ref={pillRef}
-            role="button"
-            tabIndex={0}
-            title="DSH 运行中 · 点击展开"
-            style={posStyle}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') setPill((p) => ({ ...p, collapsed: false }))
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            className={`absolute z-20 flex size-5 touch-none items-center justify-center rounded-full border border-divider bg-panel shadow-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${posClass} ${dragClass}`}
-          >
-            <span className="size-2 animate-pulse rounded-full bg-green-500" />
-          </div>
-        ) : (
-          <div
-            ref={pillRef}
-            style={posStyle}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            className={`group absolute z-20 flex touch-none items-center gap-2 rounded-full border border-divider bg-panel py-1 pl-2.5 pr-1.5 shadow-lg ${posClass} ${dragClass}`}
-          >
-            <span
-              className="flex select-none items-center gap-1.5"
-              title={version ? `DeepSeek Harness v${version} · http://127.0.0.1:${port}` : `http://127.0.0.1:${port}`}
+        {/* 底部胶囊控制条：DOM 保证可交互（WebContentsView 不覆盖这层） */}
+        <div
+          ref={barRef}
+          className="relative h-10 w-full shrink-0 border-t border-divider bg-panel-header"
+        >
+          {pill.collapsed ? (
+            <div
+              ref={pillRef}
+              role="button"
+              tabIndex={0}
+              title="DSH 运行中 · 点击展开"
+              style={posStyle}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') setPill((p) => ({ ...p, collapsed: false }))
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              className={`absolute z-20 flex size-5 touch-none items-center justify-center rounded-full border border-divider bg-panel shadow-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${posClass} top-2.5 ${dragClass}`}
             >
-              <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-              <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
-                http://127.0.0.1:{port}
+              <span className="size-2 animate-pulse rounded-full bg-green-500" />
+            </div>
+          ) : (
+            <div
+              ref={pillRef}
+              style={posStyle}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              className={`group absolute z-20 flex touch-none items-center gap-2 rounded-full border border-divider bg-panel py-1 pl-2.5 pr-1.5 shadow-lg top-1.5 ${posClass} ${dragClass}`}
+            >
+              <span
+                className="flex select-none items-center gap-1.5"
+                title={
+                  version
+                    ? `DeepSeek Harness v${version} · http://127.0.0.1:${port}`
+                    : `http://127.0.0.1:${port}`
+                }
+              >
+                <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+                <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
+                  http://127.0.0.1:{port}
+                </span>
               </span>
-            </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-              onClick={() => setPluginsOpen(true)}
-              title="管理插件"
-            >
-              <Puzzle className="size-3" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
-              onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
-              title="收起为小圆点"
-            >
-              <Minus className="size-3" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
-              onClick={handleStop}
-              title="关闭 DSH"
-            >
-              <Power className="size-3" />
-            </Button>
-          </div>
-        )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={() => setPluginsOpen(true)}
+                title="管理插件"
+              >
+                <Puzzle className="size-3" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
+                title="收起为小圆点"
+              >
+                <Minus className="size-3" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="js-nodrag h-6 rounded-full px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+                onClick={handleStop}
+                title="关闭 DSH"
+              >
+                <Power className="size-3" />
+              </Button>
+            </div>
+          )}
+        </div>
 
         <DshPluginDialog
           open={pluginsOpen}
@@ -315,9 +354,7 @@ export function DshPage() {
         <div className="space-y-1">
           <h2 className="text-sm font-medium">DeepSeek Harness</h2>
           {version && (
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              版本 {version}
-            </p>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">版本 {version}</p>
           )}
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             {notReadyReason ? (
