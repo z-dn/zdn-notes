@@ -62,4 +62,30 @@ if (typeof dshVersion !== 'string' || !gte(dshVersion, MIN_DSH_VERSION)) {
   process.exit(1)
 }
 
-console.log(`[check-dsh-package] OK: ${base} 携带完整 DSH 运行时（v${dshVersion}）`)
+// vendor patch 门禁（v1.8.1 事故同款教训：产物静默丢修复必须阻断发布）。
+// build-dsh.mjs 为 dsh-win32-process 的 CreateProcess 调用点补 CREATE_NO_WINDOW
+// （0x08000000，pwsh 工具黑窗修复），最大值标记 134218756 = 1028|0x08000000。
+// 上游修复 dsh-subprocess-local 时漏了本文件，patch 失去意义后再放宽本断言。
+const win32ProcessPath = join(
+  base,
+  'node_modules',
+  '@deepseek-ai',
+  'dsh-win32-process',
+  'lib',
+  'index.js',
+)
+if (existsSync(win32ProcessPath)) {
+  const win32Src = readFileSync(win32ProcessPath, 'utf8')
+  if (!win32Src.includes('134218756')) {
+    console.error(
+      '[check-dsh-package] FAIL: dsh-win32-process 缺少 CREATE_NO_WINDOW vendor patch（pwsh 工具会闪黑窗）',
+    )
+    console.error('[check-dsh-package] 请重跑 npm run build:dsh 重新应用 patch。')
+    process.exit(1)
+  }
+} else {
+  console.error(`[check-dsh-package] FAIL: 未找到 ${win32ProcessPath}`)
+  process.exit(1)
+}
+
+console.log(`[check-dsh-package] OK: ${base} 携带完整 DSH 运行时（v${dshVersion}，黑窗 patch 在位）`)

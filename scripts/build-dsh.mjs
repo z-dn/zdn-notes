@@ -12,6 +12,10 @@
 //   DSH_PNPM_VERSION 可覆盖 pnpm 版本（默认 11.23.0）
 //   DSH_VERSION    可覆盖 @deepseek-ai/dsh 目标版本（默认 0.1.5-rc.2）
 //   DSH_FORCE      设为 1 强制重装
+// 另含 vendor patch：为 @deepseek-ai/dsh-win32-process 的三个 CreateProcess
+// 调用点补 CREATE_NO_WINDOW（上游 0.1.5 只修了 dsh-subprocess-local 的
+// fallback spawn，windows-job 主路径漏修 → Electron run-as-node 无 console
+// 可继承，pwsh 工具每次弹黑窗）。幂等，按替换目标存在性判断。
 // ===================================================================
 
 import { spawnSync } from 'child_process'
@@ -106,7 +110,65 @@ function installDsh() {
     cwd: DSH_DIR,
     env: { ...process.env, npm_config_node_linker: 'hoisted' },
   })
+  patchWin32Process()
   console.log(`[build-dsh] DSH ${DSH_VERSION} 安装完成`)
+}
+
+/**
+ * vendor patch：@deepseek-ai/dsh-win32-process 的 CreateProcess/WAsUserW 调用点补
+ * CREATE_NO_WINDOW (0x08000000)。上游 0.1.5 只在 dsh-subprocess-local 的 Node fallback
+ * spawn 上加 windowsHide，windows-job containment 的主路径（pwsh 工具实际走的链）
+ * 由 win32-process 绑定以 creationFlags 直接 CreateProcess，缺该 flag 时
+ * Electron run-as-node 链（无 console 可继承）每次拉 pwsh 都会分配可见控制台。
+ * 幂等：三个目标子串都不存在且已含标记 → 判定已 patch，跳过。
+ * 写入用 rm+rewrite：pnpm --node-linker=hoisted 虽是真实文件，仍避免任何与
+ * 共享 store 的潜在硬链接被就地改写。
+ */
+function patchWin32Process() {
+  const NO_WINDOW = 0x08000000
+  const file = join(
+    DSH_DIR,
+    'node_modules',
+    '@deepseek-ai',
+    'dsh-win32-process',
+    'lib',
+    'index.js',
+  )
+  if (!existsSync(file)) {
+    console.error('[build-dsh] 未找到 dsh-win32-process/lib/index.js，跳过 vendor patch')
+    process.exit(1)
+  }
+  const src = readFileSync(file, 'utf8')
+  const replaces = [
+    // spawnCurrentTokenJobProcess（pwsh 工具主路径）：CREATE_UNICODE_ENV|CREATE_SUSPENDED
+    { from: ', 1, 1028, environment,', to: `, 1, ${1028 | NO_WINDOW}, environment,` },
+    // spawnPipedProcess（sandbox 管道执行）
+    { from: 'args), 0, startupInfo,', to: `args), ${NO_WINDOW}, startupInfo,` },
+    // spawnInheritedJobProcess（sandbox 继承 stdio 执行）
+    { from: 'commandLine, 4, startupInfo', to: `commandLine, ${4 | NO_WINDOW}, startupInfo` },
+  ]
+  let out = src
+  for (const { from, to } of replaces) {
+    const count = out.split(from).length - 1
+    if (count === 1) {
+      out = out.replace(from, to)
+    } else if (count === 0) {
+      if (!out.includes(to)) {
+        console.error(`[build-dsh] vendor patch 目标不存在且替换已发生形态不符: ${from}`)
+        process.exit(1)
+      }
+    } else {
+      console.error(`[build-dsh] vendor patch 目标不唯一 (${count} 处): ${from}`)
+      process.exit(1)
+    }
+  }
+  if (out === src) {
+    console.log('[build-dsh] dsh-win32-process 已 patch，跳过')
+    return
+  }
+  rmSync(file, { force: true })
+  writeFileSync(file, out)
+  console.log('[build-dsh] dsh-win32-process 已补 CREATE_NO_WINDOW（pwsh 黑窗 vendor patch）')
 }
 
 function downloadPnpm() {
@@ -146,6 +208,7 @@ function main() {
   // pnpm.exe 必须先于 installDsh 落位：findPnpm 首选它，CI 无系统 pnpm 也能装
   downloadPnpm()
   installDsh()
+  patchWin32Process()
   console.log('\n[build-dsh] 完成。resources/dsh 已就绪（自包含 Web UI 运行时 + pnpm）。')
 }
 
