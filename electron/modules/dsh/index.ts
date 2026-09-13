@@ -11,13 +11,18 @@ import type { FeatureModule, MainModuleContext } from '../../core/contracts'
 // 配置（apiKey / model）直接复用 settings 表（dsh.apiKey / dsh.model）。
 // ===================================================================
 
+let lastLoadUrl = ''
 function wireView(): void {
   dshManager.onChange((status) => {
     if (status.running && status.url) {
       // url（含 token）就绪：装载视图；可见性仍由渲染层控制（默认隐藏，
-      // 等 DshPage 上报 dsh:setViewVisible(true, rect) 才显示）
+      // 等 DshPage 上报 dsh:setViewVisible(true, rect) 才显示）。
+      // ⚠️ token 行可能早于渲染层首次上报：记录 lastLoadUrl，控制器懒创建
+      // （setViewVisible 时）再补 load，否则显示的是从未加载的空白视图。
+      lastLoadUrl = status.url
       for (const c of DshViewController.all()) c.ensureView(status.url)
     } else if (!status.running) {
+      lastLoadUrl = ''
       void DshViewController.destroyAll()
     }
   })
@@ -52,6 +57,8 @@ function registerIpc(ctx: MainModuleContext): void {
       typeof r.width === 'number' &&
       typeof r.height === 'number'
     controller.setVisible(!!visible && ok, ok ? (r as ViewRect) : { x: 0, y: 0, width: 0, height: 0 })
+    // 控制器懒创建补装载：token 可能早于本调用到达（ensureView 广播时实例还不存在）
+    if (visible && ok && lastLoadUrl) controller.ensureView(lastLoadUrl)
   })
 
   // ---- 插件管理（自带 pnpm 转发，见 dsh-manager.pluginAction）----

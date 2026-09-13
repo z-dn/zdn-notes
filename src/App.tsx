@@ -16,6 +16,9 @@ import { AgentToolsPage } from '@/components/agent/agent-tools-page'
 import { AgentSidebar } from '@/components/agent/agent-sidebar'
 import type { AgentMenuKey } from '@/components/agent/agent-sidebar'
 import { DshPage } from '@/components/dsh/dsh-page'
+import { DshStatusBadge } from '@/components/dsh/dsh-status-badge'
+import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
+import { useDshUiStore } from '@/stores/dsh-ui-store'
 import { useTheme } from '@/hooks/use-theme'
 import { useFeature } from '@/hooks/use-feature'
 import { ToastContainer } from '@/components/toast'
@@ -55,6 +58,10 @@ export default function App() {
   )
   const [agentMenu, setAgentMenu] = useState<AgentMenuKey>('plugins')
   const [tabMenu, setTabMenu] = useState<TabMenuState | null>(null)
+  // DSH 插件管理面板（标题栏徽标 / DshPage 空态均可打开）
+  const dshPluginDialogOpen = useDshUiStore((s) => s.pluginDialogOpen)
+  const setDshPluginDialogOpen = useDshUiStore((s) => s.setPluginDialogOpen)
+  const dshRunning = useDshUiStore((s) => s.running)
 
   useEffect(() => {
     loadTasks()
@@ -181,6 +188,7 @@ export default function App() {
           </div>
           <div className="flex items-center">
             <div className="flex items-center gap-1" style={NO_DRAG}>
+              <DshStatusBadge onOpenDsh={() => setSidebarTab('dsh')} />
               <button
                 onClick={() => {
                   setShowSettings(true)
@@ -343,6 +351,11 @@ export default function App() {
           open={showSettings}
           onClose={() => setShowSettings(false)}
           pendingVersion={pendingUpdate || undefined}
+        />
+        <DshPluginDialog
+          open={dshPluginDialogOpen}
+          onClose={() => setDshPluginDialogOpen(false)}
+          running={dshRunning}
         />
         {tabMenu && <TabContextMenu menu={tabMenu} onClose={() => setTabMenu(null)} />}
         <ToastContainer />
