@@ -191,6 +191,21 @@ export function DshPage() {
     }
   }, [pill.pos?.x, pill.pos?.y])
 
+  // 容器尺寸变化（窗口缩放）时把胶囊 clamp 回边界内，避免被藏在容器外
+  useEffect(() => {
+    const c = containerRef.current
+    if (!c || !running || !port) return
+    const ro = new ResizeObserver(() => {
+      setPill((p) => {
+        if (!p.pos) return p
+        const clamped = clampToContainer(p.pos.x, p.pos.y)
+        return clamped.x === p.pos.x && clamped.y === p.pos.y ? p : { ...p, pos: clamped }
+      })
+    })
+    ro.observe(c)
+    return () => ro.disconnect()
+  }, [running, port])
+
   if (running && port) {
     const posStyle = pill.pos ? { left: pill.pos.x, top: pill.pos.y } : undefined
     const posClass = pill.pos ? '' : 'bottom-3 right-3'
