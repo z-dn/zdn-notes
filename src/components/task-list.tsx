@@ -7,9 +7,9 @@ import { InlineTaskInput } from './inline-task-input'
 import { FilterBar } from './filter-bar'
 import {
   buildTree,
+  canDrop,
   collectExpandableIds,
   flattenTree,
-  isDescendantOf,
   partitionByStatus,
   sortTasks,
   type FlatRow,
@@ -17,6 +17,7 @@ import {
   type SortField,
 } from './task-list-view'
 import { generateBetween, rebalance } from '@/lib/lexorank'
+import { toast } from '@/lib/toast'
 import type { Task } from '@/types/task'
 
 const SORT_LABELS: Record<string, string> = {
@@ -198,6 +199,7 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
         if (!child || !r) return
         const relX = (e.clientX - r.left) / r.width
         const taskDepth = flatList[hoveredIdx].depth
+        const isTop = e.clientY < r.top + r.height / 2
 
         if (relX >= 0.5) {
           dropDepthRef.current = taskDepth + 1
@@ -205,9 +207,10 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
           setDropTargetLevelChange(true)
           targetIdx = hoveredIdx + 1
         } else {
-          const isTop = e.clientY < r.top + r.height / 2
-          dropDepthRef.current = taskDepth
-          setDropDepth(taskDepth)
+          // 左半按横向细分落点深度：0..taskDepth，子树末尾边界可落到中间层级
+          const d = Math.min(Math.floor(relX * 2 * (taskDepth + 1)), taskDepth)
+          dropDepthRef.current = d
+          setDropDepth(d)
           setDropTargetLevelChange(false)
           targetIdx = isTop ? hoveredIdx : hoveredIdx + 1
         }
@@ -258,10 +261,9 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
         newParentId = dropIdx === 0 ? null : (flatList[dropIdx - 1]?.task.parentId ?? null)
       }
 
-      if (
-        newParentId === draggedTask.id ||
-        (newParentId && isDescendantOf(draggedTask.id, newParentId, tasks))
-      ) {
+      const drop = canDrop(draggedTask.id, newParentId, tasks)
+      if (!drop.ok) {
+        toast(drop.reason ?? '无法移动到该位置')
         dragIdRef.current = null
         dropIdxRef.current = null
         setDropTargetIndex(null)

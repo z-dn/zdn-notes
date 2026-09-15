@@ -77,6 +77,20 @@ export function isDescendantOf(targetId: string, parentId: string, tasks: Task[]
   return false
 }
 
+/** 拖拽落点校验：只有当新父级位于被拖任务自身子树内（会成环）时才拒绝 */
+export function canDrop(
+  draggedId: string,
+  newParentId: string | null,
+  tasks: Task[],
+): { ok: boolean; reason?: string } {
+  if (!newParentId) return { ok: true }
+  if (newParentId === draggedId) return { ok: false, reason: '不能把任务拖到自己下面' }
+  if (isDescendantOf(newParentId, draggedId, tasks)) {
+    return { ok: false, reason: '不能把任务拖到自己的子任务下' }
+  }
+  return { ok: true }
+}
+
 export function partitionByStatus(tasks: Task[]): { todo: Task[]; done: Task[] } {
   const todo: Task[] = []
   const done: Task[] = []

@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildTree,
+  canDrop,
   collectExpandableIds,
   flattenTree,
+  isDescendantOf,
   partitionByStatus,
   sortTasks,
 } from '../src/components/task-list-view'
@@ -114,6 +116,48 @@ describe('flattenTree / collectExpandableIds', () => {
     ]
     const ids = collectExpandableIds(buildTree(tasks))
     expect(ids).toEqual(['p1', 'c1'])
+  })
+})
+
+describe('isDescendantOf / canDrop 拖拽落点校验', () => {
+  // 树结构：A → B → C（C 是孙级）
+  const tasks = [
+    mk('A'),
+    mk('B', { parentId: 'A' }),
+    mk('C', { parentId: 'B' }),
+    mk('D'),
+  ]
+
+  it('isDescendantOf 基本方向', () => {
+    expect(isDescendantOf('C', 'A', tasks)).toBe(true)
+    expect(isDescendantOf('A', 'C', tasks)).toBe(false)
+  })
+
+  it('孙级拖到祖级下（提升层级）应放行', () => {
+    expect(canDrop('C', 'A', tasks).ok).toBe(true)
+  })
+
+  it('同父级内兄弟排序应放行', () => {
+    expect(canDrop('C', 'B', tasks).ok).toBe(true)
+  })
+
+  it('拖到无亲缘关系的分支下应放行', () => {
+    expect(canDrop('C', 'D', tasks).ok).toBe(true)
+  })
+
+  it('拖到自身应拒绝', () => {
+    const r = canDrop('C', 'C', tasks)
+    expect(r.ok).toBe(false)
+    expect(r.reason).toBeTruthy()
+  })
+
+  it('拖到自己的子树内应拒绝（防成环）', () => {
+    expect(canDrop('A', 'C', tasks).ok).toBe(false)
+    expect(canDrop('B', 'C', tasks).ok).toBe(false)
+  })
+
+  it('拖到根级应放行', () => {
+    expect(canDrop('C', null, tasks).ok).toBe(true)
   })
 })
 
