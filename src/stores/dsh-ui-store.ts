@@ -1,10 +1,9 @@
 import { create } from 'zustand'
 
 // ===================================================================
-// DSH UI 共享状态：标题栏徽标（dsh-status-badge）与 DshPage（内容区）
-// 分属不同组件树位置，需要共享运行状态并互相触发（徽标打开插件面板、
-// 面板打开时临时隐藏 WebContentsView）。
-// 运行状态由 dsh-status-badge 订阅 dsh:statusChanged 写入（全局单源）。
+// DSH UI 共享状态：DshPage（内容区胶囊）与 DshPluginDialog 分属不同
+// 组件树位置，需要共享运行状态并互相触发（胶囊打开插件面板）。
+// 运行状态由首个订阅者（App 内组件）经 dsh:statusChanged 事件写入。
 // ===================================================================
 
 interface DshUiState {
@@ -12,11 +11,8 @@ interface DshUiState {
   port: number | null
   webUrl: string | null
   pluginDialogOpen: boolean
-  /** 标题栏徽标下拉菜单展开中：打开时需临时隐藏 WebContentsView（菜单是 DOM，盖不过视图） */
-  badgeMenuOpen: boolean
   setStatus: (s: { running: boolean; port?: number; url?: string }) => void
   setPluginDialogOpen: (open: boolean) => void
-  setBadgeMenuOpen: (open: boolean) => void
 }
 
 export const useDshUiStore = create<DshUiState>((set) => ({
@@ -24,7 +20,6 @@ export const useDshUiStore = create<DshUiState>((set) => ({
   port: null,
   webUrl: null,
   pluginDialogOpen: false,
-  badgeMenuOpen: false,
   setStatus: (s) =>
     set({
       running: s.running,
@@ -32,5 +27,4 @@ export const useDshUiStore = create<DshUiState>((set) => ({
       webUrl: s.running && s.url ? s.url : null,
     }),
   setPluginDialogOpen: (open) => set({ pluginDialogOpen: open }),
-  setBadgeMenuOpen: (open) => set({ badgeMenuOpen: open }),
 }))

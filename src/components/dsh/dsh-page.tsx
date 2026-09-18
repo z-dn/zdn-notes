@@ -1,41 +1,57 @@
-import { useEffect, useRef, useState } from 'react'
-import { Power, Bot, Puzzle } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Bot, Minus, Power, Puzzle } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { useDshUiStore } from '@/stores/dsh-ui-store'
 
 // ===================================================================
 // DshPage —— DSH 主区域，双形态：
 //   未启动：居中空状态卡片（图标 + 说明 + 电源启动钮 + 管理插件入口）；
-//   运行中：内容由主进程 WebContentsView 承载（本页不渲染它），本组件
-//           只负责上报内容区矩形/可见性；控制入口在标题栏 DshStatusBadge。
+//   运行中：内容由 DshWebviewLayer（App 层常驻 iframe）承载，本组件只
+//           负责空态/占位与一枚可拖拽状态胶囊（唯一控制入口）。
 //
-// 关键协作：WebContentsView 恒绘制在窗口 DOM 之上，因此
-//   - 视图可见性/矩形经 dshSetViewVisible 上报（DIP，getBoundingClientRect
-//     坐标系）；插件对话框打开（含从标题栏徽标打开）时暂时隐藏视图；
-//   - 切走 tab 时组件卸载、effect 清理上报 visible=false，切回重新上报即可
-//     ——视图本体在主进程保活，无重载。
-// 运行状态来源：useDshUiStore（dsh-status-badge 全局订阅写入）。
+// 胶囊交互（2bbb779 胶囊时代回归）：
+//   - 拖拽：Pointer Events + setPointerCapture，实时 clamp 在内容区边界内；
+//     拖拽中禁用过渡动画
+//   - 点击 vs 拖拽：位移 < DRAG_THRESHOLD_PX 视为点击（收缩态点击展开）；
+//     带 .js-nodrag 的按钮（插件/收起/关闭）不进入拖拽流程
+//   - 持久化：{x, y, collapsed} 存 localStorage（渲染层本地 UI 偏好），
+//     恢复时按容器边界 clamp 校验
+// 运行状态来源：useDshUiStore（dsh:statusChanged 全局单源）。
 // ===================================================================
 
-interface ViewRectFx {
+interface PillPos {
   x: number
   y: number
-  width: number
-  height: number
 }
 
-function rectOf(el: HTMLElement): ViewRectFx {
-  const r = el.getBoundingClientRect()
-  return { x: r.left, y: r.top, width: r.width, height: r.height }
+interface PillState {
+  pos: PillPos | null
+  collapsed: boolean
+}
+
+const PILL_STORAGE_KEY = 'zdn.dshPill'
+const DRAG_THRESHOLD_PX = 5
+const PILL_MARGIN_PX = 4
+
+function loadPillState(): PillState {
+  try {
+    const raw = localStorage.getItem(PILL_STORAGE_KEY)
+    if (!raw) return { pos: null, collapsed: false }
+    const s = JSON.parse(raw) as { x?: unknown; y?: unknown; collapsed?: unknown }
+    return {
+      pos: typeof s.x === 'number' && typeof s.y === 'number' ? { x: s.x, y: s.y } : null,
+      collapsed: !!s.collapsed,
+    }
+  } catch {
+    return { pos: null, collapsed: false }
+  }
 }
 
 export function DshPage() {
   const running = useDshUiStore((s) => s.running)
   const port = useDshUiStore((s) => s.port)
   const webUrl = useDshUiStore((s) => s.webUrl)
-  const pluginDialogOpen = useDshUiStore((s) => s.pluginDialogOpen)
   const setPluginDialogOpen = useDshUiStore((s) => s.setPluginDialogOpen)
-  const badgeMenuOpen = useDshUiStore((s) => s.badgeMenuOpen)
   const [version, setVersion] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notReadyReason, setNotReadyReason] = useState('')
@@ -67,96 +83,228 @@ export function DshPage() {
     }
   }
 
-  // ---- 视图可见性/矩形上报（bounds = 整个内容区；插件面板/标题栏菜单打开时隐藏）----
-  const contentRef = useRef<HTMLDivElement>(null)
-  const visible = running && !!webUrl && !pluginDialogOpen && !badgeMenuOpen
-  useEffect(() => {
-    const el = contentRef.current
-    if (!visible || !el) {
-      window.electronAPI.dshSetViewVisible(false, { x: 0, y: 0, width: 0, height: 0 })
-      return
-    }
-    window.electronAPI.dshSetViewVisible(true, rectOf(el))
-    const ro = new ResizeObserver(() => {
-      window.electronAPI.dshSetViewVisible(true, rectOf(el))
-    })
-    ro.observe(el)
-    return () => {
-      ro.disconnect()
-      // 卸载（切走 tab）或条件变化时隐藏视图
-      window.electronAPI.dshSetViewVisible(false, { x: 0, y: 0, width: 0, height: 0 })
-    }
-  }, [visible])
+  // ---- 胶囊：拖拽 + 收缩 + 持久化 ----
 
-  return (
-    <div className="relative h-full w-full bg-panel">
-      {running && port ? (
-        /* WebContentsView 绘制区域；视图未就绪（等待 token）时显示占位，
-            视图弹出后即被其盖住。与空态互斥渲染，避免两个 h-full 子树叠加把
-            卡片挤出视口（曾致 DSH 页白屏） */
-        <>
-          <div ref={contentRef} className="h-full w-full">
-            {!webUrl && (
-              <div className="flex h-full w-full items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                <LoaderSpinner />
-                <span>正在启动 DSH…</span>
-              </div>
-            )}
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pillRef = useRef<HTMLDivElement>(null)
+  const [pill, setPill] = useState<PillState>(loadPillState)
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<{
+    startX: number
+    startY: number
+    baseX: number
+    baseY: number
+    moved: boolean
+  } | null>(null)
+
+  function clampToContainer(x: number, y: number): PillPos {
+    const c = containerRef.current
+    const el = pillRef.current
+    if (!c || !el) return { x, y }
+    const maxX = Math.max(PILL_MARGIN_PX, c.clientWidth - el.offsetWidth - PILL_MARGIN_PX)
+    const maxY = Math.max(PILL_MARGIN_PX, c.clientHeight - el.offsetHeight - PILL_MARGIN_PX)
+    return {
+      x: Math.min(Math.max(x, PILL_MARGIN_PX), maxX),
+      y: Math.min(Math.max(y, PILL_MARGIN_PX), maxY),
+    }
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return
+    // 按钮自身处理点击，不进入拖拽流程
+    if ((e.target as HTMLElement).closest('.js-nodrag')) return
+    const el = pillRef.current
+    const c = containerRef.current
+    if (!el || !c) return
+    const r = el.getBoundingClientRect()
+    const cr = c.getBoundingClientRect()
+    const base = pill.pos ?? { x: r.left - cr.left, y: r.top - cr.top }
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: base.x,
+      baseY: base.y,
+      moved: false,
+    }
+    el.setPointerCapture(e.pointerId)
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const d = dragRef.current
+    if (!d) return
+    const dx = e.clientX - d.startX
+    const dy = e.clientY - d.startY
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
+    d.moved = true
+    if (!dragging) setDragging(true)
+    setPill((p) => ({ ...p, pos: clampToContainer(d.baseX + dx, d.baseY + dy) }))
+  }
+
+  function onPointerUp() {
+    const d = dragRef.current
+    dragRef.current = null
+    if (!d) return
+    if (!d.moved && pill.collapsed) {
+      // 收缩态点击 → 展开（展开态点击无操作，避免误触）
+      setPill((p) => ({ ...p, collapsed: false }))
+    }
+    setDragging(false)
+  }
+
+  // 持久化：非拖拽中的每次变化落盘
+  useEffect(() => {
+    if (dragging) return
+    try {
+      localStorage.setItem(
+        PILL_STORAGE_KEY,
+        JSON.stringify({ x: pill.pos?.x, y: pill.pos?.y, collapsed: pill.collapsed }),
+      )
+    } catch {
+      /* 存储不可用时忽略 */
+    }
+  }, [pill, dragging])
+
+  // 恢复的位置做一次边界校验（窗口尺寸可能已变）
+  useLayoutEffect(() => {
+    if (!pill.pos) return
+    const clamped = clampToContainer(pill.pos.x, pill.pos.y)
+    if (clamped.x !== pill.pos.x || clamped.y !== pill.pos.y) {
+      setPill((p) => ({ ...p, pos: clamped }))
+    }
+  }, [pill.pos?.x, pill.pos?.y])
+
+  if (running && port) {
+    const posStyle = pill.pos ? { left: pill.pos.x, top: pill.pos.y } : undefined
+    const posClass = pill.pos ? '' : 'bottom-3 right-3'
+    const dragClass = dragging ? 'cursor-grabbing select-none' : 'cursor-grab'
+    const hoverTitle = `DSH 运行中 · 127.0.0.1:${port}${version ? ` · v${version}` : ''}`
+
+    return (
+      <div ref={containerRef} className="relative h-full w-full bg-panel">
+        {/* 内容由 App 层 DshWebviewLayer 承载；webUrl 未到（token 竞态窗口）时显示占位 */}
+        {!webUrl && (
+          <div className="flex h-full w-full items-center justify-center gap-2 text-[11px] text-muted-foreground">
+            <LoaderSpinner />
+            <span>正在启动 DSH…</span>
           </div>
-        </>
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-panel">
-          <div className="animate-fade-slide-up flex w-72 flex-col items-center gap-4 text-center">
-            <div className="flex size-14 items-center justify-center rounded-2xl border border-divider bg-panel-header shadow-sm">
-              <Bot className="size-7 text-muted-foreground" />
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-sm font-medium">DeepSeek Harness</h2>
-              {version && (
-                <p className="text-[11px] leading-relaxed text-muted-foreground">版本 {version}</p>
-              )}
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                {notReadyReason ? (
-                  <>
-                    运行时不可用：{notReadyReason}
-                    <br />
-                    请重新安装完整的 ZDNotes 安装包（开发环境可运行{' '}
-                    <code>npm run build:dsh</code>）
-                  </>
-                ) : (
-                  '内嵌官方 AI 编程助手 Web UI，本地运行、开箱即用。'
-                )}
-              </p>
-            </div>
-            {/* 电源启动按钮 */}
-            <div className="flex flex-col items-center gap-1.5">
-              <button
-                onClick={handleStart}
-                disabled={busy || !!notReadyReason}
-                title={busy ? '正在启动…' : '启动 DeepSeek Harness'}
-                className="group flex size-16 items-center justify-center rounded-full border border-divider bg-panel-header shadow-sm transition-all duration-200 ease-in-out hover:bg-accent hover:shadow-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {busy ? (
-                  <LoaderSpinner />
-                ) : (
-                  <Power className="size-6 text-muted-foreground transition-colors group-hover:text-foreground" />
-                )}
-              </button>
-              <span className="text-[11px] text-muted-foreground">
-                {busy ? '正在启动…' : notReadyReason ? '不可用' : '点击启动'}
+        )}
+
+        {pill.collapsed ? (
+          <div
+            ref={pillRef}
+            role="button"
+            tabIndex={0}
+            title={`${hoverTitle} · 点击展开`}
+            style={posStyle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') setPill((p) => ({ ...p, collapsed: false }))
+            }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className={`absolute z-20 flex size-5 touch-none items-center justify-center rounded-full border border-divider bg-panel shadow-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${posClass} ${dragClass}`}
+          >
+            <span className="size-2 animate-pulse rounded-full bg-green-500" />
+          </div>
+        ) : (
+          <div
+            ref={pillRef}
+            style={posStyle}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className={`group absolute z-20 flex touch-none items-center gap-2 rounded-full border border-divider bg-panel py-1 pl-2.5 pr-1.5 shadow-lg ${posClass} ${dragClass}`}
+          >
+            <span className="select-none" title={hoverTitle}>
+              <span className="flex items-center gap-1.5">
+                <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+                <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
+                  DSH 运行中
+                </span>
               </span>
-            </div>
+            </span>
             <button
               onClick={() => setPluginDialogOpen(true)}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title="管理 DSH 插件（安装 / 卸载）"
+              className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              title="管理插件"
             >
               <Puzzle className="size-3" />
-              管理插件
+            </button>
+            <button
+              onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
+              className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              title="收起为小圆点"
+            >
+              <Minus className="size-3" />
+            </button>
+            <button
+              onClick={async () => {
+                await window.electronAPI.dshStop()
+              }}
+              className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              title="关闭 DSH"
+            >
+              <Power className="size-3" />
             </button>
           </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-panel">
+      <div className="animate-fade-slide-up flex w-72 flex-col items-center gap-4 text-center">
+        <div className="flex size-14 items-center justify-center rounded-2xl border border-divider bg-panel-header shadow-sm">
+          <Bot className="size-7 text-muted-foreground" />
         </div>
-      )}
+        <div className="space-y-1">
+          <h2 className="text-sm font-medium">DeepSeek Harness</h2>
+          {version && (
+            <p className="text-[11px] leading-relaxed text-muted-foreground">版本 {version}</p>
+          )}
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {notReadyReason ? (
+              <>
+                运行时不可用：{notReadyReason}
+                <br />
+                请重新安装完整的 ZDNotes 安装包（开发环境可运行{' '}
+                <code>npm run build:dsh</code>）
+              </>
+            ) : (
+              '内嵌官方 AI 编程助手 Web UI，本地运行、开箱即用。'
+            )}
+          </p>
+        </div>
+        {/* 电源启动按钮 */}
+        <div className="flex flex-col items-center gap-1.5">
+          <button
+            onClick={handleStart}
+            disabled={busy || !!notReadyReason}
+            title={busy ? '正在启动…' : '启动 DeepSeek Harness'}
+            className="group flex size-16 items-center justify-center rounded-full border border-divider bg-panel-header shadow-sm transition-all duration-200 ease-in-out hover:bg-accent hover:shadow-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy ? (
+              <LoaderSpinner />
+            ) : (
+              <Power className="size-6 text-muted-foreground transition-colors group-hover:text-foreground" />
+            )}
+          </button>
+          <span className="text-[11px] text-muted-foreground">
+            {busy ? '正在启动…' : notReadyReason ? '不可用' : '点击启动'}
+          </span>
+        </div>
+        <button
+          onClick={() => setPluginDialogOpen(true)}
+          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          title="管理 DSH 插件（安装 / 卸载）"
+        >
+          <Puzzle className="size-3" />
+          管理插件
+        </button>
+      </div>
     </div>
   )
 }

@@ -16,7 +16,7 @@ import { AgentToolsPage } from '@/components/agent/agent-tools-page'
 import { AgentSidebar } from '@/components/agent/agent-sidebar'
 import type { AgentMenuKey } from '@/components/agent/agent-sidebar'
 import { DshPage } from '@/components/dsh/dsh-page'
-import { DshStatusBadge } from '@/components/dsh/dsh-status-badge'
+import { DshWebviewLayer } from '@/components/dsh/dsh-webview-layer'
 import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
 import { useDshUiStore } from '@/stores/dsh-ui-store'
 import { useTheme } from '@/hooks/use-theme'
@@ -181,14 +181,18 @@ export default function App() {
                       : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   }`}
                 >
-                  {tab.label}
+                  <span className="relative">
+                    {tab.label}
+                    {tab.id === 'dsh' && dshRunning && (
+                      <span className="absolute -right-2 top-0 size-1.5 animate-pulse rounded-full bg-green-500" />
+                    )}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
           <div className="flex items-center">
             <div className="flex items-center gap-1" style={NO_DRAG}>
-              <DshStatusBadge onOpenDsh={() => setSidebarTab('dsh')} />
               <button
                 onClick={() => {
                   setShowSettings(true)
@@ -298,6 +302,9 @@ export default function App() {
           )}
 
           <div className="animate-fade-slide-up relative flex-1 overflow-hidden bg-panel">
+            {/* DSH Web UI 常驻保活层（iframe）：z-10 盖在 FadeSwitch 的 DSH 页占位之上；
+                切走 tab 仅 visibility 隐藏不卸载（组件自身按 running/port 卸载） */}
+            <DshWebviewLayer active={sidebarTab === 'dsh'} />
             <FadeSwitch
               current={sidebarTab}
               className="relative h-full overflow-hidden"
