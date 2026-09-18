@@ -1,6 +1,6 @@
 {
   "name": "zdn-notes",
-  "version": "1.8.11",
+  "version": "1.8.12",
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {
