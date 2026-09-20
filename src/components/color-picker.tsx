@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { HexColorPicker } from 'react-colorful'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tip } from '@/components/tip-button'
 import { cn } from '@/lib/utils'
 
 interface ColorPickerProps {
@@ -32,14 +33,15 @@ export function ColorPicker({
         onOpenChange?.(o)
       }}
     >
-      <PopoverTrigger asChild>
-        <button
-          className={cn('h-4 w-4 cursor-pointer rounded-full border border-input', triggerClassName)}
-          style={{ background: RAINBOW_BG, ...triggerStyle }}
-          title={title ?? '自定义颜色'}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </PopoverTrigger>
+      <Tip tip={title ?? '自定义颜色'}>
+        <PopoverTrigger asChild>
+          <button
+            className={cn('h-4 w-4 cursor-pointer rounded-full border border-input', triggerClassName)}
+            style={{ background: RAINBOW_BG, ...triggerStyle }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </PopoverTrigger>
+      </Tip>
       <PopoverContent
         align="start"
         side="top"

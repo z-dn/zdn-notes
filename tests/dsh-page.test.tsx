@@ -38,7 +38,7 @@ describe('DshPage 空态渲染', () => {
     render(<DshPage />)
     expect(document.body.innerHTML.length).toBeGreaterThan(0)
     expect(screen.getByText('DeepSeek Harness')).toBeInTheDocument()
-    expect(screen.getByTitle('启动 DeepSeek Harness')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '启动 DeepSeek Harness' })).toBeInTheDocument()
   })
 })
 
@@ -48,9 +48,9 @@ describe('DshPage 胶囊（运行中）', () => {
       useDshUiStore.setState({ running: true, port: 3000, webUrl: null })
     })
     render(<DshPage />)
-    expect(await screen.findByTitle('管理插件')).toBeInTheDocument()
-    expect(screen.getByTitle('收起为小圆点')).toBeInTheDocument()
-    expect(screen.getByTitle('关闭 DSH')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '管理插件' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '收起为小圆点' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '关闭 DSH' })).toBeInTheDocument()
     // token 未到（webUrl 空）：显示"正在启动"占位
     expect(screen.getByText('正在启动 DSH…')).toBeInTheDocument()
   })

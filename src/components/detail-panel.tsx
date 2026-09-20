@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select'
 import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
 import { FadeBlock } from '@/components/fade'
+import { Tip } from '@/components/tip-button'
 import { PRIORITY_COLORS } from './task-item'
 import { renderMarkdown } from '@/lib/markdown'
 import type { Priority } from '@/types/task'
@@ -516,17 +517,18 @@ export function DetailPanel() {
           <label className="text-xs text-muted-foreground">{expandedDescId ? '结构' : '描述'}</label>
           {!expandedDescId && (
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                const rect = descRef.current?.getBoundingClientRect()
-                if (rect) setExpandedDesc(selectedTask.id, { x: rect.left, y: rect.top, width: rect.width, height: rect.height })
-                else setExpandedDesc(selectedTask.id)
-              }}
-              className="text-[11px] text-muted-foreground/50 hover:text-foreground"
-              title="展开描述"
-            >
-              ↗
-            </button>
+            <Tip tip="展开描述">
+              <button
+                onClick={() => {
+                  const rect = descRef.current?.getBoundingClientRect()
+                  if (rect) setExpandedDesc(selectedTask.id, { x: rect.left, y: rect.top, width: rect.width, height: rect.height })
+                  else setExpandedDesc(selectedTask.id)
+                }}
+                className="text-[11px] text-muted-foreground/50 hover:text-foreground"
+              >
+                ↗
+              </button>
+            </Tip>
             {descriptionMode === 'toggle' && (
               <button
                 onClick={() => setPreviewMode((p) => !p)}

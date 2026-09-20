@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Tip } from '@/components/tip-button'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 
@@ -52,13 +53,14 @@ export function TaskInput() {
               <p className="max-w-xs break-words">{selectedTask.title}</p>
             </TooltipContent>
           </Tooltip>
-          <button
-            onClick={() => selectTask(null)}
-            className="ml-0.5 rounded-sm px-1 hover:bg-accent hover:text-foreground"
-            title="改为添加顶级任务"
-          >
-            ✕
-          </button>
+          <Tip tip="改为添加顶级任务">
+            <button
+              onClick={() => selectTask(null)}
+              className="ml-0.5 rounded-sm px-1 hover:bg-accent hover:text-foreground"
+            >
+              ✕
+            </button>
+          </Tip>
         </div>
       )}
       <Input

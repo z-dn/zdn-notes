@@ -13,6 +13,8 @@ import {
 import { format } from 'date-fns'
 import { showConfirm } from '@/components/confirm-dialog'
 import { toast } from '@/lib/toast'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Tip } from '@/components/tip-button'
 import { renderMarkdown } from '@/lib/markdown'
 import type { AgentMenuKey } from './agent-sidebar'
 
@@ -244,13 +246,11 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 <span className="text-[11px] text-muted-foreground/60">依赖:</span>
                 {Object.entries(plugin.dependencies).map(([depId, range]) => (
-                  <span
-                    key={depId}
-                    className="rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                    title={`依赖插件 ${depId}（semver 范围 ${range}）`}
-                  >
-                    {depId} {range}
-                  </span>
+                  <Tip key={depId} tip={`依赖插件 ${depId}（semver 范围 ${range}）`}>
+                    <span className="rounded bg-accent px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                      {depId} {range}
+                    </span>
+                  </Tip>
                 ))}
               </div>
             )}
@@ -261,13 +261,14 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
             )}
           </div>
           {!plugin.builtin && (
-            <button
-              onClick={() => handleUninstall(plugin)}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-              title="卸载插件"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
+            <Tip tip="卸载插件">
+              <button
+                onClick={() => handleUninstall(plugin)}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </Tip>
           )}
         </div>
 
@@ -279,12 +280,11 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
           )}
           {plugin.tools.map((tool) => (
             <label key={tool.key} className="flex items-center gap-2 py-0.5">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={config?.permissions[tool.key] ?? false}
                 disabled={!config?.enabled}
-                onChange={(e) => toggleTool(tool.key, e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40"
+                onCheckedChange={(v) => toggleTool(tool.key, v === true)}
+                className="size-3.5 disabled:opacity-40"
               />
               <span className="truncate text-xs text-muted-foreground">{tool.label}</span>
             </label>
@@ -310,34 +310,35 @@ export function AgentToolsPage({ menu }: AgentToolsPageProps) {
               </h2>
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={config?.enabled ?? false}
-                    onChange={(e) => toggleEnabled(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    onCheckedChange={(v) => toggleEnabled(v === true)}
+                    className="size-3.5"
                   />
                   <span className="text-[11px] text-muted-foreground">启用 MCP</span>
                 </label>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={refresh}
-                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
-                    title="刷新插件列表"
-                  >
-                    <RefreshCw className="size-3" />
-                    刷新
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const dir = await window.electronAPI.mcpGetPluginsDir()
-                      toast(`插件目录: ${dir}`)
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
-                    title="插件目录"
-                  >
-                    <FolderOpen className="size-3" />
-                    目录
-                  </button>
+                  <Tip tip="刷新插件列表">
+                    <button
+                      onClick={refresh}
+                      className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
+                    >
+                      <RefreshCw className="size-3" />
+                      刷新
+                    </button>
+                  </Tip>
+                  <Tip tip="插件目录">
+                    <button
+                      onClick={async () => {
+                        const dir = await window.electronAPI.mcpGetPluginsDir()
+                        toast(`插件目录: ${dir}`)
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent"
+                    >
+                      <FolderOpen className="size-3" />
+                      目录
+                    </button>
+                  </Tip>
                   <button
                     onClick={handleInstall}
                     disabled={installing}

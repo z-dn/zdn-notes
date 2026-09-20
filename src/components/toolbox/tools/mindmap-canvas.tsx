@@ -14,6 +14,7 @@ import {
 import { addMindSibling } from '@/lib/mindmap-outline'
 import { cn } from '@/lib/utils'
 import { ListPlus, Plus, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { Tip } from '@/components/tip-button'
 
 const ZOOM_MIN = 0.5
 const ZOOM_MAX = 2
@@ -190,37 +191,40 @@ export function MindMapCanvas({
           <span className="flex-1 truncate">{node.text || '未命名'}</span>
         )}
         <span className={cn('flex shrink-0 gap-0.5', selected ? '' : 'hidden group-hover:flex')}>
-          <button
-            className={isRoot ? NODE_ACTIONS_ROOT : NODE_ACTIONS}
-            title={isRoot ? '添加子节点' : '添加同级节点'}
-            onClick={(e) => {
-              e.stopPropagation()
-              handleAddSibling(node.id)
-            }}
-          >
-            <ListPlus className="size-3.5" />
-          </button>
-          <button
-            className={isRoot ? NODE_ACTIONS_ROOT : NODE_ACTIONS}
-            title="添加子节点"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleAddChild(node.id)
-            }}
-          >
-            <Plus className="size-3.5" />
-          </button>
-          {!isRoot && (
+          <Tip tip={isRoot ? '添加子节点' : '添加同级节点'}>
             <button
-              className={NODE_ACTIONS}
-              title="删除节点"
+              className={isRoot ? NODE_ACTIONS_ROOT : NODE_ACTIONS}
               onClick={(e) => {
                 e.stopPropagation()
-                handleRemove(node.id)
+                handleAddSibling(node.id)
               }}
             >
-              <X className="size-3.5" />
+              <ListPlus className="size-3.5" />
             </button>
+          </Tip>
+          <Tip tip="添加子节点">
+            <button
+              className={isRoot ? NODE_ACTIONS_ROOT : NODE_ACTIONS}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleAddChild(node.id)
+              }}
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </Tip>
+          {!isRoot && (
+            <Tip tip="删除节点">
+              <button
+                className={NODE_ACTIONS}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleRemove(node.id)
+                }}
+              >
+                <X className="size-3.5" />
+              </button>
+            </Tip>
           )}
         </span>
       </div>
@@ -288,30 +292,33 @@ export function MindMapCanvas({
         </div>
       </div>
       <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-md border border-input bg-background/90 p-0.5 shadow-sm">
-        <button
-          className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="缩小"
-          onClick={() => setZoom((z) => clampZoom(z - 0.1))}
-        >
-          <ZoomOut className="size-3.5" />
-        </button>
+        <Tip tip="缩小">
+          <button
+            className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => setZoom((z) => clampZoom(z - 0.1))}
+          >
+            <ZoomOut className="size-3.5" />
+          </button>
+        </Tip>
         <span className="w-9 text-center text-[11px] tabular-nums text-muted-foreground">
           {Math.round(zoom * 100)}%
         </span>
-        <button
-          className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="放大"
-          onClick={() => setZoom((z) => clampZoom(z + 0.1))}
-        >
-          <ZoomIn className="size-3.5" />
-        </button>
-        <button
-          className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="重置缩放"
-          onClick={() => setZoom(1)}
-        >
-          <RotateCcw className="size-3.5" />
-        </button>
+        <Tip tip="放大">
+          <button
+            className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => setZoom((z) => clampZoom(z + 0.1))}
+          >
+            <ZoomIn className="size-3.5" />
+          </button>
+        </Tip>
+        <Tip tip="重置缩放">
+          <button
+            className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => setZoom(1)}
+          >
+            <RotateCcw className="size-3.5" />
+          </button>
+        </Tip>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Settings } from 'lucide-react'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Tip } from '@/components/tip-button'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
 import { useSettingsStore } from '@/stores/settings-store'
@@ -193,19 +194,20 @@ export default function App() {
           </div>
           <div className="flex items-center">
             <div className="flex items-center gap-1" style={NO_DRAG}>
-              <button
-                onClick={() => {
-                  setShowSettings(true)
-                  setPendingUpdate('')
-                }}
-                className="relative rounded px-2 py-1.5 transition-colors hover:bg-accent"
-                title="设置"
-              >
-                <Settings className="size-3.5" />
-                {pendingUpdate && (
-                  <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-green-500" />
-                )}
-              </button>
+              <Tip tip="设置">
+                <button
+                  onClick={() => {
+                    setShowSettings(true)
+                    setPendingUpdate('')
+                  }}
+                  className="relative rounded px-2 py-1.5 transition-colors hover:bg-accent"
+                >
+                  <Settings className="size-3.5" />
+                  {pendingUpdate && (
+                    <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-green-500" />
+                  )}
+                </button>
+              </Tip>
               <button
                 onClick={handleExport}
                 className="rounded px-2 py-1.5 text-xs transition-colors hover:bg-accent"
@@ -215,27 +217,11 @@ export default function App() {
             </div>
             <span className="mx-1 h-4 w-px bg-border" />
             <div className="flex" style={NO_DRAG}>
-              <button
-                onClick={() => window.electronAPI.windowMinimize()}
-                className="titlebar-btn"
-                title="最小化"
-              >
-                <svg
-                  viewBox="0 0 12 12"
-                  className="size-3"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.2}
+              <Tip tip="最小化">
+                <button
+                  onClick={() => window.electronAPI.windowMinimize()}
+                  className="titlebar-btn"
                 >
-                  <line x1="2" y1="6" x2="10" y2="6" />
-                </svg>
-              </button>
-              <button
-                onClick={() => window.electronAPI.windowMaximizeToggle()}
-                className="titlebar-btn"
-                title={maximized ? '还原' : '最大化'}
-              >
-                {maximized ? (
                   <svg
                     viewBox="0 0 12 12"
                     className="size-3"
@@ -243,18 +229,52 @@ export default function App() {
                     stroke="currentColor"
                     strokeWidth={1.2}
                   >
-                    <rect x="1" y="1.5" width="9" height="9" rx="0.5" opacity="0.4" />
-                    <rect
-                      x="3"
-                      y="3"
-                      width="8.5"
-                      height="8.5"
-                      rx="0.5"
-                      fill="var(--color-background)"
+                    <line x1="2" y1="6" x2="10" y2="6" />
+                  </svg>
+                </button>
+              </Tip>
+              <Tip tip={maximized ? '还原' : '最大化'}>
+                <button
+                  onClick={() => window.electronAPI.windowMaximizeToggle()}
+                  className="titlebar-btn"
+                >
+                  {maximized ? (
+                    <svg
+                      viewBox="0 0 12 12"
+                      className="size-3"
+                      fill="none"
                       stroke="currentColor"
-                    />
-                  </svg>
-                ) : (
+                      strokeWidth={1.2}
+                    >
+                      <rect x="1" y="1.5" width="9" height="9" rx="0.5" opacity="0.4" />
+                      <rect
+                        x="3"
+                        y="3"
+                        width="8.5"
+                        height="8.5"
+                        rx="0.5"
+                        fill="var(--color-background)"
+                        stroke="currentColor"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      viewBox="0 0 12 12"
+                      className="size-3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.2}
+                    >
+                      <rect x="1.5" y="1.5" width="9" height="9" rx="0.5" />
+                    </svg>
+                  )}
+                </button>
+              </Tip>
+              <Tip tip="关闭">
+                <button
+                  onClick={() => window.electronAPI.windowClose()}
+                  className="titlebar-btn titlebar-close"
+                >
                   <svg
                     viewBox="0 0 12 12"
                     className="size-3"
@@ -262,26 +282,11 @@ export default function App() {
                     stroke="currentColor"
                     strokeWidth={1.2}
                   >
-                    <rect x="1.5" y="1.5" width="9" height="9" rx="0.5" />
+                    <line x1="2.5" y1="2.5" x2="9.5" y2="9.5" />
+                    <line x1="9.5" y1="2.5" x2="2.5" y2="9.5" />
                   </svg>
-                )}
-              </button>
-              <button
-                onClick={() => window.electronAPI.windowClose()}
-                className="titlebar-btn titlebar-close"
-                title="关闭"
-              >
-                <svg
-                  viewBox="0 0 12 12"
-                  className="size-3"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.2}
-                >
-                  <line x1="2.5" y1="2.5" x2="9.5" y2="9.5" />
-                  <line x1="9.5" y1="2.5" x2="2.5" y2="9.5" />
-                </svg>
-              </button>
+                </button>
+              </Tip>
             </div>
           </div>
         </header>

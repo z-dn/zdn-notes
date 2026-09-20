@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from '@/lib/toast'
 import { showConfirm } from '@/components/confirm-dialog'
+import { Tip } from '@/components/tip-button'
 
 // ===================================================================
 // DshPluginDialog —— DSH 插件管理对话框。
@@ -148,14 +149,15 @@ export function DshPluginDialog({ open, onClose, running }: DshPluginDialogProps
             <Package className="size-4" />
             DSH 插件管理
           </h2>
-          <button
-            onClick={onClose}
-            disabled={!!busyName}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-            title="关闭"
-          >
-            <X className="size-4" />
-          </button>
+          <Tip tip="关闭">
+            <button
+              onClick={onClose}
+              disabled={!!busyName}
+              className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+            >
+              <X className="size-4" />
+            </button>
+          </Tip>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
@@ -219,13 +221,14 @@ export function DshPluginDialog({ open, onClose, running }: DshPluginDialogProps
                         </Badge>
                       )}
                       {p.active === false && (
-                        <Badge
-                          variant="outline"
-                          className="shrink-0 border-amber-500/40 text-[11px] text-amber-600 dark:text-amber-400"
-                          title="未进入加载层（上次安装中断）。重启应用后自动修复。"
-                        >
-                          未生效
-                        </Badge>
+                        <Tip tip="未进入加载层（上次安装中断）。重启应用后自动修复。">
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-amber-500/40 text-[11px] text-amber-600 dark:text-amber-400"
+                          >
+                            未生效
+                          </Badge>
+                        </Tip>
                       )}
                     </div>
                     <Button

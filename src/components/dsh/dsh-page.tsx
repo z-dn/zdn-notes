@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Bot, Minus, Power, Puzzle } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { useDshUiStore } from '@/stores/dsh-ui-store'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Tip } from '@/components/tip-button'
 
 // ===================================================================
 // DshPage —— DSH 主区域，双形态：
@@ -190,23 +192,27 @@ export function DshPage() {
         )}
 
         {pill.collapsed ? (
-          <div
-            ref={pillRef}
-            role="button"
-            tabIndex={0}
-            title={`${hoverTitle} · 点击展开`}
-            style={posStyle}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') setPill((p) => ({ ...p, collapsed: false }))
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            className={`absolute z-20 flex size-5 touch-none items-center justify-center rounded-full border border-divider bg-panel shadow-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${posClass} ${dragClass}`}
-          >
-            <span className="size-2 animate-pulse rounded-full bg-green-500" />
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                ref={pillRef}
+                role="button"
+                tabIndex={0}
+                style={posStyle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setPill((p) => ({ ...p, collapsed: false }))
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                className={`absolute z-20 flex size-5 touch-none items-center justify-center rounded-full border border-divider bg-panel shadow-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${posClass} ${dragClass}`}
+              >
+                <span className="size-2 animate-pulse rounded-full bg-green-500" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top">{`${hoverTitle} · 点击展开`}</TooltipContent>
+          </Tooltip>
         ) : (
           <div
             ref={pillRef}
@@ -217,36 +223,44 @@ export function DshPage() {
             onPointerCancel={onPointerUp}
             className={`group absolute z-20 flex touch-none items-center gap-2 rounded-full border border-divider bg-panel py-1 pl-2.5 pr-1.5 shadow-lg ${posClass} ${dragClass}`}
           >
-            <span className="select-none" title={hoverTitle}>
-              <span className="flex items-center gap-1.5">
-                <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-                <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
-                  DSH 运行中
+            <Tip tip={hoverTitle}>
+              <span className="select-none">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+                  <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
+                    DSH 运行中
+                  </span>
                 </span>
               </span>
-            </span>
+            </Tip>
             <button
               onClick={() => setPluginDialogOpen(true)}
+              aria-label="管理插件"
               className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title="管理插件"
             >
-              <Puzzle className="size-3" />
+              <Tip tip="管理插件" side="bottom">
+                <Puzzle className="size-3" />
+              </Tip>
             </button>
             <button
               onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
+              aria-label="收起为小圆点"
               className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title="收起为小圆点"
             >
-              <Minus className="size-3" />
+              <Tip tip="收起为小圆点" side="bottom">
+                <Minus className="size-3" />
+              </Tip>
             </button>
             <button
               onClick={async () => {
                 await window.electronAPI.dshStop()
               }}
+              aria-label="关闭 DSH"
               className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              title="关闭 DSH"
             >
-              <Power className="size-3" />
+              <Tip tip="关闭 DSH" side="bottom">
+                <Power className="size-3" />
+              </Tip>
             </button>
           </div>
         )}
@@ -280,18 +294,20 @@ export function DshPage() {
         </div>
         {/* 电源启动按钮 */}
         <div className="flex flex-col items-center gap-1.5">
-          <button
-            onClick={handleStart}
-            disabled={busy || !!notReadyReason}
-            title={busy ? '正在启动…' : '启动 DeepSeek Harness'}
-            className="group flex size-16 items-center justify-center rounded-full border border-divider bg-panel-header shadow-sm transition-all duration-200 ease-in-out hover:bg-accent hover:shadow-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy ? (
-              <LoaderSpinner />
-            ) : (
-              <Power className="size-6 text-muted-foreground transition-colors group-hover:text-foreground" />
-            )}
-          </button>
+          <Tip tip={busy ? '正在启动…' : '启动 DeepSeek Harness'}>
+            <button
+              onClick={handleStart}
+              disabled={busy || !!notReadyReason}
+              aria-label="启动 DeepSeek Harness"
+              className="group flex size-16 items-center justify-center rounded-full border border-divider bg-panel-header shadow-sm transition-all duration-200 ease-in-out hover:bg-accent hover:shadow-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? (
+                <LoaderSpinner />
+              ) : (
+                <Power className="size-6 text-muted-foreground transition-colors group-hover:text-foreground" />
+              )}
+            </button>
+          </Tip>
           <span className="text-[11px] text-muted-foreground">
             {busy ? '正在启动…' : notReadyReason ? '不可用' : '点击启动'}
           </span>
@@ -299,7 +315,6 @@ export function DshPage() {
         <button
           onClick={() => setPluginDialogOpen(true)}
           className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          title="管理 DSH 插件（安装 / 卸载）"
         >
           <Puzzle className="size-3" />
           管理插件

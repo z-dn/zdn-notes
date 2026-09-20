@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useCategoryStore } from '@/stores/category-store'
 import type { Category } from '@/types/task'
 import { ColorPicker } from '@/components/color-picker'
+import { Tip } from '@/components/tip-button'
 
 const COLORS = [
   '#ef4444',
@@ -143,16 +144,17 @@ export function CategorySidebar() {
               }`}
               onClick={editing ? undefined : () => selectCategory(cat.id)}
             >
-              {!editing && cat.id !== '__uncategorized' ? (
-                <ColorPicker
-                  value={cat.color}
-                  onChange={(color) => updateCategory(cat.id, { color })}
-                  onOpenChange={setColorPickerOpen}
-                  triggerClassName="h-2.5 w-2.5"
-                  triggerStyle={{ background: cat.color }}
-                  title="修改颜色"
-                />
-              ) : (
+                {!editing && cat.id !== '__uncategorized' ? (
+                  <Tip tip="修改颜色">
+                    <ColorPicker
+                      value={cat.color}
+                      onChange={(color) => updateCategory(cat.id, { color })}
+                      onOpenChange={setColorPickerOpen}
+                      triggerClassName="h-2.5 w-2.5"
+                      triggerStyle={{ background: cat.color }}
+                    />
+                  </Tip>
+                ) : (
                 <span
                   className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
                   style={{ backgroundColor: cat.color }}
@@ -171,26 +173,28 @@ export function CategorySidebar() {
                       placeholder="请输入分类名称"
                       className="min-w-0 flex-1 rounded border border-input bg-background px-1 py-0.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        saveEdit()
-                      }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-950"
-                      title="保存"
-                    >
-                      ✓
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        cancelEdit()
-                      }}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent"
-                      title="取消"
-                    >
-                      ✕
-                    </button>
+                    <Tip tip="保存">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          saveEdit()
+                        }}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-950"
+                      >
+                        ✓
+                      </button>
+                    </Tip>
+                    <Tip tip="取消">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          cancelEdit()
+                        }}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent"
+                      >
+                        ✕
+                      </button>
+                    </Tip>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {COLORS.map((c) => (
@@ -224,23 +228,25 @@ export function CategorySidebar() {
                   <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
                   {cat.id !== '__uncategorized' ? (
                     <>
-                      <button
-                        onClick={(e) => startEdit(cat, e)}
-                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground group-hover/item:visible"
-                        title="重命名"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteCategory(cat.id)
-                        }}
-                        className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-destructive group-hover/item:visible"
-                        title="删除"
-                      >
-                        ✕
-                      </button>
+                      <Tip tip="重命名">
+                        <button
+                          onClick={(e) => startEdit(cat, e)}
+                          className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground group-hover/item:visible"
+                        >
+                          ✎
+                        </button>
+                      </Tip>
+                      <Tip tip="删除">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteCategory(cat.id)
+                          }}
+                          className="invisible flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-destructive group-hover/item:visible"
+                        >
+                          ✕
+                        </button>
+                      </Tip>
                     </>
                   ) : (
                     <>

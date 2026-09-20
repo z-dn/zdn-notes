@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTaskStore } from '@/stores/task-store'
+import { Tip } from '@/components/tip-button'
 
 const STATUS_OPTIONS: { label: string; value: 'all' | 'todo' | 'done' }[] = [
   { label: '全部', value: 'all' },
@@ -58,26 +59,27 @@ export function FilterBar() {
 
   return (
     <div className="mb-2 flex items-center gap-2 border-b border-divider pb-1.5">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors ${
-          hasActiveFilter
-            ? 'text-foreground bg-accent'
-            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-        }`}
-        title="筛选"
-      >
-        <svg
-          viewBox="0 0 16 16"
-          className="size-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.5}
+      <Tip tip="筛选">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors ${
+            hasActiveFilter
+              ? 'text-foreground bg-accent'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
         >
-          <circle cx="6.5" cy="6.5" r="4.5" />
-          <line x1="10" y1="10" x2="14" y2="14" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 16 16"
+            className="size-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <circle cx="6.5" cy="6.5" r="4.5" />
+            <line x1="10" y1="10" x2="14" y2="14" />
+          </svg>
+        </button>
+      </Tip>
 
       <div
         className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden transition-all duration-200 ease-in-out"

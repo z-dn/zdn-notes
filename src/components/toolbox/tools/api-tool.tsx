@@ -27,6 +27,7 @@ import { toast } from '@/lib/toast'
 import { splitJsonLines, tokenizeJson, tokenClass } from '@/lib/json-highlight'
 import { JsonEditor } from './json-editor'
 import { FadeBlock, Collapse } from '@/components/fade'
+import { Tip } from '@/components/tip-button'
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
@@ -239,14 +240,15 @@ export function ApiTool() {
             <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               <History className="size-3.5" /> 历史记录
             </span>
-            <button
-              onClick={handleClearHistory}
-              disabled={state.history.length === 0}
-              className="ml-auto rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
-              title="清空历史"
-            >
-              清空
-            </button>
+            <Tip tip="清空历史">
+              <button
+                onClick={handleClearHistory}
+                disabled={state.history.length === 0}
+                className="ml-auto rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
+              >
+                清空
+              </button>
+            </Tip>
           </div>
           <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
             {state.history.length === 0 ? (
@@ -277,13 +279,14 @@ export function ApiTool() {
                       <span className="truncate">{formatHistoryTime(h.createdAt)}</span>
                     </span>
                   </button>
-                  <button
-                    onClick={() => handleDeleteHistory(h.id)}
-                    className="absolute right-1 top-1 hidden rounded p-0.5 text-muted-foreground/50 hover:text-destructive group-hover:block"
-                    title="删除该条"
-                  >
-                    <Trash2 className="size-3" />
-                  </button>
+                  <Tip tip="删除该条">
+                    <button
+                      onClick={() => handleDeleteHistory(h.id)}
+                      className="absolute right-1 top-1 hidden rounded p-0.5 text-muted-foreground/50 hover:text-destructive group-hover:block"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </Tip>
                 </div>
               ))
             )}
@@ -296,28 +299,30 @@ export function ApiTool() {
         <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
           <Send className="size-3.5" /> 接口调试
         </span>
-        <button
-          onClick={() => setShowHistory((v) => !v)}
-          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors hover:bg-accent ${
-            showHistory ? 'text-muted-foreground hover:text-foreground' : 'text-primary'
-          }`}
-          title={showHistory ? '收起历史记录' : '展开历史记录'}
-        >
-          {showHistory ? (
-            <PanelLeftClose className="size-3" />
-          ) : (
-            <PanelLeftOpen className="size-3" />
-          )}
-          {showHistory ? '收起历史' : '历史'}
-        </button>
-        <div className="ml-auto flex items-center gap-2">
+        <Tip tip={showHistory ? '收起历史记录' : '展开历史记录'}>
           <button
-            onClick={handleClear}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent"
-            title="清空请求配置与响应"
+            onClick={() => setShowHistory((v) => !v)}
+            className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors hover:bg-accent ${
+              showHistory ? 'text-muted-foreground hover:text-foreground' : 'text-primary'
+            }`}
           >
-            <RotateCcw className="size-3" /> 清空
+            {showHistory ? (
+              <PanelLeftClose className="size-3" />
+            ) : (
+              <PanelLeftOpen className="size-3" />
+            )}
+            {showHistory ? '收起历史' : '历史'}
           </button>
+        </Tip>
+        <div className="ml-auto flex items-center gap-2">
+          <Tip tip="清空请求配置与响应">
+            <button
+              onClick={handleClear}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-accent"
+            >
+              <RotateCcw className="size-3" /> 清空
+            </button>
+          </Tip>
           <button
             onClick={handleSend}
             disabled={loading}
@@ -361,16 +366,17 @@ export function ApiTool() {
                 （{state.headers.filter((h) => h.key.trim()).length} 项）
               </span>
             )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setHeaders([...state.headers, { key: '', value: '' }])
-              }}
-              className="ml-auto flex items-center gap-0.5 rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-              title="添加请求头"
-            >
-              <Plus className="size-3" /> 添加
-            </button>
+            <Tip tip="添加请求头">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setHeaders([...state.headers, { key: '', value: '' }])
+                }}
+                className="ml-auto flex items-center gap-0.5 rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Plus className="size-3" /> 添加
+              </button>
+            </Tip>
           </button>
           <Collapse open={showHeaders} openClass="h-28" className="border-t border-divider">
             <div className="h-full overflow-y-auto px-2 py-1.5">
@@ -393,14 +399,15 @@ export function ApiTool() {
                     spellCheck={false}
                     className="h-7 min-w-0 flex-1 rounded border border-input bg-transparent px-2 font-mono text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   />
-                  <button
-                    onClick={() => setHeaders(state.headers.filter((_, k) => k !== i))}
-                    disabled={state.headers.length <= 1}
-                    className="shrink-0 rounded p-1 text-muted-foreground/50 hover:text-destructive disabled:opacity-30"
-                    title="删除"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  <Tip tip="删除">
+                    <button
+                      onClick={() => setHeaders(state.headers.filter((_, k) => k !== i))}
+                      disabled={state.headers.length <= 1}
+                      className="shrink-0 rounded p-1 text-muted-foreground/50 hover:text-destructive disabled:opacity-30"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </Tip>
                 </div>
               ))}
             </div>
@@ -414,16 +421,17 @@ export function ApiTool() {
           >
             {showBody ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
             请求体
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleBeautifyBody()
-              }}
-              className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-              title="美化请求体（JSON 格式化）"
-            >
-              <Wand2 className="size-3" /> 美化
-            </button>
+            <Tip tip="美化请求体（JSON 格式化）">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleBeautifyBody()
+                }}
+                className="ml-auto flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Wand2 className="size-3" /> 美化
+              </button>
+            </Tip>
           </button>
           <Collapse open={showBody} openClass="h-24" className="rounded-b-md border-t border-divider">
             <JsonEditor

@@ -18,6 +18,7 @@ import {
 } from './task-list-view'
 import { generateBetween, rebalance } from '@/lib/lexorank'
 import { toast } from '@/lib/toast'
+import { Tip } from '@/components/tip-button'
 import type { Task } from '@/types/task'
 
 const SORT_LABELS: Record<string, string> = {
@@ -446,20 +447,22 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
           </button>
         ))}
         <div className="ml-auto flex gap-1">
-          <button
-            onClick={() => expandAll(view.expandableIds)}
-            className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
-            title="展开全部子任务"
-          >
-            全部展开
-          </button>
-          <button
-            onClick={() => collapseAll()}
-            className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
-            title="收起全部子任务"
-          >
-            全部收起
-          </button>
+          <Tip tip="展开全部子任务">
+            <button
+              onClick={() => expandAll(view.expandableIds)}
+              className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              全部展开
+            </button>
+          </Tip>
+          <Tip tip="收起全部子任务">
+            <button
+              onClick={() => collapseAll()}
+              className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
+            >
+              全部收起
+            </button>
+          </Tip>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { Task } from '@/types/task'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { Tip } from '@/components/tip-button'
 import { Badge } from '@/components/ui/badge'
 import { Bell } from 'lucide-react'
 import { useTaskStore } from '@/stores/task-store'
@@ -106,15 +107,16 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
       onDragStart={handleDragStart}
     >
       {hasChildren ? (
-        <button
-          onClick={(e) => { e.stopPropagation(); toggleExpand(task.id) }}
-          className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground transition-transform hover:text-foreground"
-          title={isExpanded ? '折叠' : '展开'}
-        >
-          <span className={`inline-block transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}>
-            ▸
-          </span>
-        </button>
+        <Tip tip={isExpanded ? '折叠' : '展开'}>
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleExpand(task.id) }}
+            className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground transition-transform hover:text-foreground"
+          >
+            <span className={`inline-block transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}>
+              ▸
+            </span>
+          </button>
+        </Tip>
       ) : (
         <div className="h-4 w-4 shrink-0" />
       )}
@@ -186,25 +188,27 @@ export function TaskItem({ task, depth, hasChildren, onContextMenu, draggable, i
       )}
 
       {task.reminderTime && !isDone && (
-        <span
-          className="hidden shrink-0 items-center gap-0.5 text-xs text-muted-foreground/70 sm:inline-flex"
-          title="已设置提醒"
-        >
-          <Bell className="size-3" />
-          {new Date(task.reminderTime).toLocaleTimeString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </span>
+        <Tip tip="已设置提醒">
+          <span
+            className="hidden shrink-0 items-center gap-0.5 text-xs text-muted-foreground/70 sm:inline-flex"
+          >
+            <Bell className="size-3" />
+            {new Date(task.reminderTime).toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+        </Tip>
       )}
 
-      <button
-        onClick={(e) => { e.stopPropagation(); handleDelete() }}
-        className="invisible ml-auto text-muted-foreground hover:text-destructive group-hover:visible"
-        title="删除任务"
-      >
-        ✕
-      </button>
+      <Tip tip="删除任务">
+        <button
+          onClick={(e) => { e.stopPropagation(); handleDelete() }}
+          className="invisible ml-auto text-muted-foreground hover:text-destructive group-hover:visible"
+        >
+          ✕
+        </button>
+      </Tip>
     </div>
   )
 }

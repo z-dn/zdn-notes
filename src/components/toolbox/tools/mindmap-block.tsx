@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { List, Network, RotateCcw, Trash2 } from 'lucide-react'
 import type { MindNode } from '@/types/tool'
 import { parseMindmap, mindmapToMarkdown } from '@/lib/mindmap'
+import { Tip } from '@/components/tip-button'
 import {
   indentSelection,
   outdentSelection,
@@ -113,39 +114,41 @@ export function MindMapBlock({
         <div className="flex items-center gap-1">
           <div className="flex gap-0.5 rounded-md bg-muted/50 p-0.5">
             {(['outline', 'canvas'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setView(m)}
-                title={m === 'outline' ? '大纲编辑' : '思维图视图'}
-                className={cn(
-                  'flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition-colors',
-                  view === m
-                    ? 'bg-accent text-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {m === 'outline' ? <List className="size-3" /> : <Network className="size-3" />}
-                {m === 'outline' ? '大纲' : '图'}
-              </button>
+              <Tip key={m} tip={m === 'outline' ? '大纲编辑' : '思维图视图'}>
+                <button
+                  onClick={() => setView(m)}
+                  className={cn(
+                    'flex items-center gap-1 rounded px-2 py-0.5 text-[11px] transition-colors',
+                    view === m
+                      ? 'bg-accent text-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {m === 'outline' ? <List className="size-3" /> : <Network className="size-3" />}
+                  {m === 'outline' ? '大纲' : '图'}
+                </button>
+              </Tip>
             ))}
           </div>
           {height !== DEFAULT_HEIGHT && (
-            <button
-              onClick={() => setHeight(DEFAULT_HEIGHT)}
-              title="重置高度"
-              className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-            >
-              <RotateCcw className="size-3" />
-            </button>
+            <Tip tip="重置高度">
+              <button
+                onClick={() => setHeight(DEFAULT_HEIGHT)}
+                className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <RotateCcw className="size-3" />
+              </button>
+            </Tip>
           )}
           {onDelete && (
-            <button
-              onClick={onDelete}
-              title="删除思维图"
-              className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
-            >
-              <Trash2 className="size-3" />
-            </button>
+            <Tip tip="删除思维图">
+              <button
+                onClick={onDelete}
+                className="flex size-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-destructive"
+              >
+                <Trash2 className="size-3" />
+              </button>
+            </Tip>
           )}
         </div>
       </div>
@@ -187,14 +190,15 @@ export function MindMapBlock({
           <MindMapCanvas nodes={nodes} onChange={handleCanvasChange} />
         )}
       </div>
-      <div
-        className="flex h-1.5 shrink-0 cursor-ns-resize items-center justify-center hover:bg-accent/50"
-        onMouseDown={startResize}
-        onDoubleClick={() => setHeight(DEFAULT_HEIGHT)}
-        title="拖拽调整高度，双击复原"
-      >
-        <div className="h-0.5 w-8 rounded-full bg-border/70" />
-      </div>
+      <Tip tip="拖拽调整高度，双击复原">
+        <div
+          className="flex h-1.5 shrink-0 cursor-ns-resize items-center justify-center hover:bg-accent/50"
+          onMouseDown={startResize}
+          onDoubleClick={() => setHeight(DEFAULT_HEIGHT)}
+        >
+          <div className="h-0.5 w-8 rounded-full bg-border/70" />
+        </div>
+      </Tip>
     </div>
   )
 }

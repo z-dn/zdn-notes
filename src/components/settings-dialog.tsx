@@ -6,6 +6,9 @@ import { useCategoryStore } from '@/stores/category-store'
 import { showConfirm } from '@/components/confirm-dialog'
 import { toast } from '@/lib/toast'
 import { useFlipDialog } from '@/hooks/use-flip-dialog'
+import { LogViewer } from '@/components/log-viewer'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Tip } from '@/components/tip-button'
 
 type UpdateStatus =
   'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
@@ -284,11 +287,9 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
 
           <div>
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={editing.reminderEnabled}
-                onChange={(e) => updateEditing('reminderEnabled', e.target.checked)}
-                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onCheckedChange={(v) => updateEditing('reminderEnabled', v === true)}
               />
               <span className="text-xs font-medium text-muted-foreground">启用到期提醒</span>
               <button
@@ -319,11 +320,9 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
 
           <div>
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={editing.allowLocalRequests}
-                onChange={(e) => updateEditing('allowLocalRequests', e.target.checked)}
-                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onCheckedChange={(v) => updateEditing('allowLocalRequests', v === true)}
               />
               <span className="text-xs font-medium text-muted-foreground">
                 允许接口调试访问内网/本机地址
@@ -356,12 +355,13 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
             <label className="mb-2 block text-xs font-medium text-muted-foreground">
               数据存储位置
             </label>
-            <p
-              className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-              title={dataDir}
-            >
-              {dataDir}
-            </p>
+            <Tip tip={dataDir}>
+              <p
+                className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+              >
+                {dataDir}
+              </p>
+            </Tip>
             {dataDirWarning && (
               <p className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
                 {dataDirWarning}
@@ -390,12 +390,13 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
             <label className="mb-2 block text-xs font-medium text-muted-foreground">
               增量导入（收件夹）
             </label>
-            <p
-              className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-              title={inboxDir}
-            >
-              {inboxDir}
-            </p>
+            <Tip tip={inboxDir}>
+              <p
+                className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+              >
+                {inboxDir}
+              </p>
+            </Tip>
             <button
               onClick={async () => {
                 await window.electronAPI.openInboxDir()
@@ -412,11 +413,9 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">更新</label>
             <label className="flex items-center gap-3 cursor-pointer mb-3">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={editing.autoUpdate}
-                onChange={(e) => updateEditing('autoUpdate', e.target.checked)}
-                className="h-4 w-4 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onCheckedChange={(v) => updateEditing('autoUpdate', v === true)}
               />
               <span className="text-xs font-medium text-muted-foreground">启动时检查更新</span>
             </label>
@@ -449,6 +448,8 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
               <p className="mt-2 text-xs text-muted-foreground">{updateInfo}</p>
             )}
           </div>
+
+          <LogViewer />
         </div>
 
         <div className="flex items-center justify-between border-t border-divider px-6 py-3">
