@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Settings } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settings-store'
 import { useTaskStore } from '@/stores/task-store'
@@ -13,6 +13,36 @@ import { Tip } from '@/components/tip-button'
 type UpdateStatus =
   'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 
+// ---- 左侧菜单：功能域分组 + 小节项（id 对应右侧各小节锚点，顺序与 DOM 一致）----
+const NAV_SECTIONS: { group: string; items: { id: string; label: string }[] }[] = [
+  {
+    group: '外观',
+    items: [
+      { id: 'theme', label: '主题' },
+      { id: 'panelStyle', label: '面板分隔' },
+      { id: 'descriptionMode', label: '描述编辑方式' },
+    ],
+  },
+  {
+    group: '行为',
+    items: [
+      { id: 'reminder', label: '到期提醒' },
+      { id: 'localRequests', label: '内网请求' },
+      { id: 'update', label: '更新' },
+    ],
+  },
+  {
+    group: '数据',
+    items: [
+      { id: 'backup', label: '数据备份' },
+      { id: 'dataDir', label: '存储位置' },
+      { id: 'inbox', label: '收件夹' },
+    ],
+  },
+  { group: '日志', items: [{ id: 'logs', label: '应用日志' }] },
+]
+const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap((g) => g.items)
+
 interface SettingsDialogProps {
   open: boolean
   onClose: () => void
@@ -24,6 +54,23 @@ const THEME_OPTIONS: { value: 'system' | 'light' | 'dark'; label: string }[] = [
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' },
 ]
+
+/** 右侧内容小节锚点：供左菜单滚动定位与联动高亮 */
+function SectionAnchor({
+  id,
+  onRef,
+  children,
+}: {
+  id: string
+  onRef: (el: HTMLDivElement | null) => void
+  children: React.ReactNode
+}) {
+  return (
+    <div id={id} ref={onRef} className="scroll-mt-4">
+      {children}
+    </div>
+  )
+}
 
 export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialogProps) {
   const editing = useSettingsStore((s) => s.editing)
@@ -38,7 +85,34 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
   const [dataDirWarning, setDataDirWarning] = useState<string | null>(null)
   const [inboxDir, setInboxDir] = useState('')
   const [notificationPermission, setNotificationPermission] = useState<{ supported: boolean; granted: boolean } | null>(null)
+  const [activeSection, setActiveSection] = useState('theme')
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const scrollSuppressRef = useRef(0)
   const { contentRef, overlayRef, mounted, playClose } = useFlipDialog(open, onClose)
+
+  function scrollToSection(id: string) {
+    const el = sectionRefs.current[id]
+    if (!el) return
+    // 联动高亮平滑滚动期间抑制 scroll-spy 改写选中项
+    scrollSuppressRef.current += 1
+    const token = scrollSuppressRef.current
+    setTimeout(() => {
+      if (scrollSuppressRef.current === token) scrollSuppressRef.current = 0
+    }, 500)
+    setActiveSection(id)
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function handleContentScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (scrollSuppressRef.current > 0) return
+    const top = e.currentTarget.scrollTop + 48
+    let current = ALL_NAV_ITEMS[0].id
+    for (const item of ALL_NAV_ITEMS) {
+      const s = sectionRefs.current[item.id]
+      if (s && s.offsetTop <= top) current = item.id
+    }
+    setActiveSection(current)
+  }
 
   useEffect(() => {
     window.electronAPI.getAppVersion().then(setAppVersion)
@@ -204,7 +278,7 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
       <div ref={overlayRef} className="absolute inset-0 bg-black/40" onClick={() => playClose()} />
       <div
         ref={contentRef}
-        className="fixed left-1/2 top-1/2 flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col rounded-lg border bg-background shadow-lg"
+        className="fixed left-1/2 top-1/2 flex max-h-[85vh] w-[720px] max-w-[90vw] flex-col rounded-lg border bg-background shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-divider px-6 py-3">
@@ -219,237 +293,274 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">主题</label>
-            <div className="flex gap-3">
-              {THEME_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => updateEditing('theme', opt.value)}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
-                    editing.theme === opt.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">面板分隔</label>
-            <div className="flex gap-3">
-              {[
-                { value: 'divider' as const, label: '分割线' },
-                { value: 'tint' as const, label: '底色分层' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => updateEditing('panelStyle', opt.value)}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
-                    editing.panelStyle === opt.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">
-              描述编辑方式
-            </label>
-            <div className="flex gap-3">
-              {[
-                { value: 'edit' as const, label: '编辑即显示' },
-                { value: 'toggle' as const, label: '手动切换' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => updateEditing('descriptionMode', opt.value)}
-                  className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
-                    editing.descriptionMode === opt.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <Checkbox
-                checked={editing.reminderEnabled}
-                onCheckedChange={(v) => updateEditing('reminderEnabled', v === true)}
-              />
-              <span className="text-xs font-medium text-muted-foreground">启用到期提醒</span>
-              <button
-                onClick={async () => {
-                  const result = await window.electronAPI.checkNotificationPermission()
-                  setNotificationPermission(result)
-                  if (result.granted) toast('通知权限正常')
-                }}
-                className="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                检测权限
-              </button>
-            </label>
-            {notificationPermission && !notificationPermission.granted && (
-              <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2">
-                <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                  ⚠ 系统通知权限已禁用，提醒功能将无法正常工作
-                </p>
-                <button
-                  onClick={() => window.electronAPI.openNotificationSettings()}
-                  className="mt-1 text-xs text-primary hover:underline"
-                >
-                  打开 Windows 通知设置 →
-                </button>
+        <div className="flex min-h-0 flex-1">
+          {/* 左侧分组菜单 */}
+          <nav className="w-36 shrink-0 overflow-y-auto border-r border-divider bg-panel-sidebar px-2 py-3">
+            {NAV_SECTIONS.map((group) => (
+              <div key={group.group} className="mb-3 last:mb-0">
+                <div className="mb-1 px-2 text-[10px] font-medium tracking-wide text-muted-foreground/60">
+                  {group.group}
+                </div>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const active = activeSection === item.id
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => scrollToSection(item.id)}
+                        className={`flex w-full items-center rounded-md px-2 py-1 text-left text-xs transition-colors ${
+                          active
+                            ? 'bg-primary/10 font-medium text-primary'
+                            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            )}
-          </div>
+            ))}
+          </nav>
 
-          <div>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <Checkbox
-                checked={editing.allowLocalRequests}
-                onCheckedChange={(v) => updateEditing('allowLocalRequests', v === true)}
-              />
-              <span className="text-xs font-medium text-muted-foreground">
-                允许接口调试访问内网/本机地址
-              </span>
-            </label>
-          </div>
+          {/* 右侧内容：单列长滚动，小节顺序与左侧菜单一致 */}
+          <div
+            className="relative min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4"
+            onScroll={handleContentScroll}
+          >
+            <SectionAnchor id="theme" onRef={(el) => { sectionRefs.current['theme'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">主题</label>
+              <div className="flex gap-3">
+                {THEME_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateEditing('theme', opt.value)}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                      editing.theme === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </SectionAnchor>
 
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">数据备份</label>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleBackup}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                备份数据
-              </button>
-              <button
-                onClick={handleRestore}
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
-              >
-                恢复数据
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              备份包含数据库与图片，恢复将覆盖当前全部数据。
-            </p>
-          </div>
+            <SectionAnchor id="panelStyle" onRef={(el) => { sectionRefs.current['panelStyle'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">面板分隔</label>
+              <div className="flex gap-3">
+                {[
+                  { value: 'divider' as const, label: '分割线' },
+                  { value: 'tint' as const, label: '底色分层' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateEditing('panelStyle', opt.value)}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                      editing.panelStyle === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </SectionAnchor>
 
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">
-              数据存储位置
-            </label>
-            <Tip tip={dataDir}>
-              <p
-                className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-              >
-                {dataDir}
-              </p>
-            </Tip>
-            {dataDirWarning && (
-              <p className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
-                {dataDirWarning}
-              </p>
-            )}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleChangeDataDir}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                更改位置
-              </button>
-              <button
-                onClick={handleResetDataDir}
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
-              >
-                恢复默认
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              数据库与图片将存储在所选目录中，更改后需确认迁移。
-            </p>
-          </div>
+            <SectionAnchor id="descriptionMode" onRef={(el) => { sectionRefs.current['descriptionMode'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                描述编辑方式
+              </label>
+              <div className="flex gap-3">
+                {[
+                  { value: 'edit' as const, label: '编辑即显示' },
+                  { value: 'toggle' as const, label: '手动切换' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateEditing('descriptionMode', opt.value)}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                      editing.descriptionMode === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </SectionAnchor>
 
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">
-              增量导入（收件夹）
-            </label>
-            <Tip tip={inboxDir}>
-              <p
-                className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
-              >
-                {inboxDir}
-              </p>
-            </Tip>
-            <button
-              onClick={async () => {
-                await window.electronAPI.openInboxDir()
-              }}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              打开收件夹
-            </button>
-            <p className="mt-2 text-xs text-muted-foreground">
-              将 zdn-notes.db 或备份 zip 放入收件夹会自动增量合入本地（按时间取新，只增不删）。
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">更新</label>
-            <label className="flex items-center gap-3 cursor-pointer mb-3">
-              <Checkbox
-                checked={editing.autoUpdate}
-                onCheckedChange={(v) => updateEditing('autoUpdate', v === true)}
-              />
-              <span className="text-xs font-medium text-muted-foreground">启动时检查更新</span>
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleCheckUpdate}
-                disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                检查更新
-              </button>
-              {updateStatus === 'available' && (
+            <SectionAnchor id="reminder" onRef={(el) => { sectionRefs.current['reminder'] = el }}>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={editing.reminderEnabled}
+                  onCheckedChange={(v) => updateEditing('reminderEnabled', v === true)}
+                />
+                <span className="text-xs font-medium text-muted-foreground">启用到期提醒</span>
                 <button
-                  onClick={handleDownload}
+                  onClick={async () => {
+                    const result = await window.electronAPI.checkNotificationPermission()
+                    setNotificationPermission(result)
+                    if (result.granted) toast('通知权限正常')
+                  }}
+                  className="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  检测权限
+                </button>
+              </label>
+              {notificationPermission && !notificationPermission.granted && (
+                <div className="mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2">
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                    ⚠ 系统通知权限已禁用，提醒功能将无法正常工作
+                  </p>
+                  <button
+                    onClick={() => window.electronAPI.openNotificationSettings()}
+                    className="mt-1 text-xs text-primary hover:underline"
+                  >
+                    打开 Windows 通知设置 →
+                  </button>
+                </div>
+              )}
+            </SectionAnchor>
+
+            <SectionAnchor id="localRequests" onRef={(el) => { sectionRefs.current['localRequests'] = el }}>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={editing.allowLocalRequests}
+                  onCheckedChange={(v) => updateEditing('allowLocalRequests', v === true)}
+                />
+                <span className="text-xs font-medium text-muted-foreground">
+                  允许接口调试访问内网/本机地址
+                </span>
+              </label>
+            </SectionAnchor>
+
+            <SectionAnchor id="update" onRef={(el) => { sectionRefs.current['update'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">更新</label>
+              <label className="flex items-center gap-3 cursor-pointer mb-3">
+                <Checkbox
+                  checked={editing.autoUpdate}
+                  onCheckedChange={(v) => updateEditing('autoUpdate', v === true)}
+                />
+                <span className="text-xs font-medium text-muted-foreground">启动时检查更新</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCheckUpdate}
+                  disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  检查更新
+                </button>
+                {updateStatus === 'available' && (
+                  <button
+                    onClick={handleDownload}
+                    className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
+                  >
+                    下载更新
+                  </button>
+                )}
+                {updateStatus === 'downloaded' && (
+                  <button
+                    onClick={handleInstall}
+                    className="rounded-md bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700 transition-colors"
+                  >
+                    立即安装
+                  </button>
+                )}
+              </div>
+              {updateStatus !== 'idle' && (
+                <p className="mt-2 text-xs text-muted-foreground">{updateInfo}</p>
+              )}
+            </SectionAnchor>
+
+            <SectionAnchor id="backup" onRef={(el) => { sectionRefs.current['backup'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">数据备份</label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleBackup}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  备份数据
+                </button>
+                <button
+                  onClick={handleRestore}
                   className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
                 >
-                  下载更新
+                  恢复数据
                 </button>
-              )}
-              {updateStatus === 'downloaded' && (
-                <button
-                  onClick={handleInstall}
-                  className="rounded-md bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700 transition-colors"
-                >
-                  立即安装
-                </button>
-              )}
-            </div>
-            {updateStatus !== 'idle' && (
-              <p className="mt-2 text-xs text-muted-foreground">{updateInfo}</p>
-            )}
-          </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                备份包含数据库与图片，恢复将覆盖当前全部数据。
+              </p>
+            </SectionAnchor>
 
-          <LogViewer />
+            <SectionAnchor id="dataDir" onRef={(el) => { sectionRefs.current['dataDir'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                数据存储位置
+              </label>
+              <Tip tip={dataDir}>
+                <p
+                  className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                >
+                  {dataDir}
+                </p>
+              </Tip>
+              {dataDirWarning && (
+                <p className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                  {dataDirWarning}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleChangeDataDir}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  更改位置
+                </button>
+                <button
+                  onClick={handleResetDataDir}
+                  className="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
+                >
+                  恢复默认
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                数据库与图片将存储在所选目录中，更改后需确认迁移。
+              </p>
+            </SectionAnchor>
+
+            <SectionAnchor id="inbox" onRef={(el) => { sectionRefs.current['inbox'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                增量导入（收件夹）
+              </label>
+              <Tip tip={inboxDir}>
+                <p
+                  className="mb-2 break-all rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                >
+                  {inboxDir}
+                </p>
+              </Tip>
+              <button
+                onClick={async () => {
+                  await window.electronAPI.openInboxDir()
+                }}
+                className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                打开收件夹
+              </button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                将 zdn-notes.db 或备份 zip 放入收件夹会自动增量合入本地（按时间取新，只增不删）。
+              </p>
+            </SectionAnchor>
+
+            <SectionAnchor id="logs" onRef={(el) => { sectionRefs.current['logs'] = el }}>
+              <LogViewer />
+            </SectionAnchor>
+          </div>
         </div>
 
         <div className="flex items-center justify-between border-t border-divider px-6 py-3">
