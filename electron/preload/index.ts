@@ -154,4 +154,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('dsh:pluginDone', handler)
     return () => ipcRenderer.removeListener('dsh:pluginDone', handler)
   },
+
+  // ---- 应用日志（core/app-log，logs 模块）----
+  logsGet: (query?: unknown) => ipcRenderer.invoke('logs:get', query),
+  logsClear: () => ipcRenderer.invoke('logs:clear'),
+  logsOpenDir: () => ipcRenderer.invoke('logs:openDir'),
+  onLogAppended: (cb: (entry: unknown) => void) => {
+    const handler = (_e: unknown, entry: unknown) => cb(entry)
+    ipcRenderer.on('log:appended', handler)
+    return () => ipcRenderer.removeListener('log:appended', handler)
+  },
 })

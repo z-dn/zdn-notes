@@ -14,6 +14,7 @@ import {
 } from './plugin-spec'
 import { resolveSidebarShellOverride } from './shell-resolve'
 import { expandPathVars, mergePathDirs } from './path-env'
+import { appendAppLog } from '../../core/app-log'
 
 // ===================================================================
 // DshManager —— 主进程内管理 DSH Web UI 子进程的生命周期。
@@ -194,6 +195,12 @@ class DshManager {
         /* noop */
       }
     }
+  }
+
+  /** 落盘 + 广播应用日志（core/app-log）；dataDir 未初始化时跳过 */
+  private log(level: 'info' | 'warn' | 'error', message: string, detail?: string): void {
+    if (!this.dataDir) return
+    appendAppLog(this.dataDir, { level, source: 'dsh', message, detail })
   }
 
   private emitPluginDone(result: DshPluginDone): void {
@@ -488,6 +495,7 @@ class DshManager {
     try {
       execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
       console.warn(`[dsh] 已清理上次会话残留的 DSH server (pid ${pid})`)
+      this.log('warn', `已清理上次会话残留的 DSH server (pid ${pid})`)
     } catch {
       /* 已退出或无权 */
     }
@@ -528,7 +536,11 @@ class DshManager {
   ): Promise<{ ok: boolean; port?: number; error?: string }> {
     if (this.child) return { ok: true, port: this.port ?? undefined }
     const { dshBin, home } = this.resolvePaths()
-    if (!existsSync(dshBin)) return { ok: false, error: `未找到 DSH 入口: ${dshBin}` }
+    if (!existsSync(dshBin)) {
+      const err = `未找到 DSH 入口: ${dshBin}`
+      this.log('error', '启动失败', err)
+      return { ok: false, error: err }
+    }
     try {
       mkdirSync(home, { recursive: true })
       // 清理上次会话残留的 DSH server（应用强退可能留下孤儿进程占用 task-board 等锁）
@@ -545,6 +557,7 @@ class DshManager {
       this.webUrl = null
       this.webUrlEmitted = false
       this.emit()
+      this.log('info', `启动 DSH Web UI（端口 ${port}${repaired ? '，已重建 web profile' : ''}${portRetried ? '，已重试端口' : ''}）`)
       console.log(
         '[dsh] 启动: run-as-node spawn',
         dshBin,
@@ -572,18 +585,23 @@ class DshManager {
 
       let stderrBuf = ''
       child.on('error', (e) => {
-        stderrBuf += formatChildError(e) + '\n'
+        const detail = formatChildError(e)
+        stderrBuf += detail + '\n'
         if (this.child === child) {
           this.child = null
           this.port = null
           this.emit()
         }
-        console.error('[dsh] 启动失败:', formatChildError(e))
+        this.log('error', '子进程 spawn 失败', detail)
+        console.error('[dsh] 启动失败:', detail)
       })
       child.stdout?.on('data', (d) => {
         // 必须持续消费 stdout，否则管道缓冲写满会阻塞 DSH
         const line = d.toString().trim()
-        if (line) console.log('[dsh:stdout]', line)
+        if (line) {
+          console.log('[dsh:stdout]', line)
+          this.log('info', line)
+        }
         // 0.1.5 起 web server 需要 token：从「dsh web: http://…/?token=…」行提取完整入口。
         // token 行可能晚于 HTTP 探测通过（启动竞态），解析到后立即补发一次状态，
         // 否则渲染层只拿到 port、webview 停在无 token 的 401 白页
@@ -600,7 +618,10 @@ class DshManager {
         const msg = d.toString()
         stderrBuf += msg
         const line = msg.trim()
-        if (line) console.error('[dsh:stderr]', line)
+        if (line) {
+          console.error('[dsh:stderr]', line)
+          this.log('warn', line)
+        }
       })
       child.on('exit', (code) => {
         if (child.pid !== undefined) this.clearPidLock(child.pid)
@@ -609,7 +630,10 @@ class DshManager {
         this.port = null
         this.webUrl = null
         this.emit()
-        if (code && code !== 0) console.warn(`[dsh] Web UI 退出 code=${code}`)
+        if (code && code !== 0) {
+          this.log('warn', `Web UI 进程退出 code=${code}`, stderrBuf.trim().split('\n').slice(-60).join('\n'))
+          console.warn(`[dsh] Web UI 退出 code=${code}`)
+        }
       })
 
       // 等 spawn 成功后写 PID 锁并起超时窗口，避免模块加载前的空转计入
@@ -639,8 +663,10 @@ class DshManager {
             if (shouldRebuildWebProfile(manifestRaw)) {
               try {
                 rmSync(join(home, 'profiles', 'web'), { recursive: true, force: true })
+                this.log('warn', 'web profile 缺少核心包 @deepseek-ai/dsh-web-app，已重建并自动重试')
                 console.warn('[dsh] web profile 缺少核心包 @deepseek-ai/dsh-web-app，已重建并自动重试')
               } catch (e) {
+                this.log('error', '清理损坏的 web profile 失败', e instanceof Error ? e.stack : String(e))
                 console.error('[dsh] 清理损坏的 web profile 失败:', e)
               }
               return this.start(opts, true)
@@ -648,10 +674,16 @@ class DshManager {
           }
           // 无核心包缺失但启动即退：多为预留端口被抢占（TOCTOU），换新端口重试一次
           if (!portRetried) {
+            this.log('warn', '启动后立即退出，换端口重试一次', stderrBuf.trim().split('\n').slice(-60).join('\n'))
             console.warn('[dsh] 启动后立即退出，换端口重试一次')
             return this.start(opts, false, true)
           }
           const detail = stderrBuf.trim().split('\n').slice(-12).join('\n')
+          this.log(
+            'error',
+            'DSH Web UI 进程启动后立即退出（可能 profile 配置错误）',
+            stderrBuf.trim().split('\n').slice(-60).join('\n'),
+          )
           return {
             ok: false,
             error: `DSH Web UI 进程启动后立即退出（可能 profile 配置错误）\n${detail}`,
@@ -672,11 +704,16 @@ class DshManager {
       }
       await this.stop()
       const detail = stderrBuf.trim().split('\n').slice(-12).join('\n')
+      const message = `DSH 启动超时（${START_TIMEOUT_MS / 1000}s 未就绪）`
+      this.log('error', message, stderrBuf.trim().split('\n').slice(-60).join('\n'))
       return {
         ok: false,
-        error: `DSH 启动超时（${START_TIMEOUT_MS / 1000}s 未就绪）\n${detail}`,
+        error: `${message}\n${detail}`,
       }
     } catch (e) {
+      const message = 'DSH 启动异常'
+      const detail = e instanceof Error ? (e.stack ?? e.message) : String(e)
+      this.log('error', message, detail)
       await this.stop()
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
@@ -700,6 +737,7 @@ class DshManager {
     this.port = null
     this.webUrl = null
     this.emit()
+    this.log('info', '已停止 DSH Web UI')
     if (child.pid !== undefined) this.clearPidLock(child.pid)
     killTree(child.pid)
   }
@@ -771,6 +809,7 @@ class DshManager {
     // 注：pnpm 11 不再读取 npm_config_*，发布龄/构建策略统一由 healProfileBuildPolicy
     // 写入 profile 的 pnpm-workspace.yaml（minimumReleaseAge: 0 + dangerouslyAllowAllBuilds: true）。
     console.log(`[dsh] plugin ${action}:`, spec)
+    this.log('info', `插件操作 ${action}: ${spec}`)
 
     const runOnce = (extraArgs: string[]): Promise<{ ok: boolean; error?: string }> =>
       new Promise((resolve) => {
@@ -789,11 +828,16 @@ class DshManager {
         const pending = { child, action, name: spec, resolve }
         this.pluginPending = pending
         let stderrTail = ''
-        child.stdout?.on('data', (d) => this.emitPluginLog(d.toString()))
+        child.stdout?.on('data', (d) => {
+          const s = d.toString()
+          this.emitPluginLog(s)
+          this.log('info', s.trim())
+        })
         child.stderr?.on('data', (d) => {
           const s = d.toString()
           stderrTail = (stderrTail + s).slice(-2000)
           this.emitPluginLog(s)
+          this.log('warn', s.trim())
         })
         child.on('error', (e) => {
           if (this.pluginPending !== pending) return
@@ -820,6 +864,7 @@ class DshManager {
         const nmDir = join(this.profileDir(), 'node_modules')
         if (existsSync(nmDir)) {
           console.log('[dsh] 检测到 pnpm store 格式升级，清理 node_modules 后重试')
+          this.log('warn', '检测到 pnpm store 格式升级，清理 node_modules 后重试')
           this.emitPluginLog('\n[dsh] 检测到 pnpm store 格式升级，清理 node_modules 后重试\n')
           rmSync(nmDir, { recursive: true, force: true })
           last = await runOnce([])
@@ -831,6 +876,7 @@ class DshManager {
       const pkgs = parseIgnoredBuildPackages(last.error ?? '')
       if (pkgs.length > 0) {
         console.log(`[dsh] pnpm 拦截了 build scripts，自动放行并重试: ${pkgs.join(', ')}`)
+        this.log('warn', `pnpm 拦截了 build scripts，自动放行并重试: ${pkgs.join(', ')}`, last.error)
         this.emitPluginLog(`\n[dsh] 自动重试：放行 build scripts ${pkgs.join(', ')}\n`)
         last = await runOnce(pkgs.map((p) => `--allow-build=${p}`))
         if (last.ok) return last
@@ -839,6 +885,7 @@ class DshManager {
       // 3) 瞬时网络错误：原样重试一次
       if (/timeout|ETIMEDOUT|ECONNRESET|EAI_AGAIN|FetchError|error \(\d+\)/i.test(last.error ?? '')) {
         console.log('[dsh] 检测到瞬时网络错误，自动重试一次')
+        this.log('warn', '检测到瞬时网络错误，自动重试一次', last.error)
         this.emitPluginLog('\n[dsh] 自动重试（瞬时网络错误）\n')
         last = await runOnce([])
         if (last.ok) return last
@@ -848,6 +895,7 @@ class DshManager {
       //    覆盖「占位符污染 yaml、--allow-build 又因策略漂移失效」的残余场景。
       if (!last.ok && pkgs.length > 0) {
         console.log('[dsh] 构建脚本仍被拦截，再次固化构建策略后重试')
+        this.log('warn', '构建脚本仍被拦截，再次固化构建策略后重试', last.error)
         this.emitPluginLog('\n[dsh] 自动重试：重新固化 pnpm 构建策略\n')
         this.healProfileBuildPolicy()
         last = await runOnce([])
@@ -867,7 +915,12 @@ class DshManager {
   ): void {
     if (this.pluginPending !== pending) return
     this.pluginPending = null
-    if (!ok) console.error(`[dsh] plugin ${pending.action} ${pending.name} 失败:`, error)
+    if (!ok) {
+      this.log('error', `插件操作 ${pending.action} ${pending.name} 失败`, error)
+      console.error(`[dsh] plugin ${pending.action} ${pending.name} 失败:`, error)
+    } else {
+      this.log('info', `插件操作 ${pending.action} ${pending.name} 成功`)
+    }
     this.emitPluginDone({ action: pending.action, name: pending.name, ok, error })
     pending.resolve(ok ? { ok: true } : { ok: false, error })
   }

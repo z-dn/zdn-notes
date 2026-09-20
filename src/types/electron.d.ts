@@ -59,6 +59,15 @@ declare global {
     source: 'gui' | 'mcp'
   }
 
+  interface AppLogEntry {
+    id: string
+    ts: number
+    level: 'info' | 'warn' | 'error'
+    source: string
+    message: string
+    detail?: string
+  }
+
   interface Window {
     electronAPI: {
       platform: string
@@ -209,6 +218,16 @@ declare global {
       onDshPluginDone(
         cb: (result: { action: 'add' | 'remove'; name: string; ok: boolean; error?: string }) => void,
       ): () => void
+
+      // ---- 应用日志（core/app-log，logs 模块）----
+      logsGet(query?: {
+        source?: string
+        level?: 'info' | 'warn' | 'error'
+        limit?: number
+      }): Promise<AppLogEntry[]>
+      logsClear(): Promise<boolean>
+      logsOpenDir(): Promise<boolean>
+      onLogAppended(cb: (entry: AppLogEntry) => void): () => void
     }
   }
 }
