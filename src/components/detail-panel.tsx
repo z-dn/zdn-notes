@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { format } from 'date-fns'
+import { format, startOfDay } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import type { Matcher } from 'react-day-picker'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { useTaskStore } from '@/stores/task-store'
 import { useCategoryStore } from '@/stores/category-store'
@@ -13,7 +14,9 @@ import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
 import { FadeBlock } from '@/components/fade'
 import { Tip } from '@/components/tip-button'
+import { DetailSubtasks } from '@/components/detail-subtasks'
 import { PRIORITY_COLORS } from './task-item'
+import { parentBounds } from './task-calendar-view'
 import { renderMarkdown } from '@/lib/markdown'
 import type { Priority } from '@/types/task'
 
@@ -68,15 +71,9 @@ export function DetailPanel() {
       setDescription(selectedTask.description || '')
       setNewOwner('')
       setPreviewMode(false)
-      setDueDate(
-        selectedTask.dueDate
-          ? format(new Date(selectedTask.dueDate), 'yyyy-MM-dd')
-          : '',
-      )
+      setDueDate(selectedTask.dueDate ? format(new Date(selectedTask.dueDate), 'yyyy-MM-dd') : '')
       setStartDate(
-        selectedTask.startDate
-          ? format(new Date(selectedTask.startDate), 'yyyy-MM-dd')
-          : '',
+        selectedTask.startDate ? format(new Date(selectedTask.startDate), 'yyyy-MM-dd') : '',
       )
       setReminderDate(
         selectedTask.reminderTime ? format(new Date(selectedTask.reminderTime), 'yyyy-MM-dd') : '',
@@ -127,11 +124,24 @@ export function DetailPanel() {
 
   if (!selectedTask) {
     return (
-      <div key="no-task" className="animate-fade-slide-up flex h-full items-center justify-center text-sm text-muted-foreground">
+      <div
+        key="no-task"
+        className="animate-fade-slide-up flex h-full items-center justify-center text-sm text-muted-foreground"
+      >
         选择一个任务查看详情
       </div>
     )
   }
+
+  const parentId = selectedTask.parentId
+  const parentTask = parentId ? (tasks.find((t) => t.id === parentId) ?? null) : null
+  const parentRange = parentTask ? parentBounds(parentTask) : null
+  const dateDisabled: Matcher[] | undefined = parentRange
+    ? ([
+        ...(parentRange.lower != null ? [{ before: startOfDay(new Date(parentRange.lower)) }] : []),
+        ...(parentRange.upper != null ? [{ after: startOfDay(new Date(parentRange.upper)) }] : []),
+      ] as Matcher[])
+    : undefined
 
   function applyReminder(date: string, time: string) {
     if (date && time && selectedTask) {
@@ -190,6 +200,8 @@ export function DetailPanel() {
         </div>
       </div>
 
+      <DetailSubtasks task={selectedTask} />
+
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground shrink-0">分类</span>
         <Select
@@ -212,10 +224,12 @@ export function DetailPanel() {
             <Badge key={tag} variant="secondary" className="text-[11px]">
               #{tag}
               <button
-                onClick={() => updateTask({
-                  id: selectedTask.id,
-                  tags: selectedTask.tags.filter((t) => t !== tag),
-                })}
+                onClick={() =>
+                  updateTask({
+                    id: selectedTask.id,
+                    tags: selectedTask.tags.filter((t) => t !== tag),
+                  })
+                }
                 className="ml-1 hover:text-destructive"
               >
                 ✕
@@ -362,6 +376,7 @@ export function DetailPanel() {
                 <Calendar
                   mode="single"
                   selected={startDate ? new Date(startDate + 'T00:00:00') : undefined}
+                  disabled={dateDisabled}
                   onSelect={(selected: Date | undefined) => {
                     if (selected) {
                       const val = format(selected, 'yyyy-MM-dd')
@@ -410,6 +425,7 @@ export function DetailPanel() {
                 <Calendar
                   mode="single"
                   selected={dueDate ? new Date(dueDate + 'T00:00:00') : undefined}
+                  disabled={dateDisabled}
                   onSelect={(selected: Date | undefined) => {
                     if (selected) {
                       const val = format(selected, 'yyyy-MM-dd')
@@ -514,30 +530,38 @@ export function DetailPanel() {
 
       <div ref={descRef} className="flex-1 flex flex-col gap-1.5 overflow-y-auto min-h-0">
         <div className="flex items-center justify-between flex-none">
-          <label className="text-xs text-muted-foreground">{expandedDescId ? '结构' : '描述'}</label>
+          <label className="text-xs text-muted-foreground">
+            {expandedDescId ? '结构' : '描述'}
+          </label>
           {!expandedDescId && (
-          <div className="flex items-center gap-1">
-            <Tip tip="展开描述">
-              <button
-                onClick={() => {
-                  const rect = descRef.current?.getBoundingClientRect()
-                  if (rect) setExpandedDesc(selectedTask.id, { x: rect.left, y: rect.top, width: rect.width, height: rect.height })
-                  else setExpandedDesc(selectedTask.id)
-                }}
-                className="text-[11px] text-muted-foreground/50 hover:text-foreground"
-              >
-                ↗
-              </button>
-            </Tip>
-            {descriptionMode === 'toggle' && (
-              <button
-                onClick={() => setPreviewMode((p) => !p)}
-                className="text-[11px] text-muted-foreground/50 hover:text-foreground"
-              >
-                {previewMode ? '编辑' : '预览'}
-              </button>
-            )}
-          </div>
+            <div className="flex items-center gap-1">
+              <Tip tip="展开描述">
+                <button
+                  onClick={() => {
+                    const rect = descRef.current?.getBoundingClientRect()
+                    if (rect)
+                      setExpandedDesc(selectedTask.id, {
+                        x: rect.left,
+                        y: rect.top,
+                        width: rect.width,
+                        height: rect.height,
+                      })
+                    else setExpandedDesc(selectedTask.id)
+                  }}
+                  className="text-[11px] text-muted-foreground/50 hover:text-foreground"
+                >
+                  ↗
+                </button>
+              </Tip>
+              {descriptionMode === 'toggle' && (
+                <button
+                  onClick={() => setPreviewMode((p) => !p)}
+                  className="text-[11px] text-muted-foreground/50 hover:text-foreground"
+                >
+                  {previewMode ? '编辑' : '预览'}
+                </button>
+              )}
+            </div>
           )}
         </div>
         <FadeBlock
@@ -550,7 +574,8 @@ export function DetailPanel() {
           show={!expandedDescId && descriptionMode === 'edit'}
           className="desc-editor flex-1 min-h-0 rounded-md border border-input overflow-y-auto p-2"
         >
-          <MilkdownEditor key={selectedTask.id}
+          <MilkdownEditor
+            key={selectedTask.id}
             content={selectedTask.description || ''}
             onChange={(markdown) => {
               setDescription(markdown)

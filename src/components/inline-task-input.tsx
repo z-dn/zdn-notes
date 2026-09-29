@@ -14,6 +14,9 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
   const [leaving, setLeaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const createTask = useTaskStore((s) => s.createTask)
+  const parentTask = useTaskStore((s) =>
+    parentId ? (s.tasks.find((t) => t.id === parentId) ?? null) : null,
+  )
   const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
 
   useEffect(() => {
@@ -33,6 +36,8 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
       parentId,
       orderIndex,
       categoryId: activeCategoryId ?? null,
+      dueDate: parentTask?.dueDate ?? null,
+      startDate: parentTask?.startDate ?? null,
     })
     close()
   }
@@ -61,7 +66,9 @@ export function InlineTaskInput({ parentId, orderIndex, depth, onClose }: Inline
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        onBlur={() => { if (!value.trim()) close() }}
+        onBlur={() => {
+          if (!value.trim()) close()
+        }}
         placeholder="输入任务名称，按回车添加"
         className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
       />

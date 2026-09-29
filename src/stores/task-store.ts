@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Task, TaskFilter, CreateTaskDTO, UpdateTaskDTO } from '@/types/task'
 import { toast } from '@/lib/toast'
 import { showConfirm } from '@/components/confirm-dialog'
+import { violatesParentRange } from '@/components/task-calendar-view'
 import { useCategoryStore } from './category-store'
 
 function reloadCategories() {
@@ -24,6 +25,8 @@ interface TaskStore {
   filters: TaskFilter
   statusView: 'all' | 'todo' | 'done'
   setStatusView: (view: 'all' | 'todo' | 'done') => void
+  taskView: 'list' | 'calendar'
+  setTaskView: (view: 'list' | 'calendar') => void
   loadTasks: (silent?: boolean) => Promise<void>
   setFilter: (changes: Partial<TaskFilter>) => void
   createTask: (dto: CreateTaskDTO) => Promise<Task | null>
@@ -53,6 +56,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   expandedDescOrigin: null,
   filters: {},
   statusView: 'all',
+  taskView: 'list',
 
   loadTasks: async (silent = false) => {
     try {
@@ -73,6 +77,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   setStatusView: (view) => set({ statusView: view }),
+
+  setTaskView: (view) => set({ taskView: view }),
 
   createTask: async (dto) => {
     try {
@@ -99,10 +105,39 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const base = old ?? selectedTask
       if (!base) return
       const patched = { ...base, ...dto, updatedAt: Date.now() } as Task
-      const nextTasks = idx !== -1 ? tasks.map((t) => (t.id === dto.id ? patched : t)) : tasks
-      const nextSelected = selectedTask?.id === dto.id ? patched : selectedTask
+      let violators: Task[] = []
+      if (dto.dueDate !== undefined || dto.startDate !== undefined) {
+        violators = tasks.filter((t) => t.parentId === dto.id && violatesParentRange(t, patched))
+        if (violators.length > 0) {
+          const ok = await showConfirm(
+            '日期联动',
+            `调整父任务日期将清除 ${violators.length} 个子任务的日期，是否继续？`,
+          )
+          if (!ok) return
+        }
+      }
+      const clearedIds = new Set(violators.map((v) => v.id))
+      const nextTasks =
+        idx !== -1
+          ? tasks.map((t) =>
+              t.id === dto.id
+                ? patched
+                : clearedIds.has(t.id)
+                  ? { ...t, startDate: null, dueDate: null, updatedAt: Date.now() }
+                  : t,
+            )
+          : tasks
+      const nextSelected =
+        selectedTask?.id === dto.id
+          ? patched
+          : selectedTask && clearedIds.has(selectedTask.id)
+            ? { ...selectedTask, startDate: null, dueDate: null, updatedAt: Date.now() }
+            : selectedTask
       set({ tasks: nextTasks, selectedTask: nextSelected })
       await api().taskUpdate(dto)
+      for (const v of violators) {
+        await api().taskUpdate({ id: v.id, startDate: null, dueDate: null })
+      }
       reloadCategories()
     } catch {
       toast('更新任务失败')

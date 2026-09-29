@@ -5,6 +5,8 @@ import { TaskItem } from './task-item'
 import { ContextMenu } from './context-menu'
 import { InlineTaskInput } from './inline-task-input'
 import { FilterBar } from './filter-bar'
+import { FadeBlock } from './fade'
+import { TaskCalendar } from './task-calendar'
 import {
   buildTree,
   canDrop,
@@ -57,6 +59,8 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
   const expandedIds = useTaskStore((s) => s.expandedIds)
   const statusView = useTaskStore((s) => s.statusView)
   const setStatusView = useTaskStore((s) => s.setStatusView)
+  const taskView = useTaskStore((s) => s.taskView)
+  const setTaskView = useTaskStore((s) => s.setTaskView)
   const selectTask = useTaskStore((s) => s.selectTask)
   const toggleExpand = useTaskStore((s) => s.toggleExpand)
   const updateTask = useTaskStore((s) => s.updateTask)
@@ -435,34 +439,61 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-2 flex items-center gap-1 border-b border-divider pb-1.5 text-[11px] text-muted-foreground/60">
-        {(['order', 'priority', 'dueDate', 'createdAt'] as SortField[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => toggleSort(f)}
-            className={`rounded px-1.5 py-0.5 transition-colors hover:text-foreground ${
-              sortField === f ? 'bg-accent text-foreground' : ''
-            }`}
-          >
-            {SORT_LABELS[f]} {sortField === f ? (sortDir === 'asc' ? '↑' : '↓') : ''}
-          </button>
-        ))}
-        <div className="ml-auto flex gap-1">
-          <Tip tip="展开全部子任务">
+        {taskView === 'list' &&
+          (['order', 'priority', 'dueDate', 'createdAt'] as SortField[]).map((f) => (
             <button
-              onClick={() => expandAll(view.expandableIds)}
-              className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
+              key={f}
+              onClick={() => toggleSort(f)}
+              className={`rounded px-1.5 py-0.5 transition-colors hover:text-foreground ${
+                sortField === f ? 'bg-accent text-foreground' : ''
+              }`}
             >
-              全部展开
+              {SORT_LABELS[f]} {sortField === f ? (sortDir === 'asc' ? '↑' : '↓') : ''}
             </button>
-          </Tip>
-          <Tip tip="收起全部子任务">
+          ))}
+        <div className="ml-auto flex items-center gap-1">
+          {taskView === 'list' && (
+            <>
+              <Tip tip="展开全部子任务">
+                <button
+                  onClick={() => expandAll(view.expandableIds)}
+                  className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  全部展开
+                </button>
+              </Tip>
+              <Tip tip="收起全部子任务">
+                <button
+                  onClick={() => collapseAll()}
+                  className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  全部收起
+                </button>
+              </Tip>
+            </>
+          )}
+          <div className="flex gap-0.5 rounded-md bg-muted/50 p-0.5">
             <button
-              onClick={() => collapseAll()}
-              className="rounded px-1.5 py-0.5 transition-colors hover:bg-accent hover:text-foreground"
+              onClick={() => setTaskView('list')}
+              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                taskView === 'list'
+                  ? 'bg-accent text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
-              全部收起
+              列表
             </button>
-          </Tip>
+            <button
+              onClick={() => setTaskView('calendar')}
+              className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                taskView === 'calendar'
+                  ? 'bg-accent text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              日历
+            </button>
+          </div>
         </div>
       </div>
 
@@ -474,7 +505,10 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
         </div>
       ) : (
         <div className="relative min-h-0 flex-1">
-          <div ref={scrollRef} className="absolute inset-0 overflow-y-auto">
+          <div
+            ref={scrollRef}
+            className={`absolute inset-0 overflow-y-auto${taskView === 'calendar' ? ' invisible' : ''}`}
+          >
             <div
               ref={listRef}
               className="relative"
@@ -608,7 +642,7 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
             )}
           </div>
 
-          {donePanelState !== 'hidden' && (
+          {taskView === 'list' && donePanelState !== 'hidden' && (
             <div
               className={`absolute inset-0 z-10 flex flex-col bg-panel ${
                 donePanelState === 'leaving' ? 'animate-panel-down' : 'animate-panel-up'
@@ -644,6 +678,13 @@ export function TaskList({ categoryId }: { categoryId: string | null }) {
               </div>
             </div>
           )}
+
+          <FadeBlock
+            show={taskView === 'calendar'}
+            className="absolute inset-0 z-20 bg-panel"
+          >
+            <TaskCalendar categoryId={categoryId} />
+          </FadeBlock>
         </div>
       )}
     </div>
