@@ -32,6 +32,19 @@ const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   return { value: String(m).padStart(2, '0'), label: String(m).padStart(2, '0') }
 })
 
+function FieldClear({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClear}
+      className="absolute inset-y-0 right-0 flex w-6 items-center justify-center rounded-r-md text-xs text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
+    >
+      ✕
+    </button>
+  )
+}
+
 export function DetailPanel() {
   const selectedTask = useTaskStore((s) => s.selectedTask)
   const updateTask = useTaskStore((s) => s.updateTask)
@@ -221,16 +234,18 @@ export function DetailPanel() {
       <div className="space-y-1">
         <div className="flex flex-wrap gap-1">
           {selectedTask.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-[11px]">
+            <Badge key={tag} variant="secondary" className="group/badge text-[11px]">
               #{tag}
               <button
+                type="button"
+                aria-label={`移除标签 ${tag}`}
                 onClick={() =>
                   updateTask({
                     id: selectedTask.id,
                     tags: selectedTask.tags.filter((t) => t !== tag),
                   })
                 }
-                className="ml-1 hover:text-destructive"
+                className="ml-1 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover/badge:opacity-100"
               >
                 ✕
               </button>
@@ -293,11 +308,13 @@ export function DetailPanel() {
       <div className="space-y-1 relative">
         <div className="flex flex-wrap gap-1">
           {selectedTask.owner && (
-            <Badge variant="secondary" className="text-[11px]">
+            <Badge variant="secondary" className="group/badge text-[11px]">
               @{selectedTask.owner}
               <button
+                type="button"
+                aria-label={`移除负责人 ${selectedTask.owner}`}
                 onClick={() => updateTask({ id: selectedTask.id, owner: '' })}
-                className="ml-1 hover:text-destructive"
+                className="ml-1 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover/badge:opacity-100"
               >
                 ✕
               </button>
@@ -359,12 +376,12 @@ export function DetailPanel() {
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground/60">开始日期</label>
-          <div className="flex gap-1">
+          <div className="group relative">
             <Popover>
               <PopoverTrigger asChild>
                 <button
-                  className={`flex h-7 min-w-0 flex-1 items-center truncate rounded-md border border-input bg-background px-2 text-xs transition-colors hover:bg-accent ${
-                    startDate ? 'text-foreground' : 'text-muted-foreground'
+                  className={`flex h-7 w-full min-w-0 items-center truncate rounded-md border border-input bg-background text-xs transition-colors hover:bg-accent ${
+                    startDate ? 'pl-2 pr-6 text-foreground' : 'px-2 text-muted-foreground'
                   }`}
                 >
                   {startDate
@@ -393,27 +410,25 @@ export function DetailPanel() {
               </PopoverContent>
             </Popover>
             {startDate && (
-              <button
-                onClick={() => {
+              <FieldClear
+                label="清除开始日期"
+                onClear={() => {
                   setStartDate('')
                   updateTask({ id: selectedTask.id, startDate: null })
                 }}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-input bg-background text-xs text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
-              >
-                ✕
-              </button>
+              />
             )}
           </div>
         </div>
 
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground/60">截止日期</label>
-          <div className="flex gap-1">
+          <div className="group relative">
             <Popover>
               <PopoverTrigger asChild>
                 <button
-                  className={`flex h-7 min-w-0 flex-1 items-center truncate rounded-md border border-input bg-background px-2 text-xs transition-colors hover:bg-accent ${
-                    dueDate ? 'text-foreground' : 'text-muted-foreground'
+                  className={`flex h-7 w-full min-w-0 items-center truncate rounded-md border border-input bg-background text-xs transition-colors hover:bg-accent ${
+                    dueDate ? 'pl-2 pr-6 text-foreground' : 'px-2 text-muted-foreground'
                   }`}
                 >
                   {dueDate
@@ -442,15 +457,13 @@ export function DetailPanel() {
               </PopoverContent>
             </Popover>
             {dueDate && (
-              <button
-                onClick={() => {
+              <FieldClear
+                label="清除截止日期"
+                onClear={() => {
                   setDueDate('')
                   updateTask({ id: selectedTask.id, dueDate: null })
                 }}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-input bg-background text-xs text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
-              >
-                ✕
-              </button>
+              />
             )}
           </div>
         </div>
@@ -458,12 +471,14 @@ export function DetailPanel() {
 
       <div className="space-y-1">
         <label className="text-xs text-muted-foreground/60">提醒时间</label>
-        <div className="flex gap-1">
+        <div className="group relative">
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className={`flex h-7 flex-1 items-center rounded-md border border-input bg-background px-2 text-xs transition-colors hover:bg-accent ${
-                  reminderDate && reminderTime ? 'text-foreground' : 'text-muted-foreground'
+                className={`flex h-7 w-full items-center truncate rounded-md border border-input bg-background text-xs transition-colors hover:bg-accent ${
+                  reminderDate && reminderTime
+                    ? 'pl-2 pr-6 text-foreground'
+                    : 'px-2 text-muted-foreground'
                 }`}
               >
                 {reminderDate && reminderTime
@@ -518,12 +533,7 @@ export function DetailPanel() {
             </PopoverContent>
           </Popover>
           {reminderDate && reminderTime && (
-            <button
-              onClick={clearReminder}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-input bg-background text-xs text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
-            >
-              ✕
-            </button>
+            <FieldClear label="清除提醒时间" onClear={clearReminder} />
           )}
         </div>
       </div>

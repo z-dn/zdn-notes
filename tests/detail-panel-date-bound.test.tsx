@@ -52,6 +52,8 @@ function dayButton(date: Date): HTMLElement | null {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 8, 20))
   Object.defineProperty(window, 'electronAPI', {
     value: mock,
     configurable: true,
@@ -62,6 +64,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   useTaskStore.setState({ tasks: [], selectedTask: null })
 })
 
