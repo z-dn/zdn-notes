@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { addDays, addMonths, format, isToday, nextMonday, startOfDay, startOfMonth } from 'date-fns'
-import { Bell, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Bell, ChevronLeft, ChevronRight, ListTree } from 'lucide-react'
 import { useTaskStore } from '@/stores/task-store'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ChipSubtaskTree } from './chip-subtask-tree'
 import { Collapse } from './fade'
 import { Tip } from '@/components/tip-button'
 import {
@@ -43,6 +45,7 @@ interface ChipProps {
   segment?: { left: boolean; right: boolean }
   onSelect: (t: Task) => void
   onToggleDone: (id: string, status: string) => void
+  onOpenSubtree: (task: Task, anchor: DOMRect) => void
   onDragStart: (task: Task, fromKey: string | null, e: React.DragEvent) => void
   onContextMenu: (task: Task, fromKey: string | null, e: React.MouseEvent) => void
 }
@@ -57,6 +60,7 @@ const TaskChip = memo(function TaskChip({
   segment,
   onSelect,
   onToggleDone,
+  onOpenSubtree,
   onDragStart,
   onContextMenu,
 }: ChipProps) {
@@ -124,10 +128,32 @@ const TaskChip = memo(function TaskChip({
         {task.title}
       </span>
       {progress && (
-        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
+        <button
+          type="button"
+          data-subtree-entry
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenSubtree(task, e.currentTarget.getBoundingClientRect())
+          }}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="shrink-0 cursor-pointer rounded text-[10px] tabular-nums text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
           {progress.done}/{progress.total}
-        </span>
+        </button>
       )}
+      <button
+        type="button"
+        aria-label="管理子任务"
+        data-subtree-entry
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpenSubtree(task, e.currentTarget.getBoundingClientRect())
+        }}
+        onKeyDown={(e) => e.stopPropagation()}
+        className="shrink-0 text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
+      >
+        <ListTree className="size-3" />
+      </button>
       {showBell && <Bell className="size-3 shrink-0 text-muted-foreground/70" />}
     </div>
   )
@@ -157,6 +183,7 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
   const [showUnscheduled, setShowUnscheduled] = useState(false)
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [subtree, setSubtree] = useState<{ root: Task; style: CSSProperties } | null>(null)
   const dragRef = useRef<DragPayload | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -165,6 +192,7 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
   useEffect(() => {
     setExpandedDay(null)
     setMenu(null)
+    setSubtree(null)
   }, [anchor])
 
   useEffect(() => {
@@ -226,8 +254,28 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
   const openMenu = useCallback((task: Task, fromKey: string | null, e: React.MouseEvent) => {
     const rect = rootRef.current?.getBoundingClientRect()
     if (!rect) return
+    setSubtree(null)
     setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, task, fromKey })
   }, [])
+
+  const openSubtree = useCallback(
+    (root: Task, anchor: DOMRect) => {
+      if (subtree?.root.id === root.id) {
+        setSubtree(null)
+        return
+      }
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setMenu(null)
+      const left = Math.max(0, Math.min(anchor.left - rect.left, rect.width - 244))
+      const style: CSSProperties =
+        anchor.bottom + 256 > rect.height
+          ? { left, bottom: Math.max(0, rect.height - anchor.top + 4) }
+          : { left, top: anchor.bottom + 4 }
+      setSubtree({ root, style })
+    },
+    [subtree],
+  )
 
   const applyDrop = useCallback(
     (task: Task, fromKey: string | null, toKey: string) => {
@@ -389,6 +437,7 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
                       segment={segment}
                       onSelect={selectTask}
                       onToggleDone={toggleDone}
+                      onOpenSubtree={openSubtree}
                       onDragStart={handleChipDragStart}
                       onContextMenu={openMenu}
                     />
@@ -444,6 +493,7 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
                   progress={progressMap.get(t.id)}
                   onSelect={selectTask}
                   onToggleDone={toggleDone}
+                  onOpenSubtree={openSubtree}
                   onDragStart={handleChipDragStart}
                   onContextMenu={openMenu}
                 />
@@ -492,6 +542,16 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
             </button>
           )}
         </div>
+      )}
+
+      {subtree && (
+        <ChipSubtaskTree
+          key={subtree.root.id}
+          root={subtree.root}
+          style={subtree.style}
+          onReroot={(task) => setSubtree((s) => (s ? { ...s, root: task } : s))}
+          onClose={() => setSubtree(null)}
+        />
       )}
     </div>
   )

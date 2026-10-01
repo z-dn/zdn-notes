@@ -14,7 +14,6 @@ import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
 import { FadeBlock } from '@/components/fade'
 import { Tip } from '@/components/tip-button'
-import { DetailSubtasks } from '@/components/detail-subtasks'
 import { PRIORITY_COLORS } from './task-item'
 import { parentBounds } from './task-calendar-view'
 import { renderMarkdown } from '@/lib/markdown'
@@ -212,8 +211,6 @@ export function DetailPanel() {
           ))}
         </div>
       </div>
-
-      <DetailSubtasks task={selectedTask} />
 
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground shrink-0">分类</span>
