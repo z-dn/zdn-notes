@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Bot, Minus, Power, Puzzle } from 'lucide-react'
+import { Bot, ChevronLeft, Power, Puzzle, RotateCcw } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import { useDshUiStore } from '@/stores/dsh-ui-store'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Tip } from '@/components/tip-button'
 
 // ===================================================================
@@ -15,9 +14,14 @@ import { Tip } from '@/components/tip-button'
 //   - 拖拽：Pointer Events + setPointerCapture，实时 clamp 在内容区边界内；
 //     拖拽中禁用过渡动画
 //   - 点击 vs 拖拽：位移 < DRAG_THRESHOLD_PX 视为点击（收缩态点击展开）；
-//     带 .js-nodrag 的按钮（插件/收起/关闭）不进入拖拽流程
+//     带 .js-nodrag 的按钮（插件/重启/关闭/收起）不进入拖拽流程
 //   - 持久化：{x, y, collapsed} 存 localStorage（渲染层本地 UI 偏好），
 //     恢复时按容器边界 clamp 校验
+//   - 开/关动画：单元素常驻，容器 width 过渡（token 化 duration/ease）向右
+//     扫掠延展/向左收拢；按钮行 w-max 恒定尺寸靠 overflow 裁剪渐露，
+//     光点格 18px 恒定（大小/位置两态不变）；收起钮在最右（ChevronLeft）
+//   - 重启：stop→start 序列，期间 restarting 保持胶囊挂载（黄点 + 重启占位）
+//   - 光点三态：绿=运行就绪 / 黄=启动中·重启中 / 红=未运行（预留，停止后胶囊不渲染）
 // 运行状态来源：useDshUiStore（dsh:statusChanged 全局单源）。
 // ===================================================================
 
@@ -34,6 +38,13 @@ interface PillState {
 const PILL_STORAGE_KEY = 'zdn.dshPill'
 const DRAG_THRESHOLD_PX = 5
 const PILL_MARGIN_PX = 4
+/** 默认（未拖动过）贴右下角的边距，等价于原 bottom-3 right-3 */
+const DEFAULT_MARGIN_PX = 12
+/** 收起态容器边长（h-5/w-5 含边框，与历史形态一致） */
+const PILL_COLLAPSED_PX = 20
+
+/** 胶囊光点三态：stopped（红，预留——胶囊停止后不渲染）/ starting（黄）/ running（绿） */
+type DotPhase = 'stopped' | 'starting' | 'running'
 
 function loadPillState(): PillState {
   try {
@@ -56,6 +67,7 @@ export function DshPage() {
   const setPluginDialogOpen = useDshUiStore((s) => s.setPluginDialogOpen)
   const [version, setVersion] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [restarting, setRestarting] = useState(false)
   const [notReadyReason, setNotReadyReason] = useState('')
 
   useEffect(() => {
@@ -85,11 +97,27 @@ export function DshPage() {
     }
   }
 
+  async function handleRestart() {
+    if (restarting) return
+    setRestarting(true)
+    try {
+      await window.electronAPI.dshStop()
+      const res = await window.electronAPI.dshStart()
+      if (res.ok) toast('DSH 已重启')
+      else toast(`重启失败: ${res.error ?? '未知错误'}`)
+    } finally {
+      setRestarting(false)
+    }
+  }
+
   // ---- 胶囊：拖拽 + 收缩 + 持久化 ----
 
   const containerRef = useRef<HTMLDivElement>(null)
   const pillRef = useRef<HTMLDivElement>(null)
+  const innerRef = useRef<HTMLDivElement>(null)
   const [pill, setPill] = useState<PillState>(loadPillState)
+  /** 展开态容器总宽（含边框）；null = 尚未测量（首帧用 auto，数值等价无过渡） */
+  const [pillW, setPillW] = useState<number | null>(null)
   const [dragging, setDragging] = useState(false)
   const dragRef = useRef<{
     startX: number
@@ -99,12 +127,15 @@ export function DshPage() {
     moved: boolean
   } | null>(null)
 
-  function clampToContainer(x: number, y: number): PillPos {
+  /** @param w/h 目标尺寸覆盖（展开瞬间 offsetWidth 仍是过渡初值，需按目标宽度校正） */
+  function clampToContainer(x: number, y: number, w?: number, h?: number): PillPos {
     const c = containerRef.current
     const el = pillRef.current
     if (!c || !el) return { x, y }
-    const maxX = Math.max(PILL_MARGIN_PX, c.clientWidth - el.offsetWidth - PILL_MARGIN_PX)
-    const maxY = Math.max(PILL_MARGIN_PX, c.clientHeight - el.offsetHeight - PILL_MARGIN_PX)
+    const ew = w ?? el.offsetWidth
+    const eh = h ?? el.offsetHeight
+    const maxX = Math.max(PILL_MARGIN_PX, c.clientWidth - ew - PILL_MARGIN_PX)
+    const maxY = Math.max(PILL_MARGIN_PX, c.clientHeight - eh - PILL_MARGIN_PX)
     return {
       x: Math.min(Math.max(x, PILL_MARGIN_PX), maxX),
       y: Math.min(Math.max(y, PILL_MARGIN_PX), maxY),
@@ -175,95 +206,158 @@ export function DshPage() {
     }
   }, [pill.pos?.x, pill.pos?.y])
 
-  if (running && port) {
+  // 测量展开态总宽（inner 为 w-max，收起态被裁剪仍报自然宽度）；
+  // 顺带把「从未拖动过」的默认右下角物化为 left/top——右锚定会让开/关
+  // 动画朝左生长，物化后左边缘固定、向右延展恰好贴合右下角。
+  useLayoutEffect(() => {
+    const inner = innerRef.current
+    if (inner) {
+      const w = Math.ceil(inner.getBoundingClientRect().width) + 2 // + 双侧 1px 边框
+      setPillW((prev) => (prev === w ? prev : w))
+    }
+    if (pill.pos || !containerRef.current) return
+    const c = containerRef.current.getBoundingClientRect()
+    if (c.width <= 0 || c.height <= 0) return // 隐藏态（tab 未激活）不物化
+    const expandedW =
+      (inner ? Math.ceil(inner.getBoundingClientRect().width) + 2 : 0) || PILL_COLLAPSED_PX
+    const el = pillRef.current
+    const h = el ? el.offsetHeight || PILL_COLLAPSED_PX : PILL_COLLAPSED_PX
+    setPill((p) => ({
+      ...p,
+      pos: {
+        x: Math.max(PILL_MARGIN_PX, c.width - expandedW - DEFAULT_MARGIN_PX),
+        y: Math.max(PILL_MARGIN_PX, c.height - h - DEFAULT_MARGIN_PX),
+      },
+    }))
+  }, [pill.pos])
+
+  // 展开/收起瞬间按「目标宽度」校正边界（过渡中的 offsetWidth 不可用）：
+  // 默认/拖动后的位置若放不下完整胶囊，展开前先左移，避免溢出容器。
+  useLayoutEffect(() => {
+    if (!pill.pos || pillW === null) return
+    const targetW = pill.collapsed ? PILL_COLLAPSED_PX : pillW
+    const clamped = clampToContainer(pill.pos.x, pill.pos.y, targetW)
+    if (clamped.x !== pill.pos.x || clamped.y !== pill.pos.y) {
+      setPill((p) => ({ ...p, pos: clamped }))
+    }
+  }, [pill.collapsed, pillW])
+
+  if ((running && port) || restarting) {
     const posStyle = pill.pos ? { left: pill.pos.x, top: pill.pos.y } : undefined
     const posClass = pill.pos ? '' : 'bottom-3 right-3'
     const dragClass = dragging ? 'cursor-grabbing select-none' : 'cursor-grab'
-    const hoverTitle = `DSH 运行中 · 127.0.0.1:${port}${version ? ` · v${version}` : ''}`
+    // 光点三态：重启中优先判黄；stopped（红）仅代码预留——此状态胶囊不渲染
+    const phase: DotPhase = restarting
+      ? 'starting'
+      : !running
+        ? 'stopped'
+        : webUrl
+          ? 'running'
+          : 'starting'
+    const dotColor =
+      phase === 'running' ? 'bg-green-500' : phase === 'starting' ? 'bg-yellow-500' : 'bg-red-500'
+    const pulseClass = phase === 'stopped' ? '' : 'animate-pulse'
+    const hoverTitle =
+      phase === 'running'
+        ? `DSH 运行中 · 127.0.0.1:${port}${version ? ` · v${version}` : ''}`
+        : phase === 'starting'
+          ? restarting
+            ? 'DSH 重启中…'
+            : `DSH 启动中${port ? ` · 127.0.0.1:${port}` : ''}`
+          : 'DSH 未运行'
+    const tooltipText = pill.collapsed ? `${hoverTitle} · 点击展开` : hoverTitle
 
     return (
       <div ref={containerRef} className="relative h-full w-full bg-panel">
-        {/* 内容由 App 层 DshWebviewLayer 承载；webUrl 未到（token 竞态窗口）时显示占位 */}
+        {/* 内容由 App 层 DshWebviewLayer 承载；webUrl 未到（token 竞态窗口/重启窗口）时显示占位 */}
         {!webUrl && (
           <div className="flex h-full w-full items-center justify-center gap-2 text-[11px] text-muted-foreground">
             <LoaderSpinner />
-            <span>正在启动 DSH…</span>
+            <span>{restarting ? '正在重启 DSH…' : '正在启动 DSH…'}</span>
           </div>
         )}
 
-        {pill.collapsed ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                ref={pillRef}
-                role="button"
-                tabIndex={0}
-                style={posStyle}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setPill((p) => ({ ...p, collapsed: false }))
-                }}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerUp}
-                className={`absolute z-20 flex size-5 touch-none items-center justify-center rounded-full border border-divider bg-panel shadow-lg transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${posClass} ${dragClass}`}
-              >
-                <span className="size-2 animate-pulse rounded-full bg-green-500" />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="top">{`${hoverTitle} · 点击展开`}</TooltipContent>
-          </Tooltip>
-        ) : (
-          <div
-            ref={pillRef}
-            style={posStyle}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            className={`group absolute z-20 flex touch-none items-center gap-2 rounded-full border border-divider bg-panel py-1 pl-2.5 pr-1.5 shadow-lg ${posClass} ${dragClass}`}
-          >
-            <Tip tip={hoverTitle}>
-              <span className="select-none">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-                  <span className="max-w-0 overflow-hidden text-[11px] whitespace-nowrap text-muted-foreground opacity-0 transition-all duration-200 ease-in-out group-hover:max-w-40 group-hover:opacity-100">
-                    DSH 运行中
-                  </span>
-                </span>
-              </span>
+        {/* 单元素常驻胶囊：容器 width 过渡（token 化）向右扫掠延展/向左收拢；
+            内层 w-max 恒定尺寸，靠容器 overflow 裁剪渐露，光点格两态零变化 */}
+        <div
+          ref={pillRef}
+          style={{
+            ...(posStyle ?? {}),
+            width: pill.collapsed ? PILL_COLLAPSED_PX : (pillW ?? undefined),
+          }}
+          role={pill.collapsed ? 'button' : undefined}
+          tabIndex={pill.collapsed ? 0 : undefined}
+          onKeyDown={
+            pill.collapsed
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ')
+                    setPill((p) => ({ ...p, collapsed: false }))
+                }
+              : undefined
+          }
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          className={`absolute z-20 flex h-5 touch-none items-center overflow-hidden rounded-full border border-divider bg-panel shadow-lg transition-[width,background-color] duration-200 ease-out ${posClass} ${dragClass} ${
+            pill.collapsed
+              ? 'hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+              : ''
+          }`}
+        >
+          <div ref={innerRef} className="flex w-max shrink-0 items-center gap-2 pl-[5px] pr-1.5">
+            <Tip tip={tooltipText}>
+              <span className={`size-2 rounded-full ${dotColor} ${pulseClass}`} />
             </Tip>
-            <button
-              onClick={() => setPluginDialogOpen(true)}
-              aria-label="管理插件"
-              className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            <div
+              inert={pill.collapsed}
+              className={`flex items-center gap-2 transition-opacity duration-200 ease-out ${
+                pill.collapsed ? 'opacity-0' : 'opacity-100'
+              }`}
             >
-              <Tip tip="管理插件" side="bottom">
-                <Puzzle className="size-3" />
-              </Tip>
-            </button>
-            <button
-              onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
-              aria-label="收起为小圆点"
-              className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <Tip tip="收起为小圆点" side="bottom">
-                <Minus className="size-3" />
-              </Tip>
-            </button>
-            <button
-              onClick={async () => {
-                await window.electronAPI.dshStop()
-              }}
-              aria-label="关闭 DSH"
-              className="js-nodrag flex h-6 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <Tip tip="关闭 DSH" side="bottom">
-                <Power className="size-3" />
-              </Tip>
-            </button>
+              <button
+                onClick={() => setPluginDialogOpen(true)}
+                aria-label="管理插件"
+                className="js-nodrag flex h-5 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <Tip tip="管理插件" side="bottom">
+                  <Puzzle className="size-3" />
+                </Tip>
+              </button>
+              <button
+                onClick={handleRestart}
+                disabled={restarting}
+                aria-label="重启 DSH"
+                className="js-nodrag flex h-5 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Tip tip="重启 DSH" side="bottom">
+                  <RotateCcw className={`size-3 ${restarting ? 'animate-spin' : ''}`} />
+                </Tip>
+              </button>
+              <button
+                onClick={async () => {
+                  await window.electronAPI.dshStop()
+                }}
+                disabled={restarting}
+                aria-label="关闭 DSH"
+                className="js-nodrag flex h-5 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Tip tip="关闭 DSH" side="bottom">
+                  <Power className="size-3" />
+                </Tip>
+              </button>
+              <button
+                onClick={() => setPill((p) => ({ ...p, collapsed: true }))}
+                aria-label="收起为小圆点"
+                className="js-nodrag flex h-5 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <Tip tip="收起为小圆点" side="bottom">
+                  <ChevronLeft className="size-3" />
+                </Tip>
+              </button>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     )
   }
@@ -284,8 +378,7 @@ export function DshPage() {
               <>
                 运行时不可用：{notReadyReason}
                 <br />
-                请重新安装完整的 ZDNotes 安装包（开发环境可运行{' '}
-                <code>npm run build:dsh</code>）
+                请重新安装完整的 ZDNotes 安装包（开发环境可运行 <code>npm run build:dsh</code>）
               </>
             ) : (
               '内嵌官方 AI 编程助手 Web UI，本地运行、开箱即用。'
