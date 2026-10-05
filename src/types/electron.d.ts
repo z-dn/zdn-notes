@@ -15,50 +15,6 @@ declare global {
     body: string
   }
 
-  interface McpConfig {
-    enabled: boolean
-    graph: string
-    maxWaitLockMs: number
-    permissions: Record<string, boolean>
-  }
-
-  interface McpCatalogTool {
-    key: string
-    name: string
-    label: string
-    description: string
-    kind: 'builtin' | 'plugin'
-    danger: boolean
-    defaultEnabled: boolean
-  }
-
-  interface McpPluginInfo {
-    id: string
-    name: string
-    version: string
-    author?: string
-    description?: string
-    tools: { key: string; name: string; label: string }[]
-    dir: string
-    builtin: boolean
-    /** 依赖声明（插件 id → semver 范围） */
-    dependencies?: Record<string, string>
-    /** 依赖此插件的其他插件 id（卸载保护提示用） */
-    dependents?: string[]
-    error?: string
-  }
-
-  interface McpCallLog {
-    id: string
-    ts: number
-    tool: string
-    args: Record<string, unknown>
-    ok: boolean
-    error?: string
-    ms: number
-    source: 'gui' | 'mcp'
-  }
-
   interface AppLogEntry {
     id: string
     ts: number
@@ -89,45 +45,6 @@ declare global {
 
       settingsGetAll(): Promise<Record<string, string>>
       settingsSet(key: string, value: string): Promise<void>
-
-      mcpGetConfig(): Promise<McpConfig>
-      mcpSetConfig(cfg: Partial<McpConfig>): Promise<McpConfig>
-      mcpGetCatalog(): Promise<{
-        tools: {
-          key: string
-          name: string
-          label: string
-          description: string
-          kind: 'builtin' | 'plugin'
-          danger: boolean
-          defaultEnabled: boolean
-        }[]
-      }>
-      onMcpCatalogChanged(cb: () => void): () => void
-      mcpListPlugins(): Promise<McpPluginInfo[]>
-      mcpInstallPlugin(): Promise<{
-        ok: boolean
-        canceled?: boolean
-        id?: string
-        name?: string
-        error?: string
-      }>
-      mcpUninstallPlugin(
-        id: string,
-        force?: boolean,
-      ): Promise<{ ok: boolean; removed?: boolean; error?: string }>
-      mcpGetPluginsDir(): Promise<string>
-      mcpGetPluginSpec(): Promise<{ ok: boolean; content?: string; error?: string }>
-      mcpGetAgentGuide(): Promise<{ ok: boolean; content?: string; error?: string }>
-      mcpDownloadPluginSpec(): Promise<{
-        ok: boolean
-        canceled?: boolean
-        path?: string
-        error?: string
-      }>
-      mcpGetCallLogs(): Promise<McpCallLog[]>
-      mcpClearCallLogs(): Promise<boolean>
-      onMcpCallLogged(cb: (entry: McpCallLog) => void): () => void
 
       toolGetAll(): Promise<Record<string, string>>
       toolSet(key: string, value: string): Promise<void>
@@ -179,7 +96,6 @@ declare global {
           error?: string
         }) => void,
       ): () => void
-      onDataChanged(cb: () => void): () => void
       onReminderOpen(cb: (taskId: string) => void): () => void
       onReminderNotificationFailed(cb: (taskId: string) => void): () => void
 

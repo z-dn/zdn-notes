@@ -14,7 +14,7 @@
 - **窗口工厂**：`electron/modules/window/index.ts` 的 `createAppWindow(viewId?)`，dev 走 `loadURL(url + '?view=<id>')`、prod 走 `loadFile(path, { query: { view } })`；`createMainWindow()` 是无参特例并额外登记到 window-store
 - **初始视图传参**：渲染层 `src/App.tsx` 从 URL query `?view=` 解析初始 `sidebarTab`，非法/被功能开关禁用的 id 由既有兜底 effect 回落到第一个可用视图
 - **窗口绑定**：`window:minimize/maximizeToggle/close` 经 `BrowserWindow.fromWebContents(e.sender)` 绑定发起方窗口，各窗口标题栏按钮只控制自己
-- **广播**：`window-store.sendToRenderer()` 广播全部窗口（updater/inbox/`data:changed`/`mcp:catalogChanged`）；`window:maximizedChange` 改为各窗口发自身 webContents
+- **广播**：`window-store.sendToRenderer()` 广播全部窗口（updater/inbox/dsh/log 等事件）；`window:maximizedChange` 改为各窗口发自身 webContents
 - **关闭语义**：仅主窗口 close→hide 托盘驻留（`getMainWindow() === win` 判断），子窗口 close 即销毁；`second-instance` 与托盘聚焦固定走 `getMainWindow()`
 - **IPC**：新增 `window:openView(view)`（UI 专属通道，留在模块 `registerIpc`），preload API 为 `openViewWindow`
 

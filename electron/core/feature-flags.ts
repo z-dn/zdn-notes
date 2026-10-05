@@ -24,7 +24,6 @@ export const FEATURE_FLAGS: FeatureFlagDef[] = [
   { id: 'toolbox', label: '工具箱', kind: 'optional', defaultEnabled: true },
   { id: 'window', label: '窗口控制', kind: 'core', defaultEnabled: true },
   { id: 'updater', label: '自动更新', kind: 'optional', defaultEnabled: true },
-  { id: 'mcp', label: 'AI 智能体（MCP）', kind: 'optional', defaultEnabled: true },
   { id: 'notifications', label: '任务提醒通知', kind: 'optional', defaultEnabled: true },
   { id: 'dsh', label: 'DeepSeek Harness', kind: 'optional', defaultEnabled: true },
   { id: 'app', label: '应用基础', kind: 'core', defaultEnabled: true },

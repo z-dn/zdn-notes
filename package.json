@@ -4,9 +4,8 @@
   "description": "",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "npm run build:mcp && electron-vite dev",
-    "build": "npm run build:mcp && electron-vite build",
-    "build:mcp": "node scripts/build-mcp.mjs",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
     "build:dsh": "node scripts/build-dsh.mjs",
     "validate:dsh": "electron scripts/validate-dsh-utility.mjs",
     "postinstall": "electron-builder install-app-deps || echo \"[postinstall] node-pty 使用预编译二进制，跳过 electron 原生重编\"",
@@ -20,15 +19,7 @@
     "format": "prettier --write .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "mcp": "tsx electron/mcp/index.ts",
-    "mcp:stdio": "tsx electron/mcp/index.ts --stdio",
-    "mcp:http": "tsx electron/mcp/index.ts --http",
-    "mcp:stdio:dev": "electron-vite dev -- --zdn-mcp-stdio",
-    "mcp:stdio:dev:debug": "cross-env ZDNOTES_MCP_INSPECT=9229 electron-vite dev -- --zdn-mcp-stdio",
-    "mcp:test": "node scripts/test-mcp.mjs",
-    "mcp:e2e": "tsx scripts/e2e-ipc-check.mts",
-    "ztool": "node scripts/ztool.mjs"
+    "typecheck": "npm run typecheck:node && npm run typecheck:web"
   },
   "build": {
     "appId": "com.zdn.notes",
@@ -42,24 +33,12 @@
     "afterPack": "scripts/copy-dsh-runtime.cjs",
     "extraResources": [
       {
-        "from": "resources/agent-tools",
-        "to": "agent-tools"
-      },
-      {
         "from": "resources/icon.png",
         "to": "icon.png"
       },
       {
         "from": "resources/icon.ico",
         "to": "icon.ico"
-      },
-      {
-        "from": "docs/plugin-spec.md",
-        "to": "plugin-spec.md"
-      },
-      {
-        "from": "docs/agent-usage.md",
-        "to": "agent-usage.md"
       }
     ],
     "win": {
@@ -127,11 +106,9 @@
     "autoprefixer": "^10.5.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cross-env": "^10.1.0",
     "electron": "^42.5.1",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
-    "esbuild": "^0.25.12",
     "eslint": "^10.6.0",
     "globals": "^17.9.0",
     "jsdom": "^29.1.1",

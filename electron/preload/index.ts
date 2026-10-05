@@ -44,11 +44,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('inbox:processed', handler)
     return () => ipcRenderer.removeListener('inbox:processed', handler)
   },
-  onDataChanged: (cb: () => void) => {
-    const handler = () => cb()
-    ipcRenderer.on('data:changed', handler)
-    return () => ipcRenderer.removeListener('data:changed', handler)
-  },
   onReminderOpen: (cb: (taskId: string) => void) => {
     const handler = (_e: unknown, id: string) => cb(id)
     ipcRenderer.on('reminder:open', handler)
@@ -67,30 +62,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteImage: (url: string) => ipcRenderer.invoke('image:delete', url),
   settingsGetAll: () => ipcRenderer.invoke('settings:getAll'),
   settingsSet: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
-
-  mcpGetConfig: () => ipcRenderer.invoke('mcp:getConfig'),
-  mcpSetConfig: (cfg: unknown) => ipcRenderer.invoke('mcp:setConfig', cfg),
-  mcpGetCatalog: () => ipcRenderer.invoke('mcp:getCatalog'),
-  mcpListPlugins: () => ipcRenderer.invoke('mcp:listPlugins'),
-  mcpInstallPlugin: () => ipcRenderer.invoke('mcp:installPlugin'),
-  mcpUninstallPlugin: (id: string, force?: boolean) =>
-    ipcRenderer.invoke('mcp:uninstallPlugin', id, force),
-  mcpGetPluginsDir: () => ipcRenderer.invoke('mcp:getPluginsDir'),
-  mcpGetPluginSpec: () => ipcRenderer.invoke('mcp:getPluginSpec'),
-  mcpGetAgentGuide: () => ipcRenderer.invoke('mcp:getAgentGuide'),
-  mcpDownloadPluginSpec: () => ipcRenderer.invoke('mcp:downloadPluginSpec'),
-  mcpGetCallLogs: () => ipcRenderer.invoke('mcp:getCallLogs'),
-  mcpClearCallLogs: () => ipcRenderer.invoke('mcp:clearCallLogs'),
-  onMcpCallLogged: (cb: (entry: unknown) => void) => {
-    const handler = (_e: unknown, entry: unknown) => cb(entry)
-    ipcRenderer.on('mcp:callLogged', handler)
-    return () => ipcRenderer.removeListener('mcp:callLogged', handler)
-  },
-  onMcpCatalogChanged: (cb: () => void) => {
-    const handler = () => cb()
-    ipcRenderer.on('mcp:catalogChanged', handler)
-    return () => ipcRenderer.removeListener('mcp:catalogChanged', handler)
-  },
 
   toolGetAll: () => ipcRenderer.invoke('tool:getAll'),
   toolSet: (key: string, value: string) => ipcRenderer.invoke('tool:set', key, value),

@@ -11,7 +11,7 @@ import { Tip } from '@/components/tip-button'
 // DshPluginDialog —— DSH 插件管理对话框。
 // 列表来自 profile package.json 依赖（主进程 dsh:listPlugins）；
 // 安装/卸载经自带 pnpm 转发执行，pnpm 输出经 dsh:pluginLog 流式回显。
-// 安装/卸载均先弹「安装插件 = 运行任意代码」确认（与 agent-tools 同款警告）。
+// 安装/卸载均先弹「安装插件 = 运行任意代码」确认。
 // ===================================================================
 
 interface DshPluginInfo {

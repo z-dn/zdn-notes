@@ -1,15 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
 import { ModuleRegistry } from '../electron/core/module-registry'
-import { ToolRegistry } from '../electron/core/tool-registry'
-import { TASK_TOOLS } from '../electron/modules/tasks/tools'
 import type { FeatureModule, MainModuleContext } from '../electron/core/contracts'
 
-describe('ModuleRegistry.collectCtx（toolRegistry 透传）', () => {
-  it('把 toolRegistry 传给 registerIpc / onStart / onShutdown', async () => {
-    const reg = new ToolRegistry()
-    reg.registerAll(TASK_TOOLS)
-
+describe('ModuleRegistry 生命周期', () => {
+  it('registerIpc / onStart / onShutdown 按序调用并透传 ctx', async () => {
     const seen: (MainModuleContext | undefined)[] = []
     const mod: FeatureModule = {
       id: 'test',
@@ -29,7 +24,6 @@ describe('ModuleRegistry.collectCtx（toolRegistry 透传）', () => {
       saveAsync: () => {},
       send: () => {},
       getDataDir: () => 'd',
-      toolRegistry: reg,
     }
     await registry.startAll(ctx)
     registry.registerIpcAll(ctx)
@@ -37,12 +31,11 @@ describe('ModuleRegistry.collectCtx（toolRegistry 透传）', () => {
 
     expect(seen).toHaveLength(3)
     for (const c of seen) {
-      expect(c?.toolRegistry).toBe(reg)
-      expect(c?.toolRegistry?.keys()).toContain('task:create')
+      expect(c?.getDataDir()).toBe('d')
     }
   })
 
-  it('未传 toolRegistry 时保持 undefined（不报错）', () => {
+  it('未提供可选字段时保持缺省（不报错）', () => {
     const registry = new ModuleRegistry()
     registry.register({ id: 't', name: 'T', kind: 'core', registerIpc: () => {} })
     registry.registerIpcAll({})

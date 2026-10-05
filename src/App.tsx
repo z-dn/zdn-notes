@@ -13,9 +13,6 @@ import { ExpandedDescription } from '@/components/expanded-description'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { ToolboxSidebar } from '@/components/toolbox/toolbox-sidebar'
 import { ToolboxWorkspace } from '@/components/toolbox/toolbox-workspace'
-import { AgentToolsPage } from '@/components/agent/agent-tools-page'
-import { AgentSidebar } from '@/components/agent/agent-sidebar'
-import type { AgentMenuKey } from '@/components/agent/agent-sidebar'
 import { DshPage } from '@/components/dsh/dsh-page'
 import { DshWebviewLayer } from '@/components/dsh/dsh-webview-layer'
 import { DshPluginDialog } from '@/components/dsh/dsh-plugin-dialog'
@@ -44,12 +41,10 @@ export default function App() {
   const [pendingUpdate, setPendingUpdate] = useState('')
   const tasksEnabled = useFeature('tasks')
   const toolboxEnabled = useFeature('toolbox')
-  const mcpEnabled = useFeature('mcp')
   const dshEnabled = useFeature('dsh')
   const views = collectViews().filter((v) => {
     if (v.id === 'dsh') return dshEnabled
     if (v.id === 'toolbox') return toolboxEnabled
-    if (v.id === 'agent') return mcpEnabled
     return tasksEnabled
   })
   // 初始视图：新窗口通过 URL query（?view=<id>）指定要打开的模块 tab，
@@ -57,9 +52,7 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<string>(
     () => new URLSearchParams(window.location.search).get('view') ?? views[0]?.id ?? 'categories',
   )
-  const [agentMenu, setAgentMenu] = useState<AgentMenuKey>('plugins')
-  const [tabMenu, setTabMenu] = useState<TabMenuState | null>(null)
-  // DSH 插件管理面板（标题栏徽标 / DshPage 空态均可打开）
+  const [tabMenu, setTabMenu] = useState<TabMenuState | null>(null)  // DSH 插件管理面板（标题栏徽标 / DshPage 空态均可打开）
   const dshPluginDialogOpen = useDshUiStore((s) => s.pluginDialogOpen)
   const setDshPluginDialogOpen = useDshUiStore((s) => s.setPluginDialogOpen)
   const dshRunning = useDshUiStore((s) => s.running)
@@ -113,15 +106,6 @@ export default function App() {
         if (s.settingsAdded) parts.push(`新增设置 ${s.settingsAdded}`)
       }
       toast(parts.length ? `已导入 ${result.file}（${parts.join('、')}）` : `已导入 ${result.file}`)
-    })
-    return () => unsub()
-  }, [loadTasks, loadCategories])
-
-  // 数据被外部写者（MCP 智能体经 GUI-IPC 委托）修改时刷新界面
-  useEffect(() => {
-    const unsub = window.electronAPI.onDataChanged(() => {
-      loadTasks(true)
-      loadCategories()
     })
     return () => unsub()
   }, [loadTasks, loadCategories])
@@ -299,7 +283,6 @@ export default function App() {
                 className="flex min-h-0 flex-1 flex-col"
                 render={(k) => {
                   if (k === 'toolbox') return <ToolboxSidebar />
-                  if (k === 'agent') return <AgentSidebar menu={agentMenu} onMenuChange={setAgentMenu} />
                   return <CategorySidebar />
                 }}
               />
@@ -320,9 +303,6 @@ export default function App() {
                       <ToolboxWorkspace />
                     </div>
                   )
-                }
-                if (k === 'agent') {
-                  return <AgentToolsPage menu={agentMenu} />
                 }
                 if (k === 'dsh') {
                   return <DshPage />
@@ -353,7 +333,7 @@ export default function App() {
             />
           </div>
 
-          {sidebarTab !== 'toolbox' && sidebarTab !== 'agent' && sidebarTab !== 'dsh' && (
+          {sidebarTab !== 'toolbox' && sidebarTab !== 'dsh' && (
             <aside className="hidden w-80 border-l border-divider bg-panel-detail md:block">
               <DetailPanel />
             </aside>

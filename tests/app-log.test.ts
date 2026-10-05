@@ -24,7 +24,7 @@ describe('app-log', () => {
 
   it('append + read roundtrip', () => {
     appendAppLog(dataDir, { level: 'error', source: 'dsh', message: '启动失败', detail: 'boom' })
-    appendAppLog(dataDir, { level: 'info', source: 'mcp', message: 'ok' })
+    appendAppLog(dataDir, { level: 'info', source: 'inbox', message: 'ok' })
 
     const all = readAppLogs(dataDir)
     expect(all).toHaveLength(2)

@@ -9,7 +9,6 @@ import { inboxModule } from './inbox'
 import { toolboxModule } from './toolbox'
 import { windowModule } from './window'
 import { updaterModule } from './updater'
-import { mcpModule } from './mcp'
 import { appModule } from './app'
 import { notificationsModule } from './notifications'
 import { dshModule } from './dsh'
@@ -31,7 +30,6 @@ export const BUILTIN_MODULES: FeatureModule[] = [
   inboxModule,
   toolboxModule,
   updaterModule,
-  mcpModule,
   notificationsModule,
   dshModule,
   logsModule,

@@ -13,7 +13,6 @@ import { getImagesDir } from '../../main/data-location'
 import { isSafeImageFilename } from '../../main/image-utils'
 import type { FeatureModule, MainModuleContext } from '../../core/contracts'
 import type { AppService } from '../../core/app-service'
-import { TASK_TOOLS } from './tools'
 import type { Task, Status, TaskFilter, CreateTaskDTO, UpdateTaskDTO } from '@/types/task'
 
 async function exportMarkdown(): Promise<boolean> {
@@ -134,7 +133,6 @@ export const tasksModule: FeatureModule = {
   defaultEnabled: true,
   registerIpc,
   appService,
-  agentTools: TASK_TOOLS,
   renderer: {
     view: { id: 'categories', label: '待办项' },
   },

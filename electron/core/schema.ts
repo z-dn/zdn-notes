@@ -2,8 +2,7 @@ import type { Database } from 'sql.js'
 
 // ===================================================================
 // 数据库 schema 单一来源（Single Source of Truth）。
-// 供主进程 electron/main/database/index.ts 与独立 MCP electron/mcp/db.ts
-// 共同引用，消除原先双份 SCHEMA_SQL + 双份 runMigrations 的漂移。
+// 供主进程 electron/main/database/index.ts 引用。
 // 不依赖 Electron，纯 SQL.js 操作。
 // ===================================================================
 

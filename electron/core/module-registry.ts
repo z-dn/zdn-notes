@@ -1,14 +1,12 @@
 import type { FeatureModule, MainModuleContext } from './contracts'
-import type { AgentTool } from './contracts'
 import type { AppService } from './app-service'
 import { isEnabled } from './feature-flags'
-import type { ToolRegistry } from './tool-registry'
 
 // ===================================================================
 // 平台模块装配器（App Assembler）。
 // 收集内置 FeatureModule，按 feature-flags 决定启用与否，依次执行
-// onStart / registerIpc / 收集 agentTools。渲染层声明（view / settings
-// sections）也由此统一导出。
+// onStart / registerIpc。渲染层声明（view / settings sections）
+// 也由此统一导出。
 // 主进程 app-shell（electron/main/app-shell.ts）与测试均可复用。
 // ===================================================================
 
@@ -52,7 +50,6 @@ export class ModuleRegistry {
       saveAsync: provided.saveAsync ?? (() => {}),
       send: provided.send ?? (() => {}),
       getDataDir: provided.getDataDir ?? (() => ''),
-      toolRegistry: provided.toolRegistry,
     }
   }
 
@@ -84,20 +81,6 @@ export class ModuleRegistry {
   shutdownAll(ctx: Partial<MainModuleContext>, flags?: Record<string, boolean>): void {
     const c = this.collectCtx(ctx)
     for (const m of this.enabled(flags)) m.onShutdown?.(c)
-  }
-
-  /** 收集启用的模块贡献的 Agent 工具 */
-  collectAgentTools(flags?: Record<string, boolean>): AgentTool[] {
-    const out: AgentTool[] = []
-    for (const m of this.enabled(flags)) {
-      if (m.agentTools) out.push(...m.agentTools)
-    }
-    return out
-  }
-
-  /** 把启用的模块的 Agent 工具注册进统一 ToolRegistry */
-  registerAgentTools(registry: ToolRegistry, flags?: Record<string, boolean>): void {
-    registry.registerAll(this.collectAgentTools(flags))
   }
 
   /** 启用的模块的渲染层视图声明 */
