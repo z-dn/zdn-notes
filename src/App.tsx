@@ -35,6 +35,7 @@ export default function App() {
   const activeCategoryId = useCategoryStore((s) => s.activeCategoryId)
   const expandedDescId = useTaskStore((s) => s.expandedDescId)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
+  const defaultView = useSettingsStore((s) => s.saved.defaultView)
   const loadToolStates = useToolStore((s) => s.loadStates)
   const [showSettings, setShowSettings] = useState(false)
   const [maximized, setMaximized] = useState(false)
@@ -63,6 +64,12 @@ export default function App() {
     loadSettings()
     loadToolStates()
   }, [loadTasks, loadCategories, loadSettings, loadToolStates])
+
+  // 设置加载/保存后把「默认视图」应用为任务视图（只在值变化时触发，
+  // 不会覆盖用户当次手动切换；工具栏切换本身不持久化）
+  useEffect(() => {
+    useTaskStore.setState({ taskView: defaultView })
+  }, [defaultView])
 
   useEffect(() => {
     const unsub = window.electronAPI.onWindowMaximizedChange((v) => setMaximized(v))

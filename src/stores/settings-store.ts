@@ -10,6 +10,7 @@ const DEFAULTS: Settings = {
   reminderEnabled: true,
   autoUpdate: true,
   allowLocalRequests: false,
+  autoStartDsh: false,
 }
 
 function api() {
@@ -42,12 +43,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (raw.theme && ['system', 'light', 'dark'].includes(raw.theme)) saved.theme = raw.theme as Settings['theme']
       if (raw.panelStyle && ['divider', 'tint'].includes(raw.panelStyle))
         saved.panelStyle = raw.panelStyle as Settings['panelStyle']
-      if (raw.defaultView && ['list'].includes(raw.defaultView)) saved.defaultView = raw.defaultView as Settings['defaultView']
+      if (raw.defaultView && ['list', 'calendar'].includes(raw.defaultView))
+        saved.defaultView = raw.defaultView as Settings['defaultView']
       if (raw.descriptionMode && ['edit', 'toggle'].includes(raw.descriptionMode)) saved.descriptionMode = raw.descriptionMode as Settings['descriptionMode']
       if (raw.reminderEnabled !== undefined) saved.reminderEnabled = raw.reminderEnabled === 'true'
       if (raw.autoUpdate !== undefined) saved.autoUpdate = raw.autoUpdate === 'true'
       if (raw.allowLocalRequests !== undefined)
         saved.allowLocalRequests = raw.allowLocalRequests === 'true'
+      if (raw.autoStartDsh !== undefined) saved.autoStartDsh = raw.autoStartDsh === 'true'
       set({ saved, editing: { ...saved }, loading: false, dirty: false })
     } catch {
       toast('加载设置失败')

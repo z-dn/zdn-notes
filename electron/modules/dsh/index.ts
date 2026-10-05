@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { dshManager } from './dsh-manager'
+import { getAllSettings } from '../../main/database/settings-dao'
 import type { FeatureModule, MainModuleContext } from '../../core/contracts'
 
 // ===================================================================
@@ -35,6 +36,14 @@ function registerIpc(ctx: MainModuleContext): void {
   )
   dshManager.onPluginLog((chunk) => ctx.send('dsh:pluginLog', chunk))
   dshManager.onPluginDone((result) => ctx.send('dsh:pluginDone', result))
+
+  // 启动自动拉起 DSH（设置 autoStartDsh，仅后台启动服务、不切视图）。
+  // 必须放在 init 之后（isReady/start 依赖 dataDir），故不能用 onStart——
+  // app-shell 先 startAll 后 registerIpcAll，onStart 时 init 尚未执行。
+  // 模块开关已由 registry 门控（dsh 禁用时本函数不执行）；start() 幂等。
+  if (getAllSettings().autoStartDsh === 'true' && dshManager.isReady().ready) {
+    void dshManager.start()
+  }
 }
 
 function onShutdown(_ctx: MainModuleContext): void {

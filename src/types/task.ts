@@ -62,9 +62,10 @@ export interface CreateCategoryDTO {
 export interface Settings {
   theme: 'system' | 'light' | 'dark'
   panelStyle: 'divider' | 'tint'
-  defaultView: 'list'
+  defaultView: 'list' | 'calendar'
   descriptionMode: 'edit' | 'toggle'
   reminderEnabled: boolean
   autoUpdate: boolean
   allowLocalRequests: boolean
+  autoStartDsh: boolean
 }

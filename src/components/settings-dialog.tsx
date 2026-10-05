@@ -21,6 +21,7 @@ const NAV_SECTIONS: { group: string; items: { id: string; label: string }[] }[] 
       { id: 'theme', label: '主题' },
       { id: 'panelStyle', label: '面板分隔' },
       { id: 'descriptionMode', label: '描述编辑方式' },
+      { id: 'defaultView', label: '默认视图' },
     ],
   },
   {
@@ -29,6 +30,7 @@ const NAV_SECTIONS: { group: string; items: { id: string; label: string }[] }[] 
       { id: 'reminder', label: '到期提醒' },
       { id: 'localRequests', label: '内网请求' },
       { id: 'update', label: '更新' },
+      { id: 'autoStartDsh', label: '自动启动 DSH' },
     ],
   },
   {
@@ -393,6 +395,28 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
               </div>
             </SectionAnchor>
 
+            <SectionAnchor id="defaultView" onRef={(el) => { sectionRefs.current['defaultView'] = el }}>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">默认视图</label>
+              <div className="flex gap-3">
+                {[
+                  { value: 'list' as const, label: '列表' },
+                  { value: 'calendar' as const, label: '日历' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateEditing('defaultView', opt.value)}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                      editing.defaultView === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </SectionAnchor>
+
             <SectionAnchor id="reminder" onRef={(el) => { sectionRefs.current['reminder'] = el }}>
               <label className="flex items-center gap-3 cursor-pointer">
                 <Checkbox
@@ -475,6 +499,18 @@ export function SettingsDialog({ open, onClose, pendingVersion }: SettingsDialog
               {updateStatus !== 'idle' && (
                 <p className="mt-2 text-xs text-muted-foreground">{updateInfo}</p>
               )}
+            </SectionAnchor>
+
+            <SectionAnchor id="autoStartDsh" onRef={(el) => { sectionRefs.current['autoStartDsh'] = el }}>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <Checkbox
+                  checked={editing.autoStartDsh}
+                  onCheckedChange={(v) => updateEditing('autoStartDsh', v === true)}
+                />
+                <span className="text-xs font-medium text-muted-foreground">
+                  启动应用时在后台自动启动 DSH 服务
+                </span>
+              </label>
             </SectionAnchor>
 
             <SectionAnchor id="backup" onRef={(el) => { sectionRefs.current['backup'] = el }}>
