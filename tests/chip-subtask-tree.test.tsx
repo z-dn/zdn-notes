@@ -287,3 +287,71 @@ describe('TaskCalendar 子任务浮层入口', () => {
     expect(screen.getByPlaceholderText('添加子任务...')).toBeInTheDocument()
   })
 })
+
+describe('TaskCalendar 子任务浮层定位', () => {
+  const rootRect: DOMRect = {
+    x: 100,
+    y: 200,
+    width: 1000,
+    height: 600,
+    top: 200,
+    left: 100,
+    right: 1100,
+    bottom: 800,
+    toJSON: () => ({}),
+  }
+  let btnRect: DOMRect
+  let rectSpy: { mockRestore: () => void }
+
+  beforeEach(() => {
+    rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.hasAttribute('data-subtree-entry')) return btnRect
+      return rootRect
+    })
+  })
+
+  afterEach(() => {
+    rectSpy.mockRestore()
+  })
+
+  function openPopup(btn: { top: number; bottom: number; left: number }) {
+    btnRect = {
+      x: btn.left,
+      y: btn.top,
+      width: 60,
+      height: btn.bottom - btn.top,
+      top: btn.top,
+      left: btn.left,
+      right: btn.left + 60,
+      bottom: btn.bottom,
+      toJSON: () => ({}),
+    }
+    const today = startOfDay(new Date()).getTime()
+    useTaskStore.setState({
+      tasks: [
+        mk('parent-a', { dueDate: today + 12 * 3600 * 1000 }),
+        mk('sub-a', { parentId: 'parent-a' }),
+      ],
+      loading: false,
+    })
+    render(<TaskCalendar categoryId={null} />)
+    fireEvent.click(screen.getByText('0/1'))
+    return screen.getByPlaceholderText('添加子任务...').parentElement as HTMLElement
+  }
+
+  it('下方空间充足：浮层贴在入口按钮正下方（容器相对坐标）', () => {
+    const popup = openPopup({ top: 310, bottom: 330, left: 250 })
+    expect(popup.style.left).toBe('150px')
+    expect(popup.style.top).toBe('134px')
+    expect(popup.style.bottom).toBe('')
+  })
+
+  it('下方放不下：向上翻转，bottom 同样按容器相对坐标计算', () => {
+    const popup = openPopup({ top: 700, bottom: 720, left: 250 })
+    expect(popup.style.left).toBe('150px')
+    expect(popup.style.bottom).toBe('104px')
+    expect(popup.style.top).toBe('')
+  })
+})

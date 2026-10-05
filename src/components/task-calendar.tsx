@@ -267,11 +267,13 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
       const rect = rootRef.current?.getBoundingClientRect()
       if (!rect) return
       setMenu(null)
+      const relTop = anchor.top - rect.top
+      const relBottom = anchor.bottom - rect.top
       const left = Math.max(0, Math.min(anchor.left - rect.left, rect.width - 244))
       const style: CSSProperties =
-        anchor.bottom + 256 > rect.height
-          ? { left, bottom: Math.max(0, rect.height - anchor.top + 4) }
-          : { left, top: anchor.bottom + 4 }
+        relBottom + 256 > rect.height
+          ? { left, bottom: Math.max(0, rect.height - relTop + 4) }
+          : { left, top: relBottom + 4 }
       setSubtree({ root, style })
     },
     [subtree],
