@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
-import { addDays, format, startOfDay, startOfMonth } from 'date-fns'
+import { addDays, endOfDay, format, startOfDay, startOfMonth } from 'date-fns'
 import { TaskCalendar } from '../src/components/task-calendar'
 import { useTaskStore } from '../src/stores/task-store'
 import { buildMonthGrid, dayKey } from '../src/components/task-calendar-view'
@@ -12,6 +12,32 @@ const mock = vi.hoisted(() => ({
   taskGetAll: vi.fn().mockResolvedValue([]),
   categoryGetAll: vi.fn().mockResolvedValue([]),
   categoryGetTaskCounts: vi.fn().mockResolvedValue({}),
+  taskCreate: vi.fn(
+    async (dto: {
+      title: string
+      dueDate?: number | null
+      startDate?: number | null
+      parentId?: string | null
+      categoryId?: string | null
+    }) => ({
+      id: 'created-1',
+      title: dto.title,
+      description: '',
+      status: 'todo' as const,
+      priority: 'P2' as const,
+      dueDate: dto.dueDate ?? null,
+      startDate: dto.startDate ?? null,
+      reminderTime: null,
+      parentId: dto.parentId ?? null,
+      orderIndex: 0,
+      tags: [],
+      owner: '',
+      categoryId: dto.categoryId ?? null,
+      meta: {},
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+  ),
 }))
 
 function mk(id: string, over: Partial<Task> = {}): Task {
@@ -349,5 +375,47 @@ describe('TaskCalendar 改期', () => {
       dueDate: null,
       startDate: null,
     })
+  })
+})
+
+describe('TaskCalendar 空白格右键创建任务', () => {
+  it('右键空格 → 添加任务 → 输入回车：按当天起止创建并选中新任务', async () => {
+    setTasks([])
+    render(<TaskCalendar categoryId={null} />)
+    const today = startOfDay(new Date())
+    const cell = document.querySelector(`[data-day-key="${dayKey(today)}"]`) as HTMLElement
+    expect(cell).not.toBeNull()
+    fireEvent.contextMenu(cell)
+    fireEvent.click(screen.getByText('添加任务'))
+    const input = cell.querySelector('input') as HTMLInputElement
+    expect(input).not.toBeNull()
+    fireEvent.change(input, { target: { value: '日历新任务' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(mock.taskCreate).toHaveBeenCalledTimes(1))
+    const dto = mock.taskCreate.mock.calls[0][0]
+    expect(dto.title).toBe('日历新任务')
+    expect(dto.parentId).toBeNull()
+    expect(dto.startDate).toBe(today.getTime())
+    expect(dto.dueDate).toBe(endOfDay(today).getTime())
+    await waitFor(() => expect(useTaskStore.getState().selectedTask?.id).toBe('created-1'))
+  })
+
+  it('右键任务 chip 仍打开快捷菜单，不出现「添加任务」', () => {
+    const today = startOfDay(new Date())
+    setTasks([mk('chip-menu-me', { dueDate: today.getTime() + 12 * 3600 * 1000 })])
+    render(<TaskCalendar categoryId={null} />)
+    fireEvent.contextMenu(screen.getByText('chip-menu-me'))
+    expect(screen.getByText('标记完成')).toBeInTheDocument()
+    expect(screen.queryByText('添加任务')).toBeNull()
+  })
+
+  it('空白菜单打开后按 Escape 关闭', () => {
+    setTasks([])
+    render(<TaskCalendar categoryId={null} />)
+    const cell = document.querySelector(`[data-day-key="${dayKey(startOfDay(new Date()))}"]`) as HTMLElement
+    fireEvent.contextMenu(cell)
+    expect(screen.getByText('添加任务')).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByText('添加任务')).toBeNull()
   })
 })

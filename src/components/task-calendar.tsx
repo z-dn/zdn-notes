@@ -1,10 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { addDays, addMonths, format, isToday, nextMonday, startOfDay, startOfMonth } from 'date-fns'
+import { addDays, addMonths, endOfDay, format, isToday, nextMonday, startOfDay, startOfMonth } from 'date-fns'
 import { Bell, ChevronLeft, ChevronRight, ListTree } from 'lucide-react'
 import { useTaskStore } from '@/stores/task-store'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ChipSubtaskTree } from './chip-subtask-tree'
+import { ContextMenu } from './context-menu'
+import { InlineTaskInput } from './inline-task-input'
 import { Collapse } from './fade'
 import { Tip } from '@/components/tip-button'
 import {
@@ -171,6 +173,14 @@ interface MenuState {
   fromKey: string | null
 }
 
+/** 空白格右键菜单：定位 + 目标日期（key 为 yyyy-MM-dd，date 为当天零点时间戳） */
+interface CellMenuState {
+  x: number
+  y: number
+  key: string
+  date: number
+}
+
 export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
   const tasks = useTaskStore((s) => s.tasks)
   const statusView = useTaskStore((s) => s.statusView)
@@ -183,6 +193,8 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
   const [showUnscheduled, setShowUnscheduled] = useState(false)
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [cellMenu, setCellMenu] = useState<CellMenuState | null>(null)
+  const [creating, setCreating] = useState<{ key: string; date: number } | null>(null)
   const [subtree, setSubtree] = useState<{ root: Task; style: CSSProperties } | null>(null)
   const dragRef = useRef<DragPayload | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -192,6 +204,8 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
   useEffect(() => {
     setExpandedDay(null)
     setMenu(null)
+    setCellMenu(null)
+    setCreating(null)
     setSubtree(null)
   }, [anchor])
 
@@ -255,6 +269,7 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
     const rect = rootRef.current?.getBoundingClientRect()
     if (!rect) return
     setSubtree(null)
+    setCellMenu(null)
     setMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, task, fromKey })
   }, [])
 
@@ -368,6 +383,19 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
           return (
             <div
               key={cell.key}
+              data-day-key={cell.key}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                const rect = rootRef.current?.getBoundingClientRect()
+                if (!rect) return
+                setMenu(null)
+                setCellMenu({
+                  x: e.clientX - rect.left,
+                  y: e.clientY - rect.top,
+                  key: cell.key,
+                  date: cell.date.getTime(),
+                })
+              }}
               onDragOver={(e) => {
                 if (!dragRef.current) return
                 e.preventDefault()
@@ -417,6 +445,17 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
                 )}
               </div>
               <div className="space-y-0.5">
+                {creating?.key === cell.key && (
+                  <InlineTaskInput
+                    parentId={null}
+                    depth={0}
+                    compact
+                    startDate={startOfDay(creating.date).getTime()}
+                    dueDate={endOfDay(creating.date).getTime()}
+                    onCreated={selectTask}
+                    onClose={() => setCreating(null)}
+                  />
+                )}
                 {shown.map((t) => {
                   const range = taskRange(t)
                   const col = cellIdx % 7
@@ -503,6 +542,15 @@ export function TaskCalendar({ categoryId }: { categoryId: string | null }) {
             </div>
           </Collapse>
         </div>
+      )}
+
+      {cellMenu && (
+        <ContextMenu
+          x={cellMenu.x}
+          y={cellMenu.y}
+          onClose={() => setCellMenu(null)}
+          onAddTask={() => setCreating({ key: cellMenu.key, date: cellMenu.date })}
+        />
       )}
 
       {menu && menuTask && (
