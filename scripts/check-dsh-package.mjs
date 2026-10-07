@@ -62,6 +62,42 @@ if (typeof dshVersion !== 'string' || !gte(dshVersion, MIN_DSH_VERSION)) {
   process.exit(1)
 }
 
+// cordis 核心五件套精确版本断言（事故门禁）。
+// 背景：dsh@0.1.5-rc.2 对这五个包声明的是 ^ 浮动范围，全新构建（CI/release 无本地
+// lockfile 缓存时）解析到 loader 1.0.5（Entry.init 不再 await fiber 激活）+
+// hmr 1.0.19（新增 async *[Service.init]，激活需等 I/O）后，与 rc.2 runProfile 的
+// 时序契约断层：watchUserPatches 读 ctx.get("hmr") 时 fiber 尚在 state 1，
+// 打包版必报 "user patch-layer watching requires the Cordis HMR service" 并退出。
+// 这些值与 resources/dsh/pnpm-lock.yaml 一致；升级 DSH 版本时若上游有意变更
+// （如 dsh@0.1.5-rc.3 已自带精确钉同组版本），须同步更新本表与 lockfile。
+const EXPECTED_RUNTIME = {
+  cordis: '4.0.2',
+  'cordis-plugin-loader': '1.0.3',
+  'cordis-plugin-hmr': '1.0.17',
+  'cordis-plugin-timer': '1.1.4',
+  'cordis-plugin-include': '1.0.7',
+}
+const drifted = []
+for (const [pkg, expected] of Object.entries(EXPECTED_RUNTIME)) {
+  const pkgPath = join(base, 'node_modules', '@deepseek-ai', pkg, 'package.json')
+  if (!existsSync(pkgPath)) {
+    drifted.push(`${pkg}: 缺失（期望 ${expected}）`)
+    continue
+  }
+  const actual = JSON.parse(readFileSync(pkgPath, 'utf8')).version
+  if (actual !== expected) drifted.push(`${pkg}: ${actual}（期望 ${expected}）`)
+}
+if (drifted.length > 0) {
+  console.error(
+    `[check-dsh-package] FAIL: cordis 运行时版本漂移（基准目录 ${base}），与 pnpm-lock.yaml 不一致:`,
+  )
+  for (const d of drifted) console.error(`  - ${d}`)
+  console.error(
+    '[check-dsh-package] 请确认 resources/dsh/pnpm-lock.yaml 在位后重跑 npm run build:dsh 再重新打包。',
+  )
+  process.exit(1)
+}
+
 // vendor patch 门禁（v1.8.1 事故同款教训：产物静默丢修复必须阻断发布）。
 // build-dsh.mjs 为 dsh-win32-process 的 CreateProcess 调用点补 CREATE_NO_WINDOW
 // （0x08000000，pwsh 工具黑窗修复），最大值标记 134218756 = 1028|0x08000000。
@@ -88,4 +124,6 @@ if (existsSync(win32ProcessPath)) {
   process.exit(1)
 }
 
-console.log(`[check-dsh-package] OK: ${base} 携带完整 DSH 运行时（v${dshVersion}，黑窗 patch 在位）`)
+console.log(
+  `[check-dsh-package] OK: ${base} 携带完整 DSH 运行时（v${dshVersion}，cordis 五件套已钉版，黑窗 patch 在位）`,
+)

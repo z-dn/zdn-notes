@@ -7,5 +7,8 @@ release/
 .env
 *.local
 
-# 应用自带的 DSH 运行时（DSH 依赖 + pnpm + profile），由 npm run build:dsh 生成
-resources/dsh/
+# 应用自带的 DSH 运行时（DSH 依赖 + pnpm + profile），由 npm run build:dsh 生成。
+# 例外：pnpm-lock.yaml 有意提交（打包与 dev 依赖树一致的唯一保证，见 AGENTS.md 事故条目；
+# 目录级忽略无法反选内部文件，故用 /* + !  的形式）
+resources/dsh/*
+!resources/dsh/pnpm-lock.yaml
