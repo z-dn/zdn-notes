@@ -66,20 +66,29 @@ export function DshPage() {
   const webUrl = useDshUiStore((s) => s.webUrl)
   const setPluginDialogOpen = useDshUiStore((s) => s.setPluginDialogOpen)
   const [version, setVersion] = useState<string | null>(null)
+  const [userOverride, setUserOverride] = useState(false)
   const [busy, setBusy] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [notReadyReason, setNotReadyReason] = useState('')
 
   useEffect(() => {
     let cancelled = false
+    const loadVersion = () =>
+      window.electronAPI.dshCheckRuntimeUpdate().then((info) => {
+        if (cancelled) return
+        if (info.current) setVersion(info.current)
+        setUserOverride(info.hasUserOverride)
+      })
     window.electronAPI.dshIsReady().then((r) => {
       if (!cancelled && !r.ready) setNotReadyReason(r.reason ?? '')
     })
-    window.electronAPI.dshGetVersion().then((v) => {
-      if (!cancelled && v) setVersion(v)
+    loadVersion()
+    const unsubUpgrade = window.electronAPI.onDshUpgradeDone(() => {
+      loadVersion()
     })
     return () => {
       cancelled = true
+      unsubUpgrade()
     }
   }, [])
 
@@ -317,10 +326,10 @@ export function DshPage() {
             >
               <button
                 onClick={() => setPluginDialogOpen(true)}
-                aria-label="管理插件"
+                aria-label="管理 DSH"
                 className="js-nodrag flex h-5 items-center rounded-full px-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <Tip tip="管理插件" side="bottom">
+                <Tip tip="管理 DSH" side="bottom">
                   <Puzzle className="size-3" />
                 </Tip>
               </button>
@@ -371,7 +380,10 @@ export function DshPage() {
         <div className="space-y-1">
           <h2 className="text-sm font-medium">DeepSeek Harness</h2>
           {version && (
-            <p className="text-[11px] leading-relaxed text-muted-foreground">版本 {version}</p>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              版本 {version}
+              {userOverride ? '（自定义）' : '（内置）'}
+            </p>
           )}
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             {notReadyReason ? (
@@ -410,7 +422,7 @@ export function DshPage() {
           className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <Puzzle className="size-3" />
-          管理插件
+          管理 DSH
         </button>
       </div>
     </div>

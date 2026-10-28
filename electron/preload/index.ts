@@ -115,6 +115,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dshListPlugins: () => ipcRenderer.invoke('dsh:listPlugins'),
   dshAddPlugin: (spec: string) => ipcRenderer.invoke('dsh:addPlugin', spec),
   dshRemovePlugin: (name: string) => ipcRenderer.invoke('dsh:removePlugin', name),
+  dshRestoreQuarantine: (entryId: string) => ipcRenderer.invoke('dsh:restoreQuarantine', entryId),
   onDshPluginLog: (cb: (chunk: string) => void) => {
     const handler = (_e: unknown, chunk: string) => cb(chunk)
     ipcRenderer.on('dsh:pluginLog', handler)
@@ -124,6 +125,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_e: unknown, result: unknown) => cb(result)
     ipcRenderer.on('dsh:pluginDone', handler)
     return () => ipcRenderer.removeListener('dsh:pluginDone', handler)
+  },
+  dshCheckRuntimeUpdate: () => ipcRenderer.invoke('dsh:checkRuntimeUpdate'),
+  dshCheckPluginCompatibility: () => ipcRenderer.invoke('dsh:checkPluginCompatibility'),
+  dshPreviewUpgrade: (target: string) => ipcRenderer.invoke('dsh:previewUpgrade', target),
+  dshPreflightUpgrade: (target: string) => ipcRenderer.invoke('dsh:preflightUpgrade', target),
+  dshUpgradeRuntime: (target: string) => ipcRenderer.invoke('dsh:upgradeRuntime', target),
+  dshRevertRuntime: () => ipcRenderer.invoke('dsh:revertRuntime'),
+  dshRestorePreviousRuntime: () => ipcRenderer.invoke('dsh:restorePreviousRuntime'),
+  dshGetRuntimeNotes: (version: string) => ipcRenderer.invoke('dsh:getRuntimeNotes', version),
+  dshSetRuntimePin: (version: string | null) => ipcRenderer.invoke('dsh:setRuntimePin', version),
+  dshSetRuntimeIgnored: (version: string, ignored: boolean) =>
+    ipcRenderer.invoke('dsh:setRuntimeIgnored', version, ignored),
+  dshBackupHome: () => ipcRenderer.invoke('dsh:backupHome'),
+  dshRepairProfile: () => ipcRenderer.invoke('dsh:repairProfile'),
+  onDshUpgradeLog: (cb: (chunk: string) => void) => {
+    const handler = (_e: unknown, chunk: string) => cb(chunk)
+    ipcRenderer.on('dsh:upgradeLog', handler)
+    return () => ipcRenderer.removeListener('dsh:upgradeLog', handler)
+  },
+  onDshUpgradeDone: (cb: (result: unknown) => void) => {
+    const handler = (_e: unknown, result: unknown) => cb(result)
+    ipcRenderer.on('dsh:upgradeDone', handler)
+    return () => ipcRenderer.removeListener('dsh:upgradeDone', handler)
   },
 
   // ---- 应用日志（core/app-log，logs 模块）----

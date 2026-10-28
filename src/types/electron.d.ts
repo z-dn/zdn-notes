@@ -120,19 +120,147 @@ declare global {
       dshIsReady(): Promise<{ ready: boolean; reason?: string }>
       dshGetVersion(): Promise<string | null>
       dshGetStatus(): Promise<{ running: boolean; port?: number; url?: string }>
-      dshStart(opts?: { apiKey?: string; model?: string }): Promise<{ ok: boolean; port?: number; error?: string }>
+      dshStart(opts?: {
+        apiKey?: string
+        model?: string
+      }): Promise<{ ok: boolean; port?: number; error?: string }>
       dshStop(): Promise<boolean>
-      onDshStatusChanged(cb: (status: { running: boolean; port?: number; url?: string }) => void): () => void
+      onDshStatusChanged(
+        cb: (status: { running: boolean; port?: number; url?: string }) => void,
+      ): () => void
       dshListPlugins(): Promise<{
         ok: boolean
         plugins?: Array<{ name: string; version: string; active?: boolean }>
+        quarantined?: Array<{ entryId: string; name?: string; reason: string; at: number }>
         error?: string
       }>
       dshAddPlugin(spec: string): Promise<{ ok: boolean; error?: string }>
       dshRemovePlugin(name: string): Promise<{ ok: boolean; error?: string }>
+      dshRestoreQuarantine(entryId: string): Promise<{ ok: boolean; error?: string }>
       onDshPluginLog(cb: (chunk: string) => void): () => void
       onDshPluginDone(
-        cb: (result: { action: 'add' | 'remove'; name: string; ok: boolean; error?: string }) => void,
+        cb: (result: {
+          action: 'add' | 'remove'
+          name: string
+          ok: boolean
+          error?: string
+        }) => void,
+      ): () => void
+
+      // ---- DSH 运行时升级 + 插件兼容性检测 ----
+      dshCheckRuntimeUpdate(): Promise<{
+        ok: boolean
+        current: string | null
+        hasUserOverride: boolean
+        meta: { version: string; source: 'user'; at: number; vendorPatchApplied: boolean } | null
+        distTags?: Record<string, string> | null
+        latest?: string | null
+        recommended?: string | null
+        versions?: Array<{
+          version: string
+          publishedAt: number | null
+          addonRange: string | null
+          deprecated: string | null
+          tags: string[]
+          hostAddonCompatible: boolean | null
+        }>
+        pinned?: string | null
+        ignored?: string[]
+        previous?: { version: string; at: number } | null
+        host?: { electron: string | null; node: string; appBootPatchRequired: boolean }
+        error?: string
+      }>
+      dshCheckPluginCompatibility(): Promise<{
+        ok: boolean
+        plugins?: Array<{
+          name: string
+          version: string
+          active: boolean
+          status: 'ok' | 'incompatible' | 'inactive'
+          issues: string[]
+        }>
+        integrity?: Array<{ name: string; ok: boolean; reason?: string }>
+        error?: string
+      }>
+      dshPreviewUpgrade(target: string): Promise<{
+        ok: boolean
+        from?: string | null
+        to?: string
+        crossMinor?: boolean
+        breaking?: Array<{ name: string; version: string; issues: string[] }>
+        integrity?: Array<{ name: string; ok: boolean; reason?: string }>
+        error?: string
+      }>
+      /** 升级前完整预演：声明层闭包 + 目标运行时实机启动真实插件集 + 推荐版本验证 */
+      dshPreflightUpgrade(target: string): Promise<{
+        ok: boolean
+        from: string | null
+        to: string
+        crossMinor: boolean
+        declaredIssues: Array<{
+          package: string
+          version: string
+          root: string
+          parent: string | null
+          errors: string[]
+          warnings: string[]
+          children?: string[]
+        }>
+        probeOk: boolean
+        probeError?: string
+        probeFailures: Array<{
+          entryId?: string
+          name?: string
+          package?: string
+          reason: string
+        }>
+        recommendations: Array<{
+          package: string
+          current: string | null
+          recommended: string | null
+          kind: 'direct' | 'transitive'
+          children?: string[]
+          verified?: boolean
+          note?: string
+        }>
+        integrity: Array<{ name: string; ok: boolean; reason?: string }>
+        error?: string
+      }>
+      dshUpgradeRuntime(target: string): Promise<{
+        ok: boolean
+        from: string | null
+        to: string
+        reverted?: boolean
+        error?: string
+      }>
+      dshRevertRuntime(): Promise<{ ok: boolean; error?: string }>
+      dshRestorePreviousRuntime(): Promise<{ ok: boolean; version?: string; error?: string }>
+      dshGetRuntimeNotes(version: string): Promise<{
+        ok: boolean
+        version: string
+        title: string
+        body: string
+        url: string
+        source: 'github' | 'npm' | 'error'
+        publishedAt?: number | null
+        error?: string
+      }>
+      dshSetRuntimePin(version: string | null): Promise<{ ok: boolean; error?: string }>
+      dshSetRuntimeIgnored(
+        version: string,
+        ignored: boolean,
+      ): Promise<{ ok: boolean; ignored?: string[]; error?: string }>
+      dshBackupHome(): Promise<{ ok: boolean; path?: string; error?: string }>
+      dshRepairProfile(): Promise<{ ok: boolean; error?: string }>
+      onDshUpgradeLog(cb: (chunk: string) => void): () => void
+      onDshUpgradeDone(
+        cb: (result: {
+          ok: boolean
+          from: string | null
+          to: string
+          reverted?: boolean
+          error?: string
+        }) => void,
       ): () => void
 
       // ---- 应用日志（core/app-log，logs 模块）----

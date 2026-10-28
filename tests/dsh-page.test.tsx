@@ -7,16 +7,31 @@ import { useDshUiStore } from '../src/stores/dsh-ui-store'
 const mock = vi.hoisted(() => ({
   dshIsReady: vi.fn().mockResolvedValue({ ready: true }),
   dshGetVersion: vi.fn().mockResolvedValue('0.1.5'),
+  dshCheckRuntimeUpdate: vi.fn().mockResolvedValue({
+    ok: true,
+    current: '0.1.5',
+    hasUserOverride: false,
+    meta: null,
+    latest: '0.1.5',
+  }),
   dshGetStatus: vi.fn().mockResolvedValue({ running: false }),
   dshStart: vi.fn().mockResolvedValue({ ok: true, port: 3000, error: '' }),
   dshStop: vi.fn().mockResolvedValue(true),
   onDshStatusChanged: vi.fn().mockReturnValue(() => {}),
+  onDshUpgradeDone: vi.fn().mockReturnValue(() => {}),
 }))
 
 beforeEach(() => {
   localStorage.clear()
   mock.dshIsReady.mockResolvedValue({ ready: true })
   mock.dshGetVersion.mockResolvedValue('0.1.5')
+  mock.dshCheckRuntimeUpdate.mockResolvedValue({
+    ok: true,
+    current: '0.1.5',
+    hasUserOverride: false,
+    meta: null,
+    latest: '0.1.5',
+  })
   mock.dshStart.mockReset().mockResolvedValue({ ok: true, port: 3000, error: '' })
   mock.dshStop.mockReset().mockResolvedValue(true)
   Object.defineProperty(window, 'electronAPI', {
@@ -54,7 +69,7 @@ describe('DshPage 胶囊（运行中）', () => {
       useDshUiStore.setState({ running: true, port: 3000, webUrl: null })
     })
     render(<DshPage />)
-    expect(await screen.findByRole('button', { name: '管理插件' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '管理 DSH' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重启 DSH' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '收起为小圆点' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '关闭 DSH' })).toBeInTheDocument()
@@ -67,7 +82,7 @@ describe('DshPage 胶囊（运行中）', () => {
       useDshUiStore.setState({ running: true, port: 3000, webUrl: null })
     })
     const { container } = render(<DshPage />)
-    await screen.findByRole('button', { name: '管理插件' })
+    await screen.findByRole('button', { name: '管理 DSH' })
     expect(container.querySelector('.bg-yellow-500')).toBeInTheDocument()
     expect(container.querySelector('.bg-green-500')).toBeNull()
 
@@ -136,7 +151,7 @@ describe('DshPage 胶囊（运行中）', () => {
     await waitFor(() => expect(mock.dshStart).toHaveBeenCalledTimes(1))
     // running 已回写 false，但 restarting 保持胶囊挂载（黄点 + 重启占位）
     expect(screen.getByText('正在重启 DSH…')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '管理插件' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '管理 DSH' })).toBeInTheDocument()
     expect(container.querySelector('.bg-yellow-500')).toBeInTheDocument()
 
     await act(async () => {

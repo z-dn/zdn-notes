@@ -29,7 +29,9 @@ export function DshWebviewLayer({ active }: { active: boolean }) {
   const running = useDshUiStore((s) => s.running)
   const port = useDshUiStore((s) => s.port)
   const webUrl = useDshUiStore((s) => s.webUrl)
+  const reloadNonce = useDshUiStore((s) => s.webviewReloadNonce)
   const setStatus = useDshUiStore((s) => s.setStatus)
+  const reloadWebview = useDshUiStore((s) => s.reloadWebview)
 
   // 全局单订阅：主进程 dsh:statusChanged → store（DshPage / 本层 / tab 绿点共用）。
   // 挂在 App 层常驻组件上（不随 tab/页面卸载），本层 return null 不影响订阅
@@ -40,8 +42,15 @@ export function DshWebviewLayer({ active }: { active: boolean }) {
     const unsub = window.electronAPI.onDshStatusChanged((s) => {
       setStatus(s as { running: boolean; port?: number; url?: string })
     })
-    return () => unsub()
-  }, [setStatus])
+    // 升级后 DSH 客户端 bundle 的 revision 会变化；重建 webview 避免旧缓存卡住插件树
+    const unsubUpgrade = window.electronAPI.onDshUpgradeDone((r: { ok?: boolean }) => {
+      if (r?.ok) reloadWebview()
+    })
+    return () => {
+      unsub()
+      unsubUpgrade()
+    }
+  }, [setStatus, reloadWebview])
 
   if (!running || !port || !webUrl) return null
 
@@ -51,7 +60,9 @@ export function DshWebviewLayer({ active }: { active: boolean }) {
     const wv = node as unknown as {
       addEventListener(
         type: string,
-        listener: (e: Event & { permission?: string; request?: { allow(): void; deny(): void } }) => void,
+        listener: (
+          e: Event & { permission?: string; request?: { allow(): void; deny(): void } },
+        ) => void,
       ): void
     }
     wv.addEventListener('permissionrequest', (e) => {
@@ -70,7 +81,7 @@ export function DshWebviewLayer({ active }: { active: boolean }) {
       // tab 未激活时不可见即不响应鼠标（visibility 内建）
     >
       {createElement('webview', {
-        key: port,
+        key: `${port}-${reloadNonce}`,
         src: webUrl,
         ref: refCb,
         className: 'h-full w-full border-0',

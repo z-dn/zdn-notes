@@ -13,16 +13,21 @@ export function Tip({
   tip,
   children,
   side,
+  className,
 }: {
   tip: string
   children: ReactNode
   side?: 'top' | 'bottom' | 'left' | 'right'
+  /** 提示内容样式（长文案可用 max-w-* + leading-relaxed 控制换行） */
+  className?: string
 }) {
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>{children}</TooltipTrigger>
-        <TooltipContent side={side}>{tip}</TooltipContent>
+        <TooltipContent side={side} className={className}>
+          {tip}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   )

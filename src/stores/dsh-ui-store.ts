@@ -11,8 +11,11 @@ interface DshUiState {
   port: number | null
   webUrl: string | null
   pluginDialogOpen: boolean
+  /** 运行时升级完成后 +1，强制重建 webview，避免旧 client bundle 缓存 */
+  webviewReloadNonce: number
   setStatus: (s: { running: boolean; port?: number; url?: string }) => void
   setPluginDialogOpen: (open: boolean) => void
+  reloadWebview: () => void
 }
 
 export const useDshUiStore = create<DshUiState>((set) => ({
@@ -20,6 +23,7 @@ export const useDshUiStore = create<DshUiState>((set) => ({
   port: null,
   webUrl: null,
   pluginDialogOpen: false,
+  webviewReloadNonce: 0,
   setStatus: (s) =>
     set({
       running: s.running,
@@ -27,4 +31,5 @@ export const useDshUiStore = create<DshUiState>((set) => ({
       webUrl: s.running && s.url ? s.url : null,
     }),
   setPluginDialogOpen: (open) => set({ pluginDialogOpen: open }),
+  reloadWebview: () => set((s) => ({ webviewReloadNonce: s.webviewReloadNonce + 1 })),
 }))
